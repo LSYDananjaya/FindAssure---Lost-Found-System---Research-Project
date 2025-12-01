@@ -12,6 +12,7 @@ export interface IUser extends Document {
   updatedAt: Date;
 }
 
+
 const userSchema = new Schema<IUser>(
   {
     firebaseUid: {

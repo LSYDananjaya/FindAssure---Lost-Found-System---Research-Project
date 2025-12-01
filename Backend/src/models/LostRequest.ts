@@ -51,6 +51,7 @@ const lostRequestSchema = new Schema<ILostRequest>(
   }
 );
 
+
 // Index for efficient querying by owner
 lostRequestSchema.index({ ownerId: 1, createdAt: -1 });
 

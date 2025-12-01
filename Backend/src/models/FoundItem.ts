@@ -22,6 +22,7 @@ export interface IFoundItem extends Document {
   updatedAt: Date;
 }
 
+
 const founderContactSchema = new Schema<IFounderContact>(
   {
     name: {

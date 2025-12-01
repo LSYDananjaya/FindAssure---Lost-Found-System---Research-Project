@@ -7,6 +7,7 @@ export interface IOwnerVideoAnswer {
   videoUrl: string;
 }
 
+
 export interface IVerification extends Document {
   foundItemId: Types.ObjectId;
   ownerId: Types.ObjectId;

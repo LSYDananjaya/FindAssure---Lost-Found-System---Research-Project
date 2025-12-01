@@ -1,0 +1,242 @@
+// ReportFoundLocationScreen – follow the spec
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  StyleSheet, 
+  ScrollView, 
+  Alert,
+  KeyboardAvoidingView,
+  Platform
+} from 'react-native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../../types/models';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { itemsApi } from '../../api/itemsApi';
+
+type ReportFoundLocationNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundLocation'>;
+type ReportFoundLocationRouteProp = RouteProp<RootStackParamList, 'ReportFoundLocation'>;
+
+const ReportFoundLocationScreen = () => {
+  const navigation = useNavigation<ReportFoundLocationNavigationProp>();
+  const route = useRoute<ReportFoundLocationRouteProp>();
+  const { imageUri, category, description, selectedQuestions, founderAnswers } = route.params;
+
+  const [location, setLocation] = useState('');
+  const [founderName, setFounderName] = useState('');
+  const [founderEmail, setFounderEmail] = useState('');
+  const [founderPhone, setFounderPhone] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!location.trim() || !founderName.trim() || !founderEmail.trim() || !founderPhone.trim()) {
+      Alert.alert('Required Fields', 'Please fill in all fields');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Submit to backend
+      await itemsApi.reportFoundItem({
+        imageUrl: imageUri, // In production, upload to cloud storage first
+        category,
+        description,
+        questions: selectedQuestions,
+        founderAnswers,
+        location: location.trim(),
+        founderContact: {
+          name: founderName.trim(),
+          email: founderEmail.trim(),
+          phone: founderPhone.trim(),
+        },
+      });
+
+      navigation.navigate('ReportFoundSuccess');
+    } catch (error: any) {
+      Alert.alert(
+        'Submission Failed', 
+        error.message || 'Could not submit the found item. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Location & Contact Info</Text>
+            <Text style={styles.subtitle}>
+              Where did you find the item and how can the owner reach you?
+            </Text>
+          </View>
+
+          <View style={styles.form}>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>📍 Location Details</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Where did you find it? *</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="e.g., Near Starbucks on Main Street, City Park bench..."
+                  value={location}
+                  onChangeText={setLocation}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>👤 Your Contact Information</Text>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Your Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your full name"
+                  value={founderName}
+                  onChangeText={setFounderName}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Your Email *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  value={founderEmail}
+                  onChangeText={setFounderEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoComplete="email"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Your Phone Number *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your phone number"
+                  value={founderPhone}
+                  onChangeText={setFounderPhone}
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                />
+              </View>
+            </View>
+
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>
+                ℹ️ Your contact information will only be shared with verified owners after 
+                they successfully answer the ownership questions.
+              </Text>
+            </View>
+
+            <PrimaryButton
+              title="Submit Found Item"
+              onPress={handleSubmit}
+              loading={loading}
+              style={styles.submitButton}
+            />
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 20,
+  },
+  header: {
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333333',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666666',
+    lineHeight: 20,
+  },
+  form: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333333',
+    marginBottom: 16,
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333333',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#DDDDDD',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: '#FAFAFA',
+  },
+  textArea: {
+    minHeight: 80,
+    paddingTop: 12,
+  },
+  infoBox: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  infoText: {
+    fontSize: 13,
+    color: '#666666',
+    lineHeight: 18,
+  },
+  submitButton: {
+    marginTop: 10,
+  },
+});
+
+export default ReportFoundLocationScreen;

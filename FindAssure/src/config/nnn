@@ -1,0 +1,56 @@
+{
+  "_id": {
+    "$oid": "692d3bc8ea7d3544a7fc47d5"
+  },
+  "foundItemId": {
+    "$oid": "692d391418053c1c6ca132c7"
+  },
+  "ownerId": {
+    "$oid": "692d33b3e1389d1067d89e49"
+  },
+  "questions": [
+    "What color is the item?",
+    "Where exactly did you find it?",
+    "What is the brand or manufacturer?",
+    "What time of day did you find it?",
+    "What is the approximate size or dimensions?"
+  ],
+  "founderAnswers": [
+    "Bsbs",
+    "Haahs",
+    "Bsbsbs",
+    "Sbsvs",
+    "Bbsvs"
+  ],
+  "ownerVideoAnswers": [
+    {
+      "question": "What color is the item?",
+      "videoUrl": "stub://video_0_1764572096165.mp4"
+    },
+    {
+      "question": "Where exactly did you find it?",
+      "videoUrl": "stub://video_1_1764572099029.mp4"
+    },
+    {
+      "question": "What is the brand or manufacturer?",
+      "videoUrl": "stub://video_2_1764572100776.mp4"
+    },
+    {
+      "question": "What time of day did you find it?",
+      "videoUrl": "stub://video_3_1764572102640.mp4"
+    },
+    {
+      "question": "What is the approximate size or dimensions?",
+      "videoUrl": "stub://video_4_1764572104491.mp4"
+    }
+  ],
+  "status": "pending",
+  "similarityScore": null,
+  "createdAt": {
+    "$date": "2025-12-01T06:55:04.108Z"
+  },
+  "updatedAt": {
+    "$date": "2025-12-01T06:55:04.108Z"
+  },
+  "__v": 0
+}

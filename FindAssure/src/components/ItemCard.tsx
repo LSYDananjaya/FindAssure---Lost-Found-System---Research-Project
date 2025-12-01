@@ -1,0 +1,115 @@
+import React from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { FoundItem } from '../types/models';
+
+interface ItemCardProps {
+  item: FoundItem;
+  onPress: () => void;
+}
+
+export const ItemCard: React.FC<ItemCardProps> = ({ item, onPress }) => {
+  return (
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
+      <Image 
+        source={{ uri: item.imageUrl }} 
+        style={styles.image}
+        resizeMode="cover"
+      />
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.category}>{item.category}</Text>
+          <View style={[styles.statusBadge, getStatusBadgeStyle(item.status)]}>
+            <Text style={styles.statusText}>{item.status}</Text>
+          </View>
+        </View>
+        <Text style={styles.description} numberOfLines={2}>
+          {item.description}
+        </Text>
+        <View style={styles.footer}>
+          <Text style={styles.location}>📍 {item.location}</Text>
+          <Text style={styles.date}>
+            {new Date(item.createdAt).toLocaleDateString()}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+const getStatusBadgeStyle = (status: string) => {
+  switch (status) {
+    case 'available':
+      return { backgroundColor: '#4CAF50' };
+    case 'pending_verification':
+      return { backgroundColor: '#FF9800' };
+    case 'claimed':
+      return { backgroundColor: '#9E9E9E' };
+    default:
+      return { backgroundColor: '#757575' };
+  }
+};
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  image: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#E0E0E0',
+  },
+  content: {
+    padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  category: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333333',
+    textTransform: 'capitalize',
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  description: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  location: {
+    fontSize: 13,
+    color: '#4A90E2',
+    fontWeight: '500',
+  },
+  date: {
+    fontSize: 12,
+    color: '#999999',
+  },
+});

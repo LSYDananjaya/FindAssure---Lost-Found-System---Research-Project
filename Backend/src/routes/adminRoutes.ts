@@ -1,0 +1,59 @@
+import { Router } from 'express';
+import { requireAuth, requireAdmin } from '../middleware/authMiddleware';
+import * as adminController from '../controllers/adminController';
+
+const router = Router();
+
+// All admin routes require authentication and admin role
+router.use(requireAuth, requireAdmin);
+
+/**
+ * @route   GET /api/admin/overview
+ * @desc    Get dashboard statistics
+ * @access  Admin only
+ */
+router.get('/overview', adminController.getOverview);
+
+/**
+ * @route   GET /api/admin/found-items
+ * @desc    Get all found items with full details (including founder answers)
+ * @access  Admin only
+ */
+router.get('/found-items', adminController.getAllFoundItems);
+
+/**
+ * @route   PATCH /api/admin/found-items/:id
+ * @desc    Update found item status
+ * @access  Admin only
+ */
+router.patch('/found-items/:id', adminController.updateFoundItemStatus);
+
+/**
+ * @route   GET /api/admin/users
+ * @desc    Get all users
+ * @access  Admin only
+ */
+router.get('/users', adminController.getAllUsers);
+
+/**
+ * @route   PATCH /api/admin/users/:id
+ * @desc    Update user details (including role)
+ * @access  Admin only
+ */
+router.patch('/users/:id', adminController.updateUser);
+
+/**
+ * @route   GET /api/admin/verifications
+ * @desc    Get all verifications with full details
+ * @access  Admin only
+ */
+router.get('/verifications', adminController.getAllVerifications);
+
+/**
+ * @route   PUT /api/admin/verifications/:id/evaluate
+ * @desc    Evaluate verification (for future AI implementation)
+ * @access  Admin only
+ */
+router.put('/verifications/:id/evaluate', adminController.evaluateVerification);
+
+export default router;

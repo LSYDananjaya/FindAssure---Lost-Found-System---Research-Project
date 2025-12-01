@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  getAuth,
   User as FirebaseUser 
 } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,10 +27,17 @@ const firebaseConfig = {
 // Initialize Firebase (prevent re-initialization)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Auth with AsyncStorage persistence
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+// Initialize Auth with AsyncStorage persistence (prevent re-initialization)
+let auth;
+try {
+  // Try to get existing auth instance first
+  auth = getAuth(app);
+} catch (error) {
+  // If it doesn't exist, initialize it
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+}
 
 interface User {
   _id: string;
@@ -47,7 +55,8 @@ interface AuthContextType {
   signIn: (credentials: { email: string; password: string }) => Promise<void>;
   signUp: (data: { email: string; password: string; name: string; phone?: string; role?: 'owner' | 'founder' }) => Promise<void>;
   signOut: () => Promise<void>;
-  updateProfile: (data: Partial<User>) => Promise<void>;
+  updateProfile: (data: Partial<User>) => Promise<User>;
+  updateUser: (userData: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -194,11 +203,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (data: Partial<User>) => {
     try {
       const response = await axiosClient.patch('/auth/me', data);
+      // Update local user state with the response
       setUser(response.data);
+      return response.data;
     } catch (error: any) {
       console.error('Update profile error:', error);
-      throw new Error(error.message || 'Update failed');
+      throw new Error(error.response?.data?.message || error.message || 'Update failed');
     }
+  };
+
+  const updateUser = (userData: User) => {
+    setUser(userData);
   };
 
   return (
@@ -210,7 +225,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signIn, 
       signUp, 
       signOut, 
-      updateProfile 
+      updateProfile,
+      updateUser
     }}>
       {children}
     </AuthContext.Provider>

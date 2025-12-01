@@ -19,7 +19,7 @@ type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Prof
 
 const ProfileScreen = () => {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
-  const { user, updateUser, signOut } = useAuth();
+  const { user, updateProfile, signOut } = useAuth();
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -28,9 +28,9 @@ const ProfileScreen = () => {
 
   useEffect(() => {
     if (user) {
-      setName(user.name);
-      setEmail(user.email);
-      setPhone(user.phone);
+      setName(user.name || '');
+      setEmail(user.email || '');
+      setPhone(user.phone || '');
     }
   }, [user]);
 
@@ -42,8 +42,7 @@ const ProfileScreen = () => {
 
     try {
       setLoading(true);
-      const updatedUser = await authApi.updateProfile({ name, phone });
-      updateUser(updatedUser);
+      await updateProfile({ name, phone });
       Alert.alert('Success', 'Profile updated successfully');
     } catch (error: any) {
       Alert.alert('Update Failed', error.message || 'Please try again');
@@ -87,9 +86,11 @@ const ProfileScreen = () => {
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+            <Text style={styles.avatarText}>
+              {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+            </Text>
           </View>
-          <Text style={styles.roleText}>Role: {user.role}</Text>
+          <Text style={styles.roleText}>Role: {user.role || 'user'}</Text>
         </View>
 
         <View style={styles.form}>

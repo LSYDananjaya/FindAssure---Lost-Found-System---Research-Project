@@ -2,33 +2,46 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export type VerificationStatus = 'pending' | 'passed' | 'failed';
 
-export interface IOwnerVideoAnswer {
+export interface IVerificationAnswer {
+  questionId: number;
   question: string;
-  videoUrl: string;
+  founderAnswer: string;
+  ownerAnswer: string;
+  videoKey: string;
 }
-
 
 export interface IVerification extends Document {
   foundItemId: Types.ObjectId;
   ownerId: Types.ObjectId;
-  questions: string[];
-  founderAnswers: string[];
-  ownerVideoAnswers: IOwnerVideoAnswer[];
+  answers: IVerificationAnswer[];
   status: VerificationStatus;
   similarityScore: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const ownerVideoAnswerSchema = new Schema<IOwnerVideoAnswer>(
+const verificationAnswerSchema = new Schema<IVerificationAnswer>(
   {
+    questionId: {
+      type: Number,
+      required: true,
+    },
     question: {
       type: String,
       required: true,
     },
-    videoUrl: {
+    founderAnswer: {
       type: String,
       required: true,
+    },
+    ownerAnswer: {
+      type: String,
+      required: true,
+    },
+    videoKey: {
+      type: String,
+      required: true,
+      default: 'default_video_placeholder',
     },
   },
   { _id: false }
@@ -48,22 +61,14 @@ const verificationSchema = new Schema<IVerification>(
       required: true,
       index: true,
     },
-    questions: {
-      type: [String],
-      required: true,
-    },
-    founderAnswers: {
-      type: [String],
-      required: true,
-    },
-    ownerVideoAnswers: {
-      type: [ownerVideoAnswerSchema],
+    answers: {
+      type: [verificationAnswerSchema],
       required: true,
       validate: {
-        validator: function (v: IOwnerVideoAnswer[]) {
-          return v.length === (this as any).questions.length;
+        validator: function (v: IVerificationAnswer[]) {
+          return v.length > 0;
         },
-        message: 'Number of video answers must match number of questions',
+        message: 'At least one answer is required',
       },
     },
     status: {

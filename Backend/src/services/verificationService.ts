@@ -1,11 +1,17 @@
 import { Types } from 'mongoose';
-import { Verification, IVerification, VerificationStatus, IOwnerVideoAnswer } from '../models/Verification';
+import { Verification, IVerification, VerificationStatus, IVerificationAnswer } from '../models/Verification';
 import { FoundItem } from '../models/FoundItem';
+
+export interface OwnerAnswerInput {
+  questionId: number;
+  answer: string;
+  videoKey?: string;
+}
 
 export interface CreateVerificationData {
   foundItemId: string;
   ownerId: string;
-  ownerVideoAnswers: IOwnerVideoAnswer[];
+  ownerAnswers: OwnerAnswerInput[];
 }
 
 export interface EvaluateVerificationData {
@@ -27,17 +33,32 @@ export const createVerification = async (
   }
 
   // Validate that owner provided answers for all questions
-  if (data.ownerVideoAnswers.length !== foundItem.questions.length) {
-    throw new Error('Owner must provide video answers for all questions');
+  if (data.ownerAnswers.length !== foundItem.questions.length) {
+    throw new Error('Owner must provide answers for all questions');
   }
+
+  // Build unified answers array
+  const answers: IVerificationAnswer[] = data.ownerAnswers.map((ownerAnswer) => {
+    const questionIndex = ownerAnswer.questionId;
+    
+    if (questionIndex < 0 || questionIndex >= foundItem.questions.length) {
+      throw new Error(`Invalid questionId: ${questionIndex}`);
+    }
+
+    return {
+      questionId: questionIndex,
+      question: foundItem.questions[questionIndex],
+      founderAnswer: foundItem.founderAnswers[questionIndex],
+      ownerAnswer: ownerAnswer.answer,
+      videoKey: ownerAnswer.videoKey || 'default_video_placeholder',
+    };
+  });
 
   // Create verification record
   const verification = await Verification.create({
     foundItemId: new Types.ObjectId(data.foundItemId),
     ownerId: new Types.ObjectId(data.ownerId),
-    questions: foundItem.questions,
-    founderAnswers: foundItem.founderAnswers,
-    ownerVideoAnswers: data.ownerVideoAnswers,
+    answers,
     status: 'pending',
     similarityScore: null,
   });
@@ -52,13 +73,13 @@ export const createVerification = async (
 
 /**
  * Get verification by ID
- * For owners: exclude founderAnswers
+ * For owners: exclude founderAnswers from answers array
  * For admins: include all details
  */
 export const getVerificationById = async (
   id: string,
   isAdmin: boolean = false
-): Promise<Partial<IVerification> | null> => {
+): Promise<any> => {
   const verification = await Verification.findById(id)
     .populate('foundItemId', 'category description imageUrl location')
     .populate('ownerId', 'name email phone');
@@ -67,14 +88,24 @@ export const getVerificationById = async (
     return null;
   }
 
+  const verificationObj = verification.toObject();
+
   if (isAdmin) {
-    // Admin can see everything
-    return verification;
+    // Admin can see everything including founderAnswers
+    return verificationObj;
   }
 
-  // Owner view: exclude founderAnswers
-  const verificationObj = verification.toObject();
-  const { founderAnswers, ...ownerView } = verificationObj;
+  // Owner view: exclude founderAnswer from each answer in the array
+  const ownerView = {
+    ...verificationObj,
+    answers: verificationObj.answers.map((answer: IVerificationAnswer) => ({
+      questionId: answer.questionId,
+      question: answer.question,
+      ownerAnswer: answer.ownerAnswer,
+      videoKey: answer.videoKey,
+      // founderAnswer is excluded for owners
+    })),
+  };
 
   return ownerView;
 };

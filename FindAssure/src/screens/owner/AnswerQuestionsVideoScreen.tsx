@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, VideoAnswer } from '../../types/models';
+import { RootStackParamList, OwnerAnswerInput } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { itemsApi } from '../../api/itemsApi';
 
@@ -56,16 +56,17 @@ const AnswerQuestionsVideoScreen = () => {
     try {
       setLoading(true);
 
-      // Build video answers array (using text for now, video URL will be added later)
-      const ownerVideoAnswers: VideoAnswer[] = foundItem.questions.map((question, index) => ({
-        question,
-        videoUrl: textAnswers[index].trim(), // For now, storing text as videoUrl
+      // Build unified owner answers array with questionId, answer, and videoKey
+      const ownerAnswers: OwnerAnswerInput[] = textAnswers.map((answer, index) => ({
+        questionId: index,
+        answer: answer.trim(),
+        videoKey: 'default_video_placeholder', // Will be replaced with actual video key in future
       }));
 
       // Submit verification request
       await itemsApi.submitVerification({
         foundItemId: foundItem._id,
-        ownerVideoAnswers,
+        ownerAnswers,
       });
 
       navigation.navigate('VerificationPending');

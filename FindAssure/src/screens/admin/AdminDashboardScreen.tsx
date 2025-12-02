@@ -1,7 +1,7 @@
 // AdminDashboardScreen – follow the spec
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, FlatList, Alert, RefreshControl } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView, FlatList, Alert, RefreshControl, BackHandler } from 'react-native';
+import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, FoundItem, AdminOverview } from '../../types/models';
 import { itemsApi } from '../../api/itemsApi';
@@ -41,6 +41,27 @@ const AdminDashboardScreen = () => {
     fetchData();
   }, []);
 
+  // Prevent back button from navigating away
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        // Show alert asking if user wants to logout
+        Alert.alert(
+          'Exit Dashboard',
+          'Do you want to logout?',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => {} },
+            { text: 'Logout', style: 'destructive', onPress: handleLogout },
+          ]
+        );
+        return true; // Prevent default back behavior
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [])
+  );
+
   const handleRefresh = () => {
     setRefreshing(true);
     fetchData();
@@ -62,7 +83,12 @@ const AdminDashboardScreen = () => {
           onPress: async () => {
             try {
               await signOut();
-              navigation.navigate('Home');
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'Home' }],
+                })
+              );
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to logout');
             }

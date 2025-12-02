@@ -44,7 +44,7 @@ interface User {
   name: string;
   email: string;
   phone?: string;
-  role: 'owner' | 'founder' | 'admin';
+  role: 'owner' | 'admin'; // Only owners and admins register
 }
 
 interface AuthContextType {
@@ -53,7 +53,7 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   signIn: (credentials: { email: string; password: string }) => Promise<void>;
-  signUp: (data: { email: string; password: string; name: string; phone?: string; role?: 'owner' | 'founder' }) => Promise<void>;
+  signUp: (data: { email: string; password: string; name: string; phone?: string }) => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<User>;
   updateUser: (userData: User) => void;
@@ -110,11 +110,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
-  const signUp = async (data: { email: string; password: string; name: string; phone?: string; role?: 'owner' | 'founder' }) => {
+  const signUp = async (data: { email: string; password: string; name: string; phone?: string }) => {
     let firebaseUserCreated = false;
     
     try {
-      const { email, password, name, phone, role } = data;
+      const { email, password, name, phone } = data;
       
       // 1. Create user in Firebase
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -127,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 3. Register with backend (creates MongoDB user with all details)
       const registerData: any = { email, name };
       if (phone) registerData.phone = phone;
-      if (role) registerData.role = role;
+      // Role defaults to 'owner' on backend
       
       try {
         await axiosClient.post('/auth/register', registerData, {

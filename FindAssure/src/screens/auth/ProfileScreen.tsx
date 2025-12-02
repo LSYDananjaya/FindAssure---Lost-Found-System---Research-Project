@@ -8,7 +8,7 @@ import {
   ScrollView, 
   Alert 
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../types/models';
@@ -63,7 +63,12 @@ const ProfileScreen = () => {
           onPress: async () => {
             try {
               await signOut();
-              navigation.navigate('Home');
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'Home' }],
+                })
+              );
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to logout');
             }
@@ -90,7 +95,7 @@ const ProfileScreen = () => {
               {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
             </Text>
           </View>
-          <Text style={styles.roleText}>Role: {user.role || 'user'}</Text>
+          <Text style={styles.roleText}>Role: Item Owner</Text>
         </View>
 
         <View style={styles.form}>

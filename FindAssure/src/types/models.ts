@@ -5,7 +5,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  role: 'owner' | 'founder' | 'admin';
+  role: 'owner' | 'admin'; // Only owners and admins register
   createdAt: string;
   updatedAt?: string;
 }
@@ -75,7 +75,7 @@ export interface RegisterData {
   email: string;
   phone: string;
   password: string;
-  role?: 'owner' | 'founder';
+  // Role is always 'owner' for new registrations
 }
 
 export interface AuthResponse {

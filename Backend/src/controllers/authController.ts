@@ -46,13 +46,13 @@ export const register = async (
       return;
     }
 
-    // Create new user with all provided data
+    // Create new user with all provided data (only owner role allowed for registration)
     user = new User({
       firebaseUid,
       email: email || decodedToken.email,
       name: name || decodedToken.name || 'User',
       phone: phone || '',
-      role: role || 'owner',
+      role: 'owner', // Only owners register
     });
 
     try {
@@ -207,14 +207,12 @@ export const registerExtraInfo = async (
       return;
     }
 
-    const { name, phone, role } = req.body;
+    const { name, phone } = req.body;
 
     const updateData: any = {};
     if (name) updateData.name = name;
     if (phone) updateData.phone = phone;
-    if (role && ['owner', 'founder'].includes(role)) {
-      updateData.role = role;
-    }
+    // Role is fixed to 'owner' for registered users
 
     const user = await User.findByIdAndUpdate(
       req.user.id,

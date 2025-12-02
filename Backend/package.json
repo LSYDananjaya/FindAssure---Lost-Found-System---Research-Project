@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "cleanup:user": "ts-node src/scripts/cleanupUsers.ts",
-    "cleanup:all": "ts-node src/scripts/cleanupUsers.ts --all"
+    "cleanup:all": "ts-node src/scripts/cleanupUsers.ts --all",
+    "migrate:founder-to-owner": "ts-node src/scripts/migrateFounderToOwner.ts"
   },
   "keywords": [
     "lost-found",

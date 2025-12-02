@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler, Alert } from 'react-native';
+import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
@@ -26,10 +26,6 @@ const HomeScreen = () => {
     }
   };
 
-  const handleAdminLogin = () => {
-    navigation.navigate('AdminLogin');
-  };
-
   const handleProfile = () => {
     navigation.navigate('Profile');
   };
@@ -41,10 +37,41 @@ const HomeScreen = () => {
   const handleLogout = async () => {
     try {
       await signOut();
+      // Reset navigation stack after logout
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Home' }],
+        })
+      );
     } catch (error) {
       console.error('Logout error:', error);
     }
   };
+
+  // Handle Android back button for logged-in users
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        if (user) {
+          // If user is logged in, show exit app confirmation
+          Alert.alert(
+            'Exit App',
+            'Do you want to exit the app?',
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => {} },
+              { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
+            ]
+          );
+          return true; // Prevent default back behavior
+        }
+        return false; // Allow default back behavior for guests
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [user])
+  );
 
   return (
     <ScrollView style={styles.container}>
@@ -69,6 +96,14 @@ const HomeScreen = () => {
               <Text style={styles.greeting}>Welcome back, {user.name}! 👋</Text>
               <Text style={styles.userRole}>Role: {user.role}</Text>
               <View style={styles.userActions}>
+                {user.role === 'admin' && (
+                  <TouchableOpacity 
+                    style={styles.linkButton} 
+                    onPress={() => navigation.navigate('AdminDashboard')}
+                  >
+                    <Text style={[styles.linkText, styles.adminLinkText]}>Admin Dashboard</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity style={styles.linkButton} onPress={handleProfile}>
                   <Text style={styles.linkText}>View Profile</Text>
                 </TouchableOpacity>
@@ -125,16 +160,6 @@ const HomeScreen = () => {
               </Text>
             </View>
             <Text style={styles.arrow}>›</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Admin Access */}
-        <View style={styles.adminSection}>
-          <TouchableOpacity 
-            style={styles.adminLink}
-            onPress={handleAdminLogin}
-          >
-            <Text style={styles.adminLinkText}>🔒 Admin Login</Text>
           </TouchableOpacity>
         </View>
 
@@ -236,6 +261,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  adminLinkText: {
+    color: '#E53935',
+  },
   guestCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -307,18 +335,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: '#CCCCCC',
     fontWeight: '300',
-  },
-  adminSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  adminLink: {
-    paddingVertical: 12,
-  },
-  adminLinkText: {
-    fontSize: 14,
-    color: '#757575',
-    fontWeight: '500',
   },
   infoSection: {
     backgroundColor: '#FFFFFF',

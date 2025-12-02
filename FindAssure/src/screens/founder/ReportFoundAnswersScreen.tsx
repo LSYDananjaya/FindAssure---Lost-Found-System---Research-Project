@@ -8,7 +8,8 @@ import {
   ScrollView, 
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  TouchableOpacity
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -69,6 +70,22 @@ const ReportFoundAnswersScreen = () => {
               <View key={index} style={styles.questionGroup}>
                 <Text style={styles.questionNumber}>Question {index + 1}</Text>
                 <Text style={styles.questionText}>{question}</Text>
+                
+                {/* Video Option - Placeholder for future implementation */}
+                <TouchableOpacity 
+                  style={styles.videoButton}
+                  onPress={() => Alert.alert(
+                    'Coming Soon', 
+                    'Video recording will be implemented in a future update'
+                  )}
+                >
+                  <Text style={styles.videoIcon}>🎥</Text>
+                  <Text style={styles.videoButtonText}>Record Video Answer (Coming Soon)</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.orText}>OR</Text>
+
+                {/* Text Input Option */}
                 <TextInput
                   style={styles.answerInput}
                   placeholder="Type your answer here..."
@@ -152,6 +169,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     backgroundColor: '#FAFAFA',
     minHeight: 80,
+  },
+  videoButton: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#DDDDDD',
+    borderStyle: 'dashed',
+    marginBottom: 8,
+  },
+  videoIcon: {
+    fontSize: 20,
+    marginRight: 8,
+  },
+  videoButtonText: {
+    fontSize: 13,
+    color: '#999999',
+    fontWeight: '500',
+  },
+  orText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#999999',
+    marginVertical: 8,
+    fontWeight: '600',
   },
   nextButton: {
     marginBottom: 20,

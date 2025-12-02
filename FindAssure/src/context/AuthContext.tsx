@@ -111,11 +111,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signUp = async (data: { email: string; password: string; name: string; phone?: string; role?: 'owner' | 'founder' }) => {
+    let firebaseUserCreated = false;
+    
     try {
       const { email, password, name, phone, role } = data;
       
       // 1. Create user in Firebase
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      firebaseUserCreated = true;
       
       // 2. Get token
       const idToken = await userCredential.user.getIdToken();
@@ -126,9 +129,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (phone) registerData.phone = phone;
       if (role) registerData.role = role;
       
-      await axiosClient.post('/auth/register', registerData, {
-        headers: { Authorization: `Bearer ${idToken}` }
-      });
+      try {
+        await axiosClient.post('/auth/register', registerData, {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+      } catch (backendError: any) {
+        // 409 means user already exists in backend - this is OK
+        if (backendError.response?.status === 409) {
+          console.log('User already exists in backend, proceeding with login');
+        } else {
+          console.error('Backend registration error:', backendError);
+          // If backend fails but Firebase succeeded, still sync user data
+          // The backend might auto-create user on first login
+        }
+      }
 
       // 4. Refresh user data
       await syncUserWithBackend(userCredential.user);
@@ -143,6 +157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Please enter a valid email address.');
       } else if (error.code === 'auth/weak-password') {
         throw new Error('Password should be at least 6 characters long.');
+      } else if (error.code === 'auth/network-request-failed') {
+        throw new Error('Network error. Please check your internet connection.');
       } else if (error.response?.status === 409) {
         throw new Error('This account already exists. Please sign in instead.');
       } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {

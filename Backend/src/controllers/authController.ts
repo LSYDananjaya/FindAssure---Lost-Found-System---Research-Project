@@ -26,11 +26,14 @@ export const register = async (
     const decodedToken = await admin.auth().verifyIdToken(token);
     const firebaseUid = decodedToken.uid;
 
-    // Check if user already exists
-    let user = await User.findOne({ firebaseUid }).select('-__v');
+    // Check if user already exists by firebaseUid or email
+    let user = await User.findOne({ 
+      $or: [{ firebaseUid }, { email: email || decodedToken.email }]
+    }).select('-__v');
 
     if (user) {
       // Update existing user with any new data provided
+      if (firebaseUid && firebaseUid !== user.firebaseUid) user.firebaseUid = firebaseUid;
       if (name && name !== user.name) user.name = name;
       if (phone && phone !== user.phone) user.phone = phone;
       if (role && role !== user.role) user.role = role;
@@ -52,7 +55,23 @@ export const register = async (
       role: role || 'owner',
     });
 
-    await user.save();
+    try {
+      await user.save();
+    } catch (saveError: any) {
+      // Handle duplicate key error gracefully
+      if (saveError.code === 11000) {
+        // User was created between our check and save, fetch and return it
+        user = await User.findOne({ 
+          $or: [{ firebaseUid }, { email: email || decodedToken.email }]
+        }).select('-__v');
+        
+        if (user) {
+          res.status(200).json({ user, token });
+          return;
+        }
+      }
+      throw saveError;
+    }
 
     // Return user without sensitive fields
     const userObject = user.toObject();

@@ -10,7 +10,7 @@
 // Check backend console output for: "📱 Mobile Access: http://YOUR_IP:5000/api"
 export const API_CONFIG = {
   // Current backend IP (update this when your network changes)
-  BACKEND_IP: '172.20.10.2',
+  BACKEND_IP: '192.168.123.106',
   BACKEND_PORT: 5000,
   
   // Timeouts

@@ -8,7 +8,7 @@ If you're getting timeout errors when the mobile app tries to connect to the bac
 
 Run this in PowerShell:
 ```powershell
-ipconfig | Select-String -Pattern "IPv4"
+ Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi" | Select-Object IPAddress
 ```
 
 Look for the IP address of your **Wi-Fi** or **Ethernet** adapter (usually starts with `192.168.x.x`).

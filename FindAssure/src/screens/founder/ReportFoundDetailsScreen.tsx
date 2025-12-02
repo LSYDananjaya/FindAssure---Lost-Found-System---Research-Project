@@ -15,6 +15,8 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { CategoryPicker } from '../../components/CategoryPicker';
+import { ITEM_CATEGORIES } from '../../constants/appConstants';
 
 type ReportFoundDetailsNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundDetails'>;
 type ReportFoundDetailsRouteProp = RouteProp<RootStackParamList, 'ReportFoundDetails'>;
@@ -24,18 +26,18 @@ const ReportFoundDetailsScreen = () => {
   const route = useRoute<ReportFoundDetailsRouteProp>();
   const { imageUri } = route.params;
 
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(ITEM_CATEGORIES[0]);
   const [description, setDescription] = useState('');
 
   const handleConfirm = () => {
-    if (!category.trim() || !description.trim()) {
+    if (!category || !description.trim()) {
       Alert.alert('Required Fields', 'Please fill in all fields');
       return;
     }
 
     navigation.navigate('ReportFoundQuestions', {
       imageUri,
-      category: category.trim(),
+      category: category,
       description: description.trim(),
     });
   };
@@ -52,12 +54,9 @@ const ReportFoundDetailsScreen = () => {
           <View style={styles.form}>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Category *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., Phone, Wallet, Keys, Bag, etc."
-                value={category}
-                onChangeText={setCategory}
-                autoCapitalize="words"
+              <CategoryPicker
+                selectedValue={category}
+                onValueChange={setCategory}
               />
             </View>
 

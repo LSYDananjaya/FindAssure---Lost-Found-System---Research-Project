@@ -14,7 +14,9 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { LocationPicker } from '../../components/LocationPicker';
 import { itemsApi } from '../../api/itemsApi';
+import { LOCATIONS } from '../../constants/appConstants';
 
 type ReportFoundLocationNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundLocation'>;
 type ReportFoundLocationRouteProp = RouteProp<RootStackParamList, 'ReportFoundLocation'>;
@@ -24,14 +26,14 @@ const ReportFoundLocationScreen = () => {
   const route = useRoute<ReportFoundLocationRouteProp>();
   const { imageUri, category, description, selectedQuestions, founderAnswers } = route.params;
 
-  const [location, setLocation] = useState('');
+  const [location, setLocation] = useState(LOCATIONS[0]);
   const [founderName, setFounderName] = useState('');
   const [founderEmail, setFounderEmail] = useState('');
   const [founderPhone, setFounderPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!location.trim() || !founderName.trim() || !founderEmail.trim() || !founderPhone.trim()) {
+    if (!location || !founderName.trim() || !founderEmail.trim() || !founderPhone.trim()) {
       Alert.alert('Required Fields', 'Please fill in all fields');
       return;
     }
@@ -46,7 +48,7 @@ const ReportFoundLocationScreen = () => {
         description,
         questions: selectedQuestions,
         founderAnswers,
-        location: location.trim(),
+        location: location,
         founderContact: {
           name: founderName.trim(),
           email: founderEmail.trim(),
@@ -84,14 +86,9 @@ const ReportFoundLocationScreen = () => {
               <Text style={styles.sectionTitle}>📍 Location Details</Text>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Where did you find it? *</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="e.g., Near Starbucks on Main Street, City Park bench..."
-                  value={location}
-                  onChangeText={setLocation}
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
+                <LocationPicker
+                  selectedValue={location}
+                  onValueChange={setLocation}
                 />
               </View>
             </View>

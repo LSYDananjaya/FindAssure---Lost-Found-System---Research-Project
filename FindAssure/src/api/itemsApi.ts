@@ -2,6 +2,17 @@ import axiosClient from './axiosClient';
 import { FoundItem, LostItem, OwnerAnswerInput, AdminOverview } from '../types/models';
 
 export const itemsApi = {
+  // AI QUESTION GENERATION
+  
+  // Generate verification questions using AI
+  generateQuestions: async (data: {
+    category: string;
+    description: string;
+  }): Promise<{ questions: string[] }> => {
+    const response = await axiosClient.post<{ questions: string[] }>('/items/generate-questions', data);
+    return response.data;
+  },
+
   // FOUNDER ENDPOINTS
   
   // Report a found item

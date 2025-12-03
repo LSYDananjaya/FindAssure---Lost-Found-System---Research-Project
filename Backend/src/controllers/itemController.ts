@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as itemService from '../services/itemService';
 import * as verificationService from '../services/verificationService';
+import * as geminiService from '../services/geminiService';
 
 /**
  * Create a found item
@@ -265,6 +266,36 @@ export const getMyVerifications = async (
     const verifications = await verificationService.getVerificationsByOwner(req.user.id);
 
     res.status(200).json(verifications);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Generate verification questions using AI
+ * POST /api/items/generate-questions
+ */
+export const generateQuestions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { category, description } = req.body;
+
+    // Validation
+    if (!category || !description) {
+      res.status(400).json({ message: 'Category and description are required' });
+      return;
+    }
+
+    // Generate questions using Gemini AI
+    const questions = await geminiService.generateVerificationQuestions({
+      category,
+      description,
+    });
+
+    res.status(200).json({ questions });
   } catch (error) {
     next(error);
   }

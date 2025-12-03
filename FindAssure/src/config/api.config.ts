@@ -14,7 +14,7 @@ export const API_CONFIG = {
   BACKEND_PORT: 5000,
   
   // Timeouts
-  REQUEST_TIMEOUT: 30000, // 30 seconds
+  REQUEST_TIMEOUT: 60000, // 60 seconds (AI generation can take 5-15 seconds)
   
   // Alternative URLs for different scenarios:
   // Android Emulator: '10.0.2.2'

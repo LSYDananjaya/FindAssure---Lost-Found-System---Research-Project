@@ -48,6 +48,17 @@ router.post('/lost', requireAuth, itemController.createLostRequest);
 router.get('/lost/me', requireAuth, itemController.getMyLostRequests);
 
 // ============================================
+// AI QUESTION GENERATION
+// ============================================
+
+/**
+ * @route   POST /api/items/generate-questions
+ * @desc    Generate verification questions using AI
+ * @access  Public
+ */
+router.post('/generate-questions', itemController.generateQuestions);
+
+// ============================================
 // VERIFICATION ROUTES
 // ============================================
 

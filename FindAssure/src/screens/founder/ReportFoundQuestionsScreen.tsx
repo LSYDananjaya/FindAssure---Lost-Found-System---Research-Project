@@ -1,33 +1,16 @@
 // ReportFoundQuestionsScreen – follow the spec
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { QuestionChip } from '../../components/QuestionChip';
+import { itemsApi } from '../../api/itemsApi';
+import { BASE_URL } from '../../config/api.config';
 
 type ReportFoundQuestionsNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundQuestions'>;
 type ReportFoundQuestionsRouteProp = RouteProp<RootStackParamList, 'ReportFoundQuestions'>;
-
-// Generate dummy questions based on category
-const generateQuestions = (category: string, description: string): string[] => {
-  const baseQuestions = [
-    "What color is the item?",
-    "Where exactly did you find it?",
-    "What date did you find it?",
-    "What time of day did you find it?",
-    "Are there any identifying marks or features?",
-    "What is the brand or manufacturer?",
-    "What is the approximate size or dimensions?",
-    "What is the condition of the item?",
-    "Was there anything inside or attached to it?",
-    "What material is it made of?",
-  ];
-
-  // You can add category-specific questions later
-  return baseQuestions;
-};
 
 const ReportFoundQuestionsScreen = () => {
   const navigation = useNavigation<ReportFoundQuestionsNavigationProp>();
@@ -36,11 +19,55 @@ const ReportFoundQuestionsScreen = () => {
 
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const questions = generateQuestions(category, description);
-    setSuggestedQuestions(questions);
+    fetchQuestionsFromAI();
   }, [category, description]);
+
+  const fetchQuestionsFromAI = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔍 Fetching questions for:', { category, description });
+      console.log('📡 API Base URL:', BASE_URL);
+      
+      // Call the API to generate questions using Gemini AI
+      const response = await itemsApi.generateQuestions({
+        category,
+        description,
+      });
+
+      console.log('✅ Received questions:', response.questions);
+      console.log('📝 First question:', response.questions[0]);
+      
+      setSuggestedQuestions(response.questions);
+    } catch (err: any) {
+      console.error('❌ Error generating questions:', err);
+      console.error('Error details:', err.response?.data || err.message);
+      setError('Failed to generate questions. Please try again.');
+      
+      // Show error alert with more details
+      Alert.alert(
+        'Error',
+        `Failed to generate questions: ${err.response?.data?.message || err.message || 'Network error'}`,
+        [
+          {
+            text: 'Retry',
+            onPress: () => fetchQuestionsFromAI(),
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleToggleQuestion = (question: string) => {
     if (selectedQuestions.includes(question)) {
@@ -71,6 +98,16 @@ const ReportFoundQuestionsScreen = () => {
     });
   };
 
+  // Show loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#1565C0" />
+        <Text style={styles.loadingText}>Generating questions with AI...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -78,7 +115,7 @@ const ReportFoundQuestionsScreen = () => {
           <View style={styles.header}>
             <Text style={styles.title}>Select Ownership Questions</Text>
             <Text style={styles.subtitle}>
-              Choose exactly 5 questions that the owner should answer to verify ownership
+              AI-generated questions based on your item description. Choose exactly 5 questions that the owner should answer to verify ownership.
             </Text>
             <View style={styles.counter}>
               <Text style={styles.counterText}>
@@ -86,6 +123,16 @@ const ReportFoundQuestionsScreen = () => {
               </Text>
             </View>
           </View>
+
+          {error && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              <PrimaryButton
+                title="Retry"
+                onPress={fetchQuestionsFromAI}
+              />
+            </View>
+          )}
 
           <View style={styles.questionsContainer}>
             {suggestedQuestions.map((question, index) => (
@@ -115,6 +162,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666666',
+    fontWeight: '500',
   },
   scrollView: {
     flex: 1,
@@ -148,6 +205,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1565C0',
+  },
+  errorContainer: {
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 20,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#C62828',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   questionsContainer: {
     marginBottom: 20,

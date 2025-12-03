@@ -26,26 +26,58 @@ export const register = async (
     const decodedToken = await admin.auth().verifyIdToken(token);
     const firebaseUid = decodedToken.uid;
 
-    // Check if user already exists
-    let user = await User.findOne({ firebaseUid });
+    // Check if user already exists by firebaseUid or email
+    let user = await User.findOne({ 
+      $or: [{ firebaseUid }, { email: email || decodedToken.email }]
+    }).select('-__v');
 
     if (user) {
+      // Update existing user with any new data provided
+      if (firebaseUid && firebaseUid !== user.firebaseUid) user.firebaseUid = firebaseUid;
+      if (name && name !== user.name) user.name = name;
+      if (phone && phone !== user.phone) user.phone = phone;
+      if (role && role !== user.role) user.role = role;
+      
+      if (user.isModified()) {
+        await user.save();
+      }
+      
       res.status(200).json({ user, token });
       return;
     }
 
-    // Create new user
+    // Create new user with all provided data (only owner role allowed for registration)
     user = new User({
       firebaseUid,
       email: email || decodedToken.email,
-      name: name || 'User',
+      name: name || decodedToken.name || 'User',
       phone: phone || '',
-      role: role || 'owner',
+      role: 'owner', // Only owners register
     });
 
-    await user.save();
+    try {
+      await user.save();
+    } catch (saveError: any) {
+      // Handle duplicate key error gracefully
+      if (saveError.code === 11000) {
+        // User was created between our check and save, fetch and return it
+        user = await User.findOne({ 
+          $or: [{ firebaseUid }, { email: email || decodedToken.email }]
+        }).select('-__v');
+        
+        if (user) {
+          res.status(200).json({ user, token });
+          return;
+        }
+      }
+      throw saveError;
+    }
 
-    res.status(201).json({ user, token });
+    // Return user without sensitive fields
+    const userObject = user.toObject();
+    delete userObject.__v;
+
+    res.status(201).json({ user: userObject, token });
   } catch (error) {
     next(error);
   }
@@ -75,7 +107,7 @@ export const login = async (
     const firebaseUid = decodedToken.uid;
 
     // Find user
-    const user = await User.findOne({ firebaseUid });
+    const user = await User.findOne({ firebaseUid }).select('-__v');
 
     if (!user) {
       res.status(404).json({ message: 'User not found. Please register first.' });
@@ -175,14 +207,12 @@ export const registerExtraInfo = async (
       return;
     }
 
-    const { name, phone, role } = req.body;
+    const { name, phone } = req.body;
 
     const updateData: any = {};
     if (name) updateData.name = name;
     if (phone) updateData.phone = phone;
-    if (role && ['owner', 'founder'].includes(role)) {
-      updateData.role = role;
-    }
+    // Role is fixed to 'owner' for registered users
 
     const user = await User.findByIdAndUpdate(
       req.user.id,

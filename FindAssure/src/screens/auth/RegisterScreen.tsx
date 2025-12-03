@@ -11,7 +11,7 @@ import {
   Alert,
   TouchableOpacity
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../types/models';
@@ -28,7 +28,6 @@ const RegisterScreen = () => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<'owner' | 'founder'>('owner');
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
@@ -49,9 +48,17 @@ const RegisterScreen = () => {
 
     try {
       setLoading(true);
-      await signUp({ name, email, phone, password, role });
+      await signUp({ name, email, phone, password, role: 'owner' });
       Alert.alert('Success', 'Account created successfully!', [
-        { text: 'OK', onPress: () => navigation.navigate('Home') }
+        { 
+          text: 'OK', 
+          onPress: () => navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'Home' }],
+            })
+          )
+        }
       ]);
     } catch (error: any) {
       Alert.alert('Registration Failed', error.message || 'Please try again');
@@ -73,7 +80,7 @@ const RegisterScreen = () => {
         <View style={styles.content}>
           <View style={styles.header}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join Find Assure today</Text>
+            <Text style={styles.subtitle}>Register as an Item Owner</Text>
           </View>
 
           <View style={styles.form}>
@@ -111,28 +118,6 @@ const RegisterScreen = () => {
                 keyboardType="phone-pad"
                 autoComplete="tel"
               />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Role</Text>
-              <View style={styles.roleContainer}>
-                <TouchableOpacity
-                  style={[styles.roleButton, role === 'owner' && styles.roleButtonActive]}
-                  onPress={() => setRole('owner')}
-                >
-                  <Text style={[styles.roleText, role === 'owner' && styles.roleTextActive]}>
-                    Item Owner
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.roleButton, role === 'founder' && styles.roleButtonActive]}
-                  onPress={() => setRole('founder')}
-                >
-                  <Text style={[styles.roleText, role === 'founder' && styles.roleTextActive]}>
-                    Item Founder
-                  </Text>
-                </TouchableOpacity>
-              </View>
             </View>
 
             <View style={styles.inputGroup}>
@@ -233,32 +218,6 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: '#FAFAFA',
-  },
-  roleContainer: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  roleButton: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: '#DDDDDD',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-  },
-  roleButtonActive: {
-    borderColor: '#4A90E2',
-    backgroundColor: '#E3F2FD',
-  },
-  roleText: {
-    fontSize: 14,
-    color: '#666666',
-    fontWeight: '500',
-  },
-  roleTextActive: {
-    color: '#4A90E2',
-    fontWeight: '600',
   },
   registerButton: {
     marginTop: 10,

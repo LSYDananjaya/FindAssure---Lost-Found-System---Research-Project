@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export type UserRole = 'owner' | 'founder' | 'admin';
+// Only 'owner' and 'admin' roles - founders don't need to register
+export type UserRole = 'owner' | 'admin';
 
 export interface IUser extends Document {
   firebaseUid: string;
@@ -38,7 +39,7 @@ const userSchema = new Schema<IUser>(
     },
     role: {
       type: String,
-      enum: ['owner', 'founder', 'admin'],
+      enum: ['owner', 'admin'],
       default: 'owner',
     },
   },

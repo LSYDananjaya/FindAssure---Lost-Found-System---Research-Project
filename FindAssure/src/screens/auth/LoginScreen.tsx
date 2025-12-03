@@ -11,7 +11,7 @@ import {
   Alert,
   TouchableOpacity
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../types/models';
@@ -21,7 +21,7 @@ type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
-  const { signIn } = useAuth();
+  const { signIn, user } = useAuth();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,13 +36,41 @@ const LoginScreen = () => {
     try {
       setLoading(true);
       await signIn({ email, password });
-      navigation.navigate('Home');
+      
+      // Wait a moment for user data to be synced
+      setTimeout(() => {
+        // Check if user is admin and navigate accordingly
+        // The user state will be updated by AuthContext after signIn
+      }, 100);
     } catch (error: any) {
       Alert.alert('Login Failed', error.message || 'Please check your credentials');
     } finally {
       setLoading(false);
     }
   };
+
+  // Navigate based on user role after login
+  React.useEffect(() => {
+    if (user && !loading) {
+      if (user.role === 'admin') {
+        // Reset navigation stack to prevent going back to login
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'AdminDashboard' }],
+          })
+        );
+      } else {
+        // Reset navigation stack to prevent going back to login
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Home' }],
+          })
+        );
+      }
+    }
+  }, [user, loading, navigation]);
 
   const handleRegister = () => {
     navigation.navigate('Register');

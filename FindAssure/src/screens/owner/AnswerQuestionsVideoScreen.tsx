@@ -3,14 +3,17 @@ import React, { useState } from 'react';
 import { 
   View, 
   Text, 
+  TextInput,
   StyleSheet, 
   ScrollView, 
   Alert,
-  TouchableOpacity
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, VideoAnswer } from '../../types/models';
+import { RootStackParamList, OwnerAnswerInput } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { itemsApi } from '../../api/itemsApi';
 
@@ -22,62 +25,48 @@ const AnswerQuestionsVideoScreen = () => {
   const route = useRoute<AnswerQuestionsVideoRouteProp>();
   const { foundItem } = route.params;
 
-  // Store video URIs for each question (stubbed for now)
-  const [videoAnswers, setVideoAnswers] = useState<{ [key: number]: string }>({}); 
+  // Store text answers for each question (video will be implemented later)
+  const [textAnswers, setTextAnswers] = useState<string[]>(
+    new Array(foundItem.questions.length).fill('')
+  );
   const [loading, setLoading] = useState(false);
 
-  const handleRecordVideo = (questionIndex: number) => {
-    // TODO: Implement actual video recording with Expo Camera/AV
-    // For now, use a stub/placeholder
-    Alert.alert(
-      'Record Video',
-      'Video recording will be implemented here using Expo Camera',
-      [
-        {
-          text: 'Simulate Recording',
-          onPress: () => {
-            // Simulate a video recording
-            const stubVideoUri = `stub://video_${questionIndex}_${Date.now()}.mp4`;
-            setVideoAnswers(prev => ({
-              ...prev,
-              [questionIndex]: stubVideoUri,
-            }));
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+  const handleAnswerChange = (index: number, text: string) => {
+    const newAnswers = [...textAnswers];
+    newAnswers[index] = text;
+    setTextAnswers(newAnswers);
   };
 
-  const handleRetake = (questionIndex: number) => {
-    const newAnswers = { ...videoAnswers };
-    delete newAnswers[questionIndex];
-    setVideoAnswers(newAnswers);
+  const handleRecordVideo = () => {
+    // TODO: Implement actual video recording with Expo Camera/AV in future
+    Alert.alert(
+      'Coming Soon',
+      'Video recording will be implemented in a future update. Please use text answers for now.'
+    );
   };
 
   const handleSubmit = async () => {
-    const allAnswered = foundItem.questions.every((_, index) => 
-      videoAnswers[index] !== undefined
-    );
+    const allAnswered = textAnswers.every(answer => answer.trim().length > 0);
 
     if (!allAnswered) {
-      Alert.alert('Incomplete', 'Please record video answers for all questions');
+      Alert.alert('Incomplete', 'Please answer all questions');
       return;
     }
 
     try {
       setLoading(true);
 
-      // Build video answers array
-      const ownerVideoAnswers: VideoAnswer[] = foundItem.questions.map((question, index) => ({
-        question,
-        videoUrl: videoAnswers[index],
+      // Build unified owner answers array with questionId, answer, and videoKey
+      const ownerAnswers: OwnerAnswerInput[] = textAnswers.map((answer, index) => ({
+        questionId: index,
+        answer: answer.trim(),
+        videoKey: 'default_video_placeholder', // Will be replaced with actual video key in future
       }));
 
       // Submit verification request
       await itemsApi.submitVerification({
         foundItemId: foundItem._id,
-        ownerVideoAnswers,
+        ownerAnswers,
       });
 
       navigation.navigate('VerificationPending');
@@ -92,13 +81,16 @@ const AnswerQuestionsVideoScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Record Video Answers</Text>
+            <Text style={styles.title}>Answer the Questions</Text>
             <Text style={styles.subtitle}>
-              Record a short video (max 5 seconds) answering each question
+              Answer each question to verify your ownership
             </Text>
           </View>
 
@@ -108,37 +100,39 @@ const AnswerQuestionsVideoScreen = () => {
                 <Text style={styles.questionNumber}>Question {index + 1}</Text>
                 <Text style={styles.questionText}>{question}</Text>
 
-                {videoAnswers[index] ? (
-                  <View style={styles.videoPreview}>
-                    <Text style={styles.videoPreviewText}>✓ Video recorded</Text>
-                    <TouchableOpacity 
-                      style={styles.retakeButton}
-                      onPress={() => handleRetake(index)}
-                    >
-                      <Text style={styles.retakeText}>Retake</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity 
-                    style={styles.recordButton}
-                    onPress={() => handleRecordVideo(index)}
-                  >
-                    <Text style={styles.recordIcon}>🎥</Text>
-                    <Text style={styles.recordText}>Record Video Answer</Text>
-                  </TouchableOpacity>
-                )}
+                {/* Video Option - Placeholder for future implementation */}
+                <TouchableOpacity 
+                  style={styles.recordButton}
+                  onPress={handleRecordVideo}
+                >
+                  <Text style={styles.recordIcon}>🎥</Text>
+                  <Text style={styles.recordText}>Record Video Answer (Coming Soon)</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.orText}>OR</Text>
+
+                {/* Text Input Option */}
+                <TextInput
+                  style={styles.answerInput}
+                  placeholder="Type your answer here..."
+                  value={textAnswers[index]}
+                  onChangeText={(text) => handleAnswerChange(index, text)}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
               </View>
             ))}
           </View>
 
           <View style={styles.infoBox}>
             <Text style={styles.infoText}>
-              📹 Tips for recording:
+              📝 Answer Tips:
             </Text>
-            <Text style={styles.infoText}>• Speak clearly and confidently</Text>
-            <Text style={styles.infoText}>• Show your face (selfie video)</Text>
-            <Text style={styles.infoText}>• Keep answers under 5 seconds</Text>
-            <Text style={styles.infoText}>• Answer honestly to verify ownership</Text>
+            <Text style={styles.infoText}>• Be specific and accurate</Text>
+            <Text style={styles.infoText}>• Provide details only the true owner would know</Text>
+            <Text style={styles.infoText}>• Answer all questions honestly</Text>
+            <Text style={styles.infoText}>• Video recording will be available in a future update</Text>
           </View>
         </View>
       </ScrollView>
@@ -150,7 +144,7 @@ const AnswerQuestionsVideoScreen = () => {
           loading={loading}
         />
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -207,50 +201,41 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   recordButton: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#F5F5F5',
     borderRadius: 8,
-    padding: 16,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#4A90E2',
+    borderWidth: 1,
+    borderColor: '#DDDDDD',
     borderStyle: 'dashed',
+    marginBottom: 8,
   },
   recordIcon: {
-    fontSize: 24,
+    fontSize: 20,
     marginRight: 8,
   },
   recordText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4A90E2',
-  },
-  videoPreview: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 8,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  videoPreviewText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4CAF50',
-  },
-  retakeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
-  },
-  retakeText: {
     fontSize: 13,
+    color: '#999999',
+    fontWeight: '500',
+  },
+  orText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#999999',
+    marginVertical: 8,
     fontWeight: '600',
-    color: '#4CAF50',
+  },
+  answerInput: {
+    borderWidth: 1,
+    borderColor: '#DDDDDD',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    backgroundColor: '#FAFAFA',
+    minHeight: 80,
   },
   infoBox: {
     backgroundColor: '#FFF3E0',

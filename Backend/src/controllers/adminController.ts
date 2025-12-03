@@ -144,6 +144,63 @@ export const updateUser = async (
 };
 
 /**
+ * Delete user
+ * DELETE /api/admin/users/:id
+ */
+export const deleteUser = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Find user in MongoDB
+    const user = await User.findById(id);
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Prevent deleting admin users
+    if (user.role === 'admin') {
+      res.status(403).json({ message: 'Cannot delete admin users' });
+      return;
+    }
+
+    // Delete from Firebase
+    try {
+      const admin = (await import('../config/firebaseAdmin')).default;
+      await admin.auth().deleteUser(user.firebaseUid);
+      console.log(`✅ Deleted user from Firebase: ${user.email}`);
+    } catch (firebaseError: any) {
+      if (firebaseError.code === 'auth/user-not-found') {
+        console.log(`⚠️  User not found in Firebase: ${user.email}`);
+      } else {
+        console.error(`❌ Error deleting from Firebase: ${user.email}`, firebaseError.message);
+        // Continue with MongoDB deletion even if Firebase deletion fails
+      }
+    }
+
+    // Delete from MongoDB
+    await User.findByIdAndDelete(id);
+    console.log(`✅ Deleted user from MongoDB: ${user.email}`);
+
+    res.status(200).json({ 
+      message: 'User deleted successfully',
+      deletedUser: {
+        id: user._id,
+        email: user.email,
+        name: user.name
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Get all verifications (admin view)
  * GET /api/admin/verifications
  */

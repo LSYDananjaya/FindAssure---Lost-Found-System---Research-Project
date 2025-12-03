@@ -1,5 +1,5 @@
 import axiosClient from './axiosClient';
-import { FoundItem, LostItem, VideoAnswer, AdminOverview } from '../types/models';
+import { FoundItem, LostItem, OwnerAnswerInput, AdminOverview } from '../types/models';
 
 export const itemsApi = {
   // FOUNDER ENDPOINTS
@@ -47,10 +47,10 @@ export const itemsApi = {
     return response.data;
   },
 
-  // Submit verification (owner's video answers)
+  // Submit verification (owner's answers with unified structure)
   submitVerification: async (data: {
     foundItemId: string;
-    ownerVideoAnswers: VideoAnswer[];
+    ownerAnswers: OwnerAnswerInput[];
   }): Promise<any> => {
     const response = await axiosClient.post('/items/verification', data);
     return response.data;

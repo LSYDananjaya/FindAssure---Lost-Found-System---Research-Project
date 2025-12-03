@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  getAuth,
   User as FirebaseUser 
 } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,17 +27,24 @@ const firebaseConfig = {
 // Initialize Firebase (prevent re-initialization)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Auth with AsyncStorage persistence
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+// Initialize Auth with AsyncStorage persistence (prevent re-initialization)
+let auth;
+try {
+  // Try to get existing auth instance first
+  auth = getAuth(app);
+} catch (error) {
+  // If it doesn't exist, initialize it
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+}
 
 interface User {
   _id: string;
   name: string;
   email: string;
   phone?: string;
-  role: 'owner' | 'founder' | 'admin';
+  role: 'owner' | 'admin'; // Only owners and admins register
 }
 
 interface AuthContextType {
@@ -45,9 +53,10 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   signIn: (credentials: { email: string; password: string }) => Promise<void>;
-  signUp: (data: { email: string; password: string; name: string; phone?: string; role?: 'owner' | 'founder' }) => Promise<void>;
+  signUp: (data: { email: string; password: string; name: string; phone?: string }) => Promise<void>;
   signOut: () => Promise<void>;
-  updateProfile: (data: Partial<User>) => Promise<void>;
+  updateProfile: (data: Partial<User>) => Promise<User>;
+  updateUser: (userData: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -101,12 +110,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
-  const signUp = async (data: { email: string; password: string; name: string; phone?: string; role?: 'owner' | 'founder' }) => {
+  const signUp = async (data: { email: string; password: string; name: string; phone?: string }) => {
+    let firebaseUserCreated = false;
+    
     try {
-      const { email, password, name, phone, role } = data;
+      const { email, password, name, phone } = data;
       
       // 1. Create user in Firebase
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      firebaseUserCreated = true;
       
       // 2. Get token
       const idToken = await userCredential.user.getIdToken();
@@ -115,11 +127,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 3. Register with backend (creates MongoDB user with all details)
       const registerData: any = { email, name };
       if (phone) registerData.phone = phone;
-      if (role) registerData.role = role;
+      // Role defaults to 'owner' on backend
       
-      await axiosClient.post('/auth/register', registerData, {
-        headers: { Authorization: `Bearer ${idToken}` }
-      });
+      try {
+        await axiosClient.post('/auth/register', registerData, {
+          headers: { Authorization: `Bearer ${idToken}` }
+        });
+      } catch (backendError: any) {
+        // 409 means user already exists in backend - this is OK
+        if (backendError.response?.status === 409) {
+          console.log('User already exists in backend, proceeding with login');
+        } else {
+          console.error('Backend registration error:', backendError);
+          // If backend fails but Firebase succeeded, still sync user data
+          // The backend might auto-create user on first login
+        }
+      }
 
       // 4. Refresh user data
       await syncUserWithBackend(userCredential.user);
@@ -134,6 +157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Please enter a valid email address.');
       } else if (error.code === 'auth/weak-password') {
         throw new Error('Password should be at least 6 characters long.');
+      } else if (error.code === 'auth/network-request-failed') {
+        throw new Error('Network error. Please check your internet connection.');
       } else if (error.response?.status === 409) {
         throw new Error('This account already exists. Please sign in instead.');
       } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
@@ -194,11 +219,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (data: Partial<User>) => {
     try {
       const response = await axiosClient.patch('/auth/me', data);
+      // Update local user state with the response
       setUser(response.data);
+      return response.data;
     } catch (error: any) {
       console.error('Update profile error:', error);
-      throw new Error(error.message || 'Update failed');
+      throw new Error(error.response?.data?.message || error.message || 'Update failed');
     }
+  };
+
+  const updateUser = (userData: User) => {
+    setUser(userData);
   };
 
   return (
@@ -210,7 +241,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signIn, 
       signUp, 
       signOut, 
-      updateProfile 
+      updateProfile,
+      updateUser
     }}>
       {children}
     </AuthContext.Provider>

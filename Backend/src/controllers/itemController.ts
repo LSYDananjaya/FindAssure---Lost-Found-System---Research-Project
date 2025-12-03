@@ -197,17 +197,17 @@ export const createVerification = async (
       return;
     }
 
-    const { foundItemId, ownerVideoAnswers } = req.body;
+    const { foundItemId, ownerAnswers } = req.body;
 
-    if (!foundItemId || !ownerVideoAnswers) {
-      res.status(400).json({ message: 'foundItemId and ownerVideoAnswers are required' });
+    if (!foundItemId || !ownerAnswers) {
+      res.status(400).json({ message: 'foundItemId and ownerAnswers are required' });
       return;
     }
 
     const verification = await verificationService.createVerification({
       foundItemId,
       ownerId: req.user.id,
-      ownerVideoAnswers,
+      ownerAnswers,
     });
 
     res.status(201).json(verification);

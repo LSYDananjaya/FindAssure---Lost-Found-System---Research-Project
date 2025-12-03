@@ -10,15 +10,16 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import Slider from '@react-native-community/slider';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { CategoryPicker } from '../../components/CategoryPicker';
+import { LocationPicker } from '../../components/LocationPicker';
 import { itemsApi } from '../../api/itemsApi';
-import { LOCATIONS, CONFIDENCE_LEVEL_MIN, CONFIDENCE_LEVEL_MAX, CONFIDENCE_LEVEL_DEFAULT } from '../../constants/appConstants';
+import { LOCATIONS, ITEM_CATEGORIES, CONFIDENCE_LEVEL_MIN, CONFIDENCE_LEVEL_MAX, CONFIDENCE_LEVEL_DEFAULT } from '../../constants/appConstants';
 
 type FindLostStartNavigationProp = StackNavigationProp<RootStackParamList, 'FindLostStart'>;
 
@@ -26,7 +27,7 @@ const FindLostStartScreen = () => {
   const navigation = useNavigation<FindLostStartNavigationProp>();
   const { user } = useAuth();
 
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState(ITEM_CATEGORIES[0]);
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState(LOCATIONS[0]);
   const [confidenceLevel, setConfidenceLevel] = useState(CONFIDENCE_LEVEL_DEFAULT);
@@ -41,7 +42,7 @@ const FindLostStartScreen = () => {
       return;
     }
 
-    if (!category.trim() || !description.trim() || !location) {
+    if (!category || !description.trim() || !location) {
       Alert.alert('Required Fields', 'Please fill in all fields');
       return;
     }
@@ -51,7 +52,7 @@ const FindLostStartScreen = () => {
 
       // Step A: Save the lost request with location and confidence level
       await itemsApi.reportLostItem({
-        category: category.trim(),
+        category: category,
         description: description.trim(),
         location: location,
         confidenceLevel: confidenceLevel,
@@ -88,12 +89,9 @@ const FindLostStartScreen = () => {
           <View style={styles.form}>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Category *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., Phone, Wallet, Keys, Bag, etc."
-                value={category}
-                onChangeText={setCategory}
-                autoCapitalize="words"
+              <CategoryPicker
+                selectedValue={category}
+                onValueChange={setCategory}
               />
             </View>
 
@@ -115,17 +113,10 @@ const FindLostStartScreen = () => {
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Lost Location *</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={location}
-                  onValueChange={(itemValue) => setLocation(itemValue)}
-                  style={styles.picker}
-                >
-                  {LOCATIONS.map((loc) => (
-                    <Picker.Item key={loc} label={loc} value={loc} />
-                  ))}
-                </Picker>
-              </View>
+              <LocationPicker
+                selectedValue={location}
+                onValueChange={setLocation}
+              />
               <Text style={styles.helperText}>
                 Select the location where you think you lost the item
               </Text>
@@ -242,16 +233,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999999',
     marginTop: 6,
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#DDDDDD',
-    borderRadius: 8,
-    backgroundColor: '#FAFAFA',
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 50,
   },
   slider: {
     width: '100%',

@@ -5,7 +5,7 @@ export interface User {
   name: string;
   email: string;
   phone: string;
-  role: 'owner' | 'founder' | 'admin';
+  role: 'owner' | 'admin'; // Only owners and admins register
   createdAt: string;
   updatedAt?: string;
 }
@@ -42,17 +42,27 @@ export interface LostItem {
   updatedAt?: string;
 }
 
-export interface VideoAnswer {
+export interface VerificationAnswer {
+  questionId: number;
   question: string;
-  videoUrl: string;
+  founderAnswer?: string;  // Only visible to admin
+  ownerAnswer: string;
+  videoKey: string;
+}
+
+export interface OwnerAnswerInput {
+  questionId: number;
+  answer: string;
+  videoKey?: string;
 }
 
 export interface VerificationRequest {
   _id: string;
   foundItemId: string;
   ownerId: string;
-  ownerVideoAnswers: VideoAnswer[];
+  answers: VerificationAnswer[];
   status: 'pending' | 'passed' | 'failed';
+  similarityScore?: number | null;
   createdAt: string;
   updatedAt?: string;
 }
@@ -75,7 +85,7 @@ export interface RegisterData {
   email: string;
   phone: string;
   password: string;
-  role?: 'owner' | 'founder';
+  // Role is always 'owner' for new registrations
 }
 
 export interface AuthResponse {
@@ -115,4 +125,5 @@ export type RootStackParamList = {
   AdminLogin: undefined;
   AdminDashboard: undefined;
   AdminItemDetail: { foundItem: FoundItem };
+  AdminUsers: undefined;
 };

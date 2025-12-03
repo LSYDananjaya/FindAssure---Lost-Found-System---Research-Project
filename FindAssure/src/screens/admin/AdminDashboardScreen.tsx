@@ -5,6 +5,7 @@ import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, FoundItem, AdminOverview } from '../../types/models';
 import { itemsApi } from '../../api/itemsApi';
+import { adminApi } from '../../api/adminApi';
 import { ItemCard } from '../../components/ItemCard';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useAuth } from '../../context/AuthContext';
@@ -23,7 +24,7 @@ const AdminDashboardScreen = () => {
   const fetchData = async () => {
     try {
       const [overviewData, itemsData] = await Promise.all([
-        itemsApi.getAdminOverview(),
+        adminApi.getOverview(),
         itemsApi.getFoundItems(),
       ]);
 
@@ -145,6 +146,14 @@ const AdminDashboardScreen = () => {
             </View>
           )}
 
+          <View style={styles.actionButtonsContainer}>
+            <PrimaryButton
+              title="Manage Users"
+              onPress={() => navigation.navigate('AdminUsers')}
+              style={styles.manageUsersButton}
+            />
+          </View>
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>All Found Items</Text>
             {foundItems.map((item) => (
@@ -250,6 +259,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     color: '#999999',
+  },
+  actionButtonsContainer: {
+    marginBottom: 24,
+  },
+  manageUsersButton: {
+    backgroundColor: '#4A90E2',
   },
   logoutButton: {
     marginTop: 10,

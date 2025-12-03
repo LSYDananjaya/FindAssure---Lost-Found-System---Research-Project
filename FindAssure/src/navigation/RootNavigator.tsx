@@ -30,6 +30,7 @@ import VerificationPendingScreen from '../screens/owner/VerificationPendingScree
 import AdminLoginScreen from '../screens/admin/AdminLoginScreen';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AdminItemDetailScreen from '../screens/admin/AdminItemDetailScreen';
+import AdminUsersScreen from '../screens/admin/AdminUsersScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -150,6 +151,11 @@ export const RootNavigator = () => {
           name="AdminItemDetail" 
           component={AdminItemDetailScreen} 
           options={{ title: 'Item Details (Admin)' }}
+        />
+        <Stack.Screen 
+          name="AdminUsers" 
+          component={AdminUsersScreen} 
+          options={{ title: 'User Management' }}
         />
     </Stack.Navigator>
   );

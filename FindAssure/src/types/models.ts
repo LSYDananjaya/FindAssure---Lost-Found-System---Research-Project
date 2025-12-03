@@ -125,4 +125,5 @@ export type RootStackParamList = {
   AdminLogin: undefined;
   AdminDashboard: undefined;
   AdminItemDetail: { foundItem: FoundItem };
+  AdminUsers: undefined;
 };

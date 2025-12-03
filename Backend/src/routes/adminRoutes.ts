@@ -43,6 +43,13 @@ router.get('/users', adminController.getAllUsers);
 router.patch('/users/:id', adminController.updateUser);
 
 /**
+ * @route   DELETE /api/admin/users/:id
+ * @desc    Delete user from MongoDB and Firebase
+ * @access  Admin only
+ */
+router.delete('/users/:id', adminController.deleteUser);
+
+/**
  * @route   GET /api/admin/verifications
  * @desc    Get all verifications with full details
  * @access  Admin only

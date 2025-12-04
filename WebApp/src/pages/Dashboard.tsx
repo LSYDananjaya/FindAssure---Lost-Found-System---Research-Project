@@ -184,7 +184,7 @@ const Dashboard: React.FC = () => {
                     <img src={item.imageUrl} alt={item.category} />
                   )}
                 </div>
-              <div className="item-content">
+                <div className="item-content">
                 <div className="item-header">
                   <h3>{item.category}</h3>
                   <span className={`status-badge ${getStatusBadge(item.status).class}`}>

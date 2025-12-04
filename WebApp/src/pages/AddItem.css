@@ -210,6 +210,76 @@
   color: #2c5282;
 }
 
+.selection-counter {
+  background: #e6fffa;
+  border: 2px solid #38b2ac;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #234e52;
+}
+
+.questions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.question-chip {
+  padding: 1rem 1.25rem;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 80px;
+}
+
+.question-chip:hover {
+  border-color: #cbd5e0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.question-chip.selected {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.question-chip .question-text {
+  flex: 1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.question-chip.selected .question-text {
+  color: white;
+}
+
+.question-chip .checkmark {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: white;
+  background: rgba(255, 255, 255, 0.2);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .questions-list {
   display: flex;
   flex-direction: column;

@@ -3,6 +3,7 @@ import cors from 'cors';
 import authRoutes from './routes/authRoutes';
 import itemRoutes from './routes/itemRoutes';
 import adminRoutes from './routes/adminRoutes';
+import uploadRoutes from './routes/uploadRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 /**
@@ -16,12 +17,17 @@ export const createApp = (): Application => {
   // ============================================
 
   // CORS configuration
+  const allowedOrigins = process.env.FRONTEND_URL 
+    ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+    : ['http://localhost:8081'];
+  
   app.use(
     cors({
       origin: [
-        process.env.FRONTEND_URL || 'http://localhost:8081',
-        'http://192.168.113.106:8081',
-        'http://localhost:19006',
+        ...allowedOrigins,
+        'http://localhost:3000',  // Web frontend (Vite)
+        'http://192.168.113.106:8081',  // Mobile app (network)
+        'http://localhost:19006',  // Expo dev server
         'http://192.168.113.106:19006'
       ],
       credentials: true,
@@ -57,6 +63,7 @@ export const createApp = (): Application => {
   app.use('/api/auth', authRoutes);
   app.use('/api/items', itemRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/upload', uploadRoutes);
 
   // 404 handler
   app.use((req, res) => {

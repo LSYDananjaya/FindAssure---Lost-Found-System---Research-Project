@@ -2,6 +2,49 @@ import axiosClient from './axiosClient';
 import { FoundItem, LostItem, OwnerAnswerInput, AdminOverview } from '../types/models';
 
 export const itemsApi = {
+  // IMAGE UPLOAD
+  
+  // Upload image to server (Cloudinary)
+  uploadImage: async (imageUri: string): Promise<string> => {
+    const formData = new FormData();
+    
+    // Get file info
+    const filename = imageUri.split('/').pop() || 'image.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+    // Append image to form data
+    formData.append('image', {
+      uri: imageUri,
+      name: filename,
+      type: type,
+    } as any);
+
+    // Upload to backend
+    const response = await axiosClient.post<{ imageUrl: string; publicId: string }>(
+      '/upload/image',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+
+    return response.data.imageUrl;
+  },
+
+  // AI QUESTION GENERATION
+  
+  // Generate verification questions using AI
+  generateQuestions: async (data: {
+    category: string;
+    description: string;
+  }): Promise<{ questions: string[] }> => {
+    const response = await axiosClient.post<{ questions: string[] }>('/items/generate-questions', data);
+    return response.data;
+  },
+
   // FOUNDER ENDPOINTS
   
   // Report a found item

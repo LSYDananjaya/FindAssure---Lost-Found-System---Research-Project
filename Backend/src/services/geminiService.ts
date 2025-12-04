@@ -56,31 +56,64 @@ export const generateVerificationQuestions = async ({
     const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     // Create the prompt for question generation
-    const prompt = `You are an AI assistant helping with a lost and found system. Generate exactly 10 specific, detailed verification questions that would help verify true ownership of an item.
+    const prompt = `You are an AI assistant for a lost and found system in Sri Lanka. Generate exactly 10 simple, quick-to-answer verification questions for video responses (5 seconds each).
 
 Item Category: ${category}
 Item Description: ${description}
 
+IMPORTANT Context:
+- This system is used in SRI LANKA
+- Both the FOUNDER (who found the item) and OWNER (who lost it) will answer these questions separately
+- Answers will be compared using similarity scoring to verify ownership
+- Questions must be answerable in a 5-second video response
+- Questions should be about OBSERVABLE details that both parties can see by looking at the item
+- Keep language simple and clear for Sri Lankan users
+
 Requirements:
 1. Generate exactly 10 questions
-2. Questions should be specific and detailed
-3. Questions should help verify true ownership
-4. Questions should be based on details that only the real owner would know
-5. Include questions about:
-   - Physical characteristics (color, size, material, condition)
-   - Identifying marks or features
-   - Brand/model details
-   - Location and time of loss
-   - Contents or attachments
-   - Purchase/acquisition details
-   - Usage patterns
-   - Unique identifiers
+2. Questions must be SIMPLE and QUICK to answer (one sentence response)
+3. Questions must be about VISIBLE/OBSERVABLE features both founder and owner can identify
+4. Include 2-3 SECURE VERIFICATION questions that only the real owner would know (but founder can also see/check)
+5. Questions should help distinguish the real owner from others
+6. Use simple English that Sri Lankan users can easily understand
+7. Focus on:
+   - Specific colors, patterns, or textures
+   - Visible brand names or logos
+   - Unique marks, scratches, or damages
+   - Size or shape characteristics
+   - Materials or finishes
+   - Contents or attachments (if applicable)
+   - Distinctive features only the real owner would notice
+   
+8. SECURE VERIFICATION details (include 2-3 of these when relevant):
+   - For phones: Lock screen wallpaper, home screen wallpaper, phone case design
+   - For documents: Last 4 digits of ID numbers, visible stamps or signatures
+   - For wallets/bags: Total number of cards, specific card names/banks, hidden compartments
+   - For keys: Total number of keys, key shapes, specific key patterns
+   - For electronics: Serial number last digits, unique stickers, device name
+   - For personal items: Initials, monograms, personal markings
 
-Return ONLY a JSON array of 10 questions, nothing else. Format:
+CRITICAL - For items with MULTIPLE similar objects (like cards in wallet, keys on ring):
+- ALWAYS ask for TOTAL COUNT first (e.g., "How many cards are in the wallet?")
+- Then ask about SPECIFIC identifiable items by NAME/TYPE (e.g., "Is there a National ID card?", "Is there a Commercial Bank card?")
+- NEVER use ambiguous terms like "first", "second", "top", "bottom" as order can vary
+- Ask "What types of cards are visible?" instead of "What is the first card?"
+- Ask "Are there any bank cards? If yes, which banks?" instead of "What is the first bank card?"
+
+AVOID:
+- Ambiguous positional terms: "first", "second", "top", "bottom", "left", "right"
+- Complex questions requiring long explanations
+- Questions about feelings, memories, or abstract details
+- Questions requiring specific dates, times, or complex sequences
+- Questions needing detailed backstories
+- Overly technical or complicated English phrases
+- Full sensitive information (only ask for partial details like "last 4 digits")
+
+Return ONLY a JSON array of 10 questions. Format:
 ["Question 1?", "Question 2?", "Question 3?", ...]
 
-Example for a wallet:
-["What color is the wallet?", "What brand is the wallet?", "How many card slots does it have?", "Are there any unique marks or scratches?", "What was inside the wallet when you lost it?", "Where did you purchase the wallet?", "What is the material of the wallet?", "Are there any initials or monograms on it?", "What is the approximate size or dimensions?", "Where and when did you lose it?"]`;
+Example for "Black Samsung phone":
+["What color is the phone?", "What brand is it?", "Are there any cracks on the screen?", "What is the lock screen wallpaper?", "Is there a phone case on it?", "What color is the phone case?", "Are there any scratches on the back?", "How many camera lenses are on the back?", "Are there any stickers on the phone?", "What is the home screen wallpaper?"]`;
 
     // Generate content
     const result = await model.generateContent(prompt);

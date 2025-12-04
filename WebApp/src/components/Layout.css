@@ -58,6 +58,39 @@
   background-color: rgba(255, 255, 255, 0.3);
 }
 
+.user-menu {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.user-name {
+  color: white;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.btn-signout {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-signout:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.auth-links {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
 .main-content {
   flex: 1;
   background-color: #f5f7fa;

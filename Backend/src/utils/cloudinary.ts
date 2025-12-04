@@ -1,0 +1,94 @@
+import { v2 as cloudinary } from 'cloudinary';
+import multer from 'multer';
+import { Request } from 'express';
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || '',
+  api_key: process.env.CLOUDINARY_API_KEY || '',
+  api_secret: process.env.CLOUDINARY_API_SECRET || '',
+});
+
+// Configure Multer for memory storage (we'll upload to Cloudinary from memory)
+const storage = multer.memoryStorage();
+
+const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  // Accept images only
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image files are allowed'));
+  }
+};
+
+export const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max file size
+  },
+});
+
+/**
+ * Upload image buffer to Cloudinary
+ * @param buffer Image buffer from multer
+ * @param folder Cloudinary folder name
+ * @returns Cloudinary upload result with secure URL
+ */
+export const uploadToCloudinary = (
+  buffer: Buffer,
+  folder: string = 'findassure'
+): Promise<{ secure_url: string; public_id: string }> => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: folder,
+        resource_type: 'image',
+        transformation: [
+          { width: 1000, height: 1000, crop: 'limit' }, // Limit max dimensions
+          { quality: 'auto:good' }, // Automatic quality optimization
+        ],
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else if (result) {
+          resolve({
+            secure_url: result.secure_url,
+            public_id: result.public_id,
+          });
+        } else {
+          reject(new Error('Upload failed'));
+        }
+      }
+    );
+
+    uploadStream.end(buffer);
+  });
+};
+
+/**
+ * Delete image from Cloudinary
+ * @param publicId Public ID of the image to delete
+ */
+export const deleteFromCloudinary = async (publicId: string): Promise<void> => {
+  try {
+    await cloudinary.uploader.destroy(publicId);
+  } catch (error) {
+    console.error('Error deleting image from Cloudinary:', error);
+    throw error;
+  }
+};
+
+/**
+ * Check if Cloudinary is configured
+ */
+export const isCloudinaryConfigured = (): boolean => {
+  return !!(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
+};
+
+export default cloudinary;

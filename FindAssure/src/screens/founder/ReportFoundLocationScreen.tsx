@@ -52,9 +52,28 @@ const ReportFoundLocationScreen = () => {
     try {
       setLoading(true);
 
-      // Submit to backend
+      // Step 1: Upload image to Cloudinary
+      let uploadedImageUrl = imageUri;
+      try {
+        Alert.alert('Uploading', 'Uploading image to server...');
+        uploadedImageUrl = await itemsApi.uploadImage(imageUri);
+      } catch (uploadError) {
+        console.error('Image upload failed:', uploadError);
+        Alert.alert(
+          'Image Upload Failed',
+          'Could not upload image to server. The item will be saved with a placeholder. You can update the image later.',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => { setLoading(false); return; } },
+            { text: 'Continue Anyway', onPress: () => { /* continue with local URI */ } }
+          ]
+        );
+        // If user cancels, return early
+        return;
+      }
+
+      // Step 2: Submit to backend with uploaded image URL
       await itemsApi.reportFoundItem({
-        imageUrl: imageUri, // In production, upload to cloud storage first
+        imageUrl: uploadedImageUrl,
         category,
         description,
         questions: selectedQuestions,

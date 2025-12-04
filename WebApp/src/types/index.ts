@@ -31,9 +31,15 @@ export interface FoundItem {
   updatedAt: string;
 }
 
+export interface OwnerAnswerInput {
+  questionId: number;
+  answer: string;
+  videoKey?: string;
+}
+
 export interface VerificationInput {
   foundItemId: string;
-  ownerAnswers: string[];
+  ownerAnswers: OwnerAnswerInput[];
 }
 
 export interface Verification {

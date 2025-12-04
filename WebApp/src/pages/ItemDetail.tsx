@@ -57,9 +57,16 @@ const ItemDetail: React.FC = () => {
       setSubmitting(true);
       setError(null);
 
+      // Build unified owner answers array with questionId, answer, and videoKey
+      const ownerAnswersInput = ownerAnswers.map((answer, index) => ({
+        questionId: index,
+        answer: answer.trim(),
+        videoKey: 'default_video_placeholder', // Will be replaced with actual video key in future
+      }));
+
       await createVerification({
         foundItemId: item._id,
-        ownerAnswers,
+        ownerAnswers: ownerAnswersInput,
       });
 
       // Success

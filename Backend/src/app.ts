@@ -3,6 +3,7 @@ import cors from 'cors';
 import authRoutes from './routes/authRoutes';
 import itemRoutes from './routes/itemRoutes';
 import adminRoutes from './routes/adminRoutes';
+import uploadRoutes from './routes/uploadRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 /**
@@ -62,6 +63,7 @@ export const createApp = (): Application => {
   app.use('/api/auth', authRoutes);
   app.use('/api/items', itemRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/upload', uploadRoutes);
 
   // 404 handler
   app.use((req, res) => {

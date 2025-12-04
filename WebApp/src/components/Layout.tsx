@@ -1,8 +1,21 @@
 import React from 'react';
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import './Layout.css';
 
 const Layout: React.FC = () => {
+  const { user, loading, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
+
   return (
     <div className="layout">
       <header className="header">
@@ -13,6 +26,24 @@ const Layout: React.FC = () => {
           <nav className="nav">
             <Link to="/" className="nav-link">Dashboard</Link>
             <Link to="/add-item" className="nav-link nav-link-primary">Add Found Item</Link>
+            
+            {!loading && (
+              <>
+                {user ? (
+                  <div className="user-menu">
+                    <span className="user-name">👤 {user.name}</span>
+                    <button onClick={handleSignOut} className="btn-signout">
+                      Sign Out
+                    </button>
+                  </div>
+                ) : (
+                  <div className="auth-links">
+                    <Link to="/login" className="nav-link">Sign In</Link>
+                    <Link to="/register" className="nav-link nav-link-primary">Sign Up</Link>
+                  </div>
+                )}
+              </>
+            )}
           </nav>
         </div>
       </header>

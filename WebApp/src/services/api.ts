@@ -4,10 +4,11 @@ import type {
   FoundItem,
   VerificationInput,
   Verification,
+  OwnerAnswerInput,
 } from '../types';
 
 // Re-export types for convenience
-export type { FoundItemInput, FoundItem, VerificationInput, Verification };
+export type { FoundItemInput, FoundItem, VerificationInput, Verification, OwnerAnswerInput };
 
 // API Base URL - update this to match your backend URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';

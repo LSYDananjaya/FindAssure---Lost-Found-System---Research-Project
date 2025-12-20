@@ -1,0 +1,66 @@
+import os
+import json
+import requests
+
+GEMINI_KEY = "AIzaSyCfKRmXYkYQwufi_9BM9sR8kETZd7nPpF0"
+API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+
+
+def gemini_batch_similarity(q_list):
+    if not GEMINI_KEY:
+        return {"error": "Missing GEMINI_API_KEY"}
+
+    block = "\n\n".join(
+        [
+            f"Question {i+1}: {q['question']}\n"
+            f"Founder's Answer: \"{q['founder']}\"\n"
+            f"Owner's Answer: \"{q['owner']}\""
+            for i, q in enumerate(q_list)
+        ]
+    )
+
+    prompt = f"""
+You are an AI assistant verifying if the owner truly matches the founder's answers.
+
+Questions and Answers:
+{block}
+
+Return ONLY JSON:
+
+{{
+  "overallScore": <0-100>,
+  "matchDetails": [
+    {{
+      "questionNumber": 1,
+      "question": "<question>",
+      "similarityScore": <0-100>,
+      "analysis": "<short>",
+      "isMatch": <true/false>
+    }}
+  ],
+  "recommendation": "<VERIFIED | LIKELY_MATCH | UNCERTAIN | NOT_MATCH>",
+  "reasoning": "<overall explanation>"
+}}
+"""
+
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.3,
+            "topK": 20,
+            "topP": 0.8,
+            "maxOutputTokens": 2048,
+        },
+    }
+
+    try:
+        r = requests.post(f"{API_URL}?key={GEMINI_KEY}", json=body, timeout=40)
+        data = r.json()
+
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        text = text.replace("```json", "").replace("```", "").strip()
+
+        return json.loads(text)
+
+    except Exception as e:
+        return {"error": str(e), "raw": r.text if "r" in locals() else None}

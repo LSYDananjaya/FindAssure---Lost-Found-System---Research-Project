@@ -59,24 +59,35 @@ export const generateVerificationQuestions = async ({
     const prompt = `You are an AI assistant for a lost and found system in Sri Lanka. Generate exactly 10 simple, quick-to-answer verification questions for video responses (5 seconds each).
 
 Item Category: ${category}
-Item Description: ${description}
+Item Description (visible details): ${description}
 
 IMPORTANT Context:
 - This system is used in SRI LANKA
 - Both the FOUNDER (who found the item) and OWNER (who lost it) will answer these questions separately
+- The DESCRIPTION above contains visible details that BOTH parties can observe by looking at the item
 - Answers will be compared using similarity scoring to verify ownership
 - Questions must be answerable in a 5-second video response
-- Questions should be about OBSERVABLE details that both parties can see by looking at the item
 - Keep language simple and clear for Sri Lankan users
+
+CRITICAL APPROACH:
+1. READ the description carefully - it contains VISIBLE details about the item
+2. Generate questions that ask about BOTH:
+   a) Details mentioned in the description (to confirm what's visible)
+   b) Additional observable details NOT in the description (to verify deeper knowledge)
+3. Questions should test if the claimant can see the SAME details the founder saw
 
 Requirements:
 1. Generate exactly 10 questions
 2. Questions must be SIMPLE and QUICK to answer (one sentence response)
 3. Questions must be about VISIBLE/OBSERVABLE features both founder and owner can identify
-4. Include 2-3 SECURE VERIFICATION questions that only the real owner would know (but founder can also see/check)
-5. Questions should help distinguish the real owner from others
-6. Use simple English that Sri Lankan users can easily understand
-7. Focus on:
+4. Use the DESCRIPTION as a guide for what's visible, but also ask beyond it
+5. Include 2-3 SECURE VERIFICATION questions about details only the real owner would notice closely
+6. Mix of:
+   - Questions confirming details IN the description (3-4 questions)
+   - Questions about observable details BEYOND the description (3-4 questions)
+   - Secure verification questions only careful observers know (2-3 questions)
+7. Use simple English that Sri Lankan users can easily understand
+8. Focus on:
    - Specific colors, patterns, or textures
    - Visible brand names or logos
    - Unique marks, scratches, or damages
@@ -85,13 +96,13 @@ Requirements:
    - Contents or attachments (if applicable)
    - Distinctive features only the real owner would notice
    
-8. SECURE VERIFICATION details (include 2-3 of these when relevant):
-   - For phones: Lock screen wallpaper, home screen wallpaper, phone case design
-   - For documents: Last 4 digits of ID numbers, visible stamps or signatures
+9. SECURE VERIFICATION details (include 2-3 of these when relevant):
+   - For phones: Lock screen wallpaper, home screen wallpaper, phone case design, specific app icons
+   - For documents: Last 4 digits of ID numbers, visible stamps or signatures, specific text
    - For wallets/bags: Total number of cards, specific card names/banks, hidden compartments
-   - For keys: Total number of keys, key shapes, specific key patterns
-   - For electronics: Serial number last digits, unique stickers, device name
-   - For personal items: Initials, monograms, personal markings
+   - For keys: Total number of keys, key shapes, specific key patterns, keychain details
+   - For electronics: Serial number last digits, unique stickers, device name, specific buttons
+   - For personal items: Initials, monograms, personal markings, wear patterns
 
 CRITICAL - For items with MULTIPLE similar objects (like cards in wallet, keys on ring):
 - ALWAYS ask for TOTAL COUNT first (e.g., "How many cards are in the wallet?")
@@ -108,12 +119,13 @@ AVOID:
 - Questions needing detailed backstories
 - Overly technical or complicated English phrases
 - Full sensitive information (only ask for partial details like "last 4 digits")
+- Repeating the EXACT description back (ask to verify, but in different words)
 
 Return ONLY a JSON array of 10 questions. Format:
 ["Question 1?", "Question 2?", "Question 3?", ...]
 
-Example for "Black Samsung phone":
-["What color is the phone?", "What brand is it?", "Are there any cracks on the screen?", "What is the lock screen wallpaper?", "Is there a phone case on it?", "What color is the phone case?", "Are there any scratches on the back?", "How many camera lenses are on the back?", "Are there any stickers on the phone?", "What is the home screen wallpaper?"]`;
+Example for "Black Samsung phone with cracked screen":
+["What color is the phone?", "What brand is it?", "Is the screen cracked or damaged?", "Where is the crack located?", "What is the lock screen wallpaper?", "Is there a phone case on it?", "What color is the phone case?", "Are there any scratches on the back?", "How many camera lenses are on the back?", "What is the home screen wallpaper?"]`;
 
     // Generate content
     const result = await model.generateContent(prompt);

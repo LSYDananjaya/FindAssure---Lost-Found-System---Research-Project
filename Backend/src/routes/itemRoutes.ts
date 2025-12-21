@@ -83,4 +83,11 @@ router.get('/verification/:id', requireAuth, itemController.getVerificationById)
  */
 router.get('/verification/me', requireAuth, itemController.getMyVerifications);
 
+/**
+ * @route   POST /api/items/found/batch
+ * @desc    Get multiple found items by IDs (batch)
+ * @access  Public
+ */
+router.post('/found/batch', itemController.getFoundItemsByIds);
+
 export default router;

@@ -145,3 +145,18 @@ export const getAllFoundItemsForAdmin = async (): Promise<IFoundItem[]> => {
 
   return items;
 };
+
+/**
+ * Get multiple found items by IDs (batch operation)
+ */
+export const getFoundItemsByIds = async (ids: string[]): Promise<IFoundItem[]> => {
+  const objectIds = ids.map(id => new Types.ObjectId(id));
+  
+  const items = await FoundItem.find({
+    _id: { $in: objectIds }
+  })
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 });
+
+  return items;
+};

@@ -300,3 +300,35 @@ export const generateQuestions = async (
     next(error);
   }
 };
+
+/**
+ * Get multiple found items by IDs (batch)
+ * POST /api/items/found/batch
+ */
+export const getFoundItemsByIds = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { itemIds } = req.body;
+
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      res.status(400).json({ message: 'itemIds array is required' });
+      return;
+    }
+
+    // Limit batch size to prevent abuse
+    if (itemIds.length > 50) {
+      res.status(400).json({ message: 'Maximum 50 items can be fetched at once' });
+      return;
+    }
+
+    const items = await itemService.getFoundItemsByIds(itemIds);
+
+    res.status(200).json(items);
+  } catch (error) {
+    next(error);
+  }
+};
+

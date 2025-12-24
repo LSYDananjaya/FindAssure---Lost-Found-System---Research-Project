@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getFoundItemById, createVerification } from '../services/api';
 import type { FoundItem } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import './ItemDetail.css';
 
 const ItemDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user, token } = useAuth();
   
   const [item, setItem] = useState<FoundItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +49,15 @@ const ItemDetail: React.FC = () => {
   const handleSubmitVerification = async () => {
     if (!item) return;
 
+    // Check if user is logged in
+    if (!user || !token) {
+      setError('You need to be logged in to claim this item. Please login or register first.');
+      setTimeout(() => {
+        navigate('/login', { state: { returnTo: `/item/${item._id}` } });
+      }, 2000);
+      return;
+    }
+
     // Validate all answers are filled
     if (ownerAnswers.some(answer => !answer.trim())) {
       setError('Please answer all questions');
@@ -64,21 +75,26 @@ const ItemDetail: React.FC = () => {
         videoKey: 'default_video_placeholder', // Will be replaced with actual video key in future
       }));
 
-      await createVerification({
+      const verificationResponse = await createVerification({
         foundItemId: item._id,
         ownerAnswers: ownerAnswersInput,
       });
 
-      // Success
-      alert('Verification submitted successfully! The system will compare your answers with the founder\'s answers.');
-      navigate('/');
+      // Navigate to verification result
+      navigate(`/verification/${verificationResponse._id}`);
     } catch (err: any) {
+      console.error('Error submitting verification:', err);
+      
       if (err.response?.status === 401) {
-        setError('You need to be logged in to claim this item. This feature requires authentication.');
+        setError('Your session has expired. Please login again.');
+        setTimeout(() => {
+          navigate('/login', { state: { returnTo: `/item/${item._id}` } });
+        }, 2000);
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message);
       } else {
         setError('Failed to submit verification. Please try again.');
       }
-      console.error('Error submitting verification:', err);
     } finally {
       setSubmitting(false);
     }
@@ -229,12 +245,26 @@ const ItemDetail: React.FC = () => {
                     To claim this item, you'll need to answer the same questions that the founder answered.
                     Your answers will be compared with the founder's answers to verify ownership.
                   </p>
+                  {!user && (
+                    <p style={{ color: '#DC2626', fontWeight: 600, marginTop: '12px' }}>
+                      ⚠️ You must be logged in to claim this item.
+                    </p>
+                  )}
                 </div>
                 <button
-                  onClick={() => setShowVerification(true)}
+                  onClick={() => {
+                    if (!user) {
+                      setError('Please login or register to claim this item.');
+                      setTimeout(() => {
+                        navigate('/login', { state: { returnTo: `/item/${item._id}` } });
+                      }, 1500);
+                    } else {
+                      setShowVerification(true);
+                    }
+                  }}
                   className="btn btn-primary btn-large"
                 >
-                  Claim This Item
+                  {user ? 'Claim This Item' : 'Login to Claim'}
                 </button>
               </div>
             )}

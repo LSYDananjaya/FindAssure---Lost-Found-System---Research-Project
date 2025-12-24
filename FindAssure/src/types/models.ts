@@ -120,6 +120,7 @@ export type RootStackParamList = {
   ItemDetail: { foundItem: FoundItem };
   AnswerQuestionsVideo: { foundItem: FoundItem };
   VerificationPending: undefined;
+  VerificationResult: { verificationId: string };
   
   // Admin Flow
   AdminLogin: undefined;

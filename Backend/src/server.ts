@@ -23,7 +23,7 @@ if (missingEnvVars.length > 0) {
 }
 
 // Server configuration
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 /**
  * Start the server

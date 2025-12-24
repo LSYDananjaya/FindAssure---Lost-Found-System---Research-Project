@@ -5,6 +5,7 @@ from sentence_transformers import SentenceTransformer, util
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 
 class LocalNLP:
+    
     def __init__(self):
         self.nlp = spacy.load("en_core_web_lg")
         self.sbert = SentenceTransformer("all-mpnet-base-v2")

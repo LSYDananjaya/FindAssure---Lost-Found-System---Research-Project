@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/authMiddleware';
+import { requireAuth, optionalAuth } from '../middleware/authMiddleware';
 import * as itemController from '../controllers/itemController';
 
 const router = Router();
@@ -36,9 +36,9 @@ router.get('/found/:id', itemController.getFoundItemById);
 /**
  * @route   POST /api/items/lost
  * @desc    Create a lost item request
- * @access  Private
+ * @access  Private (preferred) / Public (demo mode with auto-created demo user)
  */
-router.post('/lost', requireAuth, itemController.createLostRequest);
+router.post('/lost', optionalAuth, itemController.createLostRequest);
 
 /**
  * @route   GET /api/items/lost/me

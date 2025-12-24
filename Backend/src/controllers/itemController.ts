@@ -130,11 +130,6 @@ export const createLostRequest = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (!req.user) {
-      res.status(401).json({ message: 'Authentication required' });
-      return;
-    }
-
     const { category, description, location, confidenceLevel } = req.body;
 
     if (!category || !description || !location || confidenceLevel === undefined) {
@@ -147,7 +142,30 @@ export const createLostRequest = async (
       return;
     }
 
-    const lostRequest = await itemService.createLostRequest(req.user.id, {
+    // Use authenticated user ID or create/use a demo user
+    let ownerId: string;
+    
+    if (req.user) {
+      ownerId = req.user.id;
+    } else {
+      // For testing/demo: find or create a demo user
+      const User = require('../models/User').User;
+      let demoUser = await User.findOne({ email: 'demo@suggestionui.com' });
+      
+      if (!demoUser) {
+        demoUser = await User.create({
+          email: 'demo@suggestionui.com',
+          firebaseUid: 'demo-suggestion-ui',
+          role: 'owner',
+          name: 'Demo User (Suggestion UI)',
+        });
+        console.log('✅ Created demo user for Suggestion UI');
+      }
+      
+      ownerId = demoUser._id.toString();
+    }
+
+    const lostRequest = await itemService.createLostRequest(ownerId, {
       category,
       description,
       location,

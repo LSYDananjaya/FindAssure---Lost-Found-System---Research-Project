@@ -5,7 +5,7 @@ from sentence_transformers import SentenceTransformer, util
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 
 class LocalNLP:
-    
+
     def __init__(self):
         self.nlp = spacy.load("en_core_web_lg")
         self.sbert = SentenceTransformer("all-mpnet-base-v2")
@@ -145,6 +145,7 @@ class LocalNLP:
             f["wmd"]*0.05
         )
         return float(max(0.0, min(s, 1.0)))
+
 
     def score_pair(self, founder, owner):
         feats = self.compute_features(founder, owner)

@@ -4,8 +4,10 @@ export interface ILostRequest extends Document {
   ownerId: Types.ObjectId;
   category: string;
   description: string;
-  location: string;
-  confidenceLevel: number;
+  owner_location: string;
+  floor_id?: string | null;
+  hall_name?: string | null;
+  owner_location_confidence_stage: number; // 1: Pretty Sure, 2: Sure, 3: Not Sure
   matchedFoundItemIds?: Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
@@ -29,16 +31,25 @@ const lostRequestSchema = new Schema<ILostRequest>(
       required: true,
       trim: true,
     },
-    location: {
+    owner_location: {
       type: String,
       required: true,
       trim: true,
     },
-    confidenceLevel: {
+    floor_id: {
+      type: String,
+      default: null,
+    },
+    hall_name: {
+      type: String,
+      default: null,
+    },
+    owner_location_confidence_stage: {
       type: Number,
       required: true,
       min: 1,
-      max: 100,
+      max: 3,
+      default: 2, // Default to "Sure"
     },
     matchedFoundItemIds: {
       type: [Schema.Types.ObjectId],

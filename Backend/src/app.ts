@@ -4,6 +4,7 @@ import authRoutes from './routes/authRoutes';
 import itemRoutes from './routes/itemRoutes';
 import adminRoutes from './routes/adminRoutes';
 import uploadRoutes from './routes/uploadRoutes';
+import locationRoutes from './routes/locationRoutes';
 import { errorHandler } from './middleware/errorHandler';
 
 /**
@@ -71,6 +72,7 @@ export const createApp = (): Application => {
   app.use('/api/items', itemRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/upload', uploadRoutes);
+  app.use('/api/locations', locationRoutes);
 
   // 404 handler
   app.use((req, res) => {

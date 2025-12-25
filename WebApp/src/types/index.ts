@@ -1,12 +1,18 @@
 // Type definitions for the FindAssure API
 
+export interface LocationDetail {
+  location: string;
+  floor_id?: string | null;
+  hall_name?: string | null;
+}
+
 export interface FoundItemInput {
   imageUrl: string;
   category: string;
   description: string;
   questions: string[];
   founderAnswers: string[];
-  location: string;
+  found_location: LocationDetail[];
   founderContact: {
     name: string;
     email: string;
@@ -20,7 +26,7 @@ export interface FoundItem {
   category: string;
   description: string;
   questions: string[];
-  location: string;
+  found_location: LocationDetail[];
   status: 'available' | 'pending_verification' | 'claimed';
   founderContact: {
     name: string;

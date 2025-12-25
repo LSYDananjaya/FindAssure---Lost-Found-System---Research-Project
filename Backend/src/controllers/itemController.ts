@@ -19,13 +19,13 @@ export const createFoundItem = async (
       description,
       questions,
       founderAnswers,
-      location,
+      found_location,
       founderContact,
     } = req.body;
 
-    // Validation
-    if (!imageUrl || !category || !description || !questions || !founderAnswers || !location || !founderContact) {
-      res.status(400).json({ message: 'All fields are required' });
+    // Validation (imageUrl is optional)
+    if (!category || !description || !questions || !founderAnswers || !found_location || !founderContact) {
+      res.status(400).json({ message: 'Required fields: category, description, questions, founderAnswers, found_location, founderContact' });
       return;
     }
 
@@ -40,12 +40,12 @@ export const createFoundItem = async (
     }
 
     const foundItem = await itemService.createFoundItem({
-      imageUrl,
+      imageUrl: imageUrl || 'https://via.placeholder.com/400x400/CCCCCC/666666?text=No+Image',
       category,
       description,
       questions,
       founderAnswers,
-      location,
+      found_location,
       founderContact,
       createdBy: req.user?.id,
     });
@@ -135,23 +135,25 @@ export const createLostRequest = async (
       return;
     }
 
-    const { category, description, location, confidenceLevel } = req.body;
+    const { category, description, owner_location, floor_id, hall_name, owner_location_confidence_stage } = req.body;
 
-    if (!category || !description || !location || confidenceLevel === undefined) {
-      res.status(400).json({ message: 'Category, description, location, and confidence level are required' });
+    if (!category || !description || !owner_location || owner_location_confidence_stage === undefined) {
+      res.status(400).json({ message: 'Category, description, owner_location, and confidence stage are required' });
       return;
     }
 
-    if (confidenceLevel < 1 || confidenceLevel > 100) {
-      res.status(400).json({ message: 'Confidence level must be between 1 and 100' });
+    if (owner_location_confidence_stage < 1 || owner_location_confidence_stage > 3) {
+      res.status(400).json({ message: 'Confidence stage must be 1 (Pretty Sure), 2 (Sure), or 3 (Not Sure)' });
       return;
     }
 
     const lostRequest = await itemService.createLostRequest(req.user.id, {
       category,
       description,
-      location,
-      confidenceLevel,
+      owner_location,
+      floor_id,
+      hall_name,
+      owner_location_confidence_stage,
     });
 
     res.status(201).json(lostRequest);

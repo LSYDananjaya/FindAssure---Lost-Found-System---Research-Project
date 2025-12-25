@@ -6,6 +6,21 @@ import { initializeFirebaseAdmin } from './config/firebaseAdmin';
 // Load environment variables
 dotenv.config();
 
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit process, just log the error
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error: Error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // Don't exit process in development
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
+});
+
 // Validate required environment variables
 const requiredEnvVars = [
   'MONGODB_URI',
@@ -23,7 +38,7 @@ if (missingEnvVars.length > 0) {
 }
 
 // Server configuration
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 /**
  * Start the server

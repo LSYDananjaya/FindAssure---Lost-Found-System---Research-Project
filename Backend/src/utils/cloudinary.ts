@@ -40,30 +40,41 @@ export const uploadToCloudinary = (
   folder: string = 'findassure'
 ): Promise<{ secure_url: string; public_id: string }> => {
   return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: folder,
-        resource_type: 'image',
-        transformation: [
-          { width: 1000, height: 1000, crop: 'limit' }, // Limit max dimensions
-          { quality: 'auto:good' }, // Automatic quality optimization
-        ],
-      },
-      (error, result) => {
-        if (error) {
-          reject(error);
-        } else if (result) {
-          resolve({
-            secure_url: result.secure_url,
-            public_id: result.public_id,
-          });
-        } else {
-          reject(new Error('Upload failed'));
+    try {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: folder,
+          resource_type: 'image',
+          transformation: [
+            { width: 1000, height: 1000, crop: 'limit' }, // Limit max dimensions
+            { quality: 'auto:good' }, // Automatic quality optimization
+          ],
+        },
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary callback error:', error);
+            reject(error);
+          } else if (result) {
+            resolve({
+              secure_url: result.secure_url,
+              public_id: result.public_id,
+            });
+          } else {
+            reject(new Error('Upload failed - no result returned'));
+          }
         }
-      }
-    );
+      );
 
-    uploadStream.end(buffer);
+      uploadStream.on('error', (err) => {
+        console.error('Cloudinary stream error:', err);
+        reject(err);
+      });
+
+      uploadStream.end(buffer);
+    } catch (error) {
+      console.error('Cloudinary synchronous error:', error);
+      reject(error);
+    }
   });
 };
 

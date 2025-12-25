@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import { Verification, IVerification, VerificationStatus, IVerificationAnswer } from '../models/Verification';
 import { FoundItem } from '../models/FoundItem';
+import { verifyOwnershipWithPython, PythonVerificationRequest, PythonVerificationResponse } from './pythonVerificationService';
 
 export interface OwnerAnswerInput {
   questionId: number;
@@ -67,6 +68,46 @@ export const createVerification = async (
   await FoundItem.findByIdAndUpdate(data.foundItemId, {
     status: 'pending_verification',
   });
+
+  // Call Python backend for verification
+  try {
+    const pythonRequest: PythonVerificationRequest = {
+      owner_id: data.ownerId,
+      category: foundItem.category,
+      answers: answers.map((answer) => ({
+        question_id: answer.questionId + 1, // Python uses 1-based indexing
+        video_key: answer.videoKey,
+        founder_answer: answer.founderAnswer,
+        owner_answer: answer.ownerAnswer,
+        question_text: answer.question,
+      })),
+    };
+
+    const pythonResponse = await verifyOwnershipWithPython(pythonRequest);
+
+    // Update verification with Python backend results
+    const finalScore = parseFloat(pythonResponse.final_confidence.replace('%', '')) / 100;
+    const newStatus: VerificationStatus = pythonResponse.is_absolute_owner ? 'passed' : 'failed';
+
+    verification.status = newStatus;
+    verification.similarityScore = finalScore;
+    verification.pythonVerificationResult = pythonResponse;
+    await verification.save();
+
+    // Update found item status based on verification result
+    if (pythonResponse.is_absolute_owner) {
+      await FoundItem.findByIdAndUpdate(data.foundItemId, {
+        status: 'claimed',
+      });
+    } else {
+      await FoundItem.findByIdAndUpdate(data.foundItemId, {
+        status: 'available',
+      });
+    }
+  } catch (error) {
+    console.error('Python verification failed:', error);
+    // Keep status as pending if Python verification fails
+  }
 
   return verification;
 };

@@ -64,12 +64,15 @@ const AnswerQuestionsVideoScreen = () => {
       }));
 
       // Submit verification request
-      await itemsApi.submitVerification({
+      const response = await itemsApi.submitVerification({
         foundItemId: foundItem._id,
         ownerAnswers,
       });
 
-      navigation.navigate('VerificationPending');
+      // Navigate to verification result screen with the verification ID
+      navigation.navigate('VerificationResult', { 
+        verificationId: response._id 
+      });
     } catch (error: any) {
       Alert.alert(
         'Submission Failed',

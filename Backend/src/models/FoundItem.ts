@@ -8,6 +8,12 @@ export interface IFounderContact {
   phone: string;
 }
 
+export interface ILocationDetail {
+  location: string;
+  floor_id?: string | null;
+  hall_name?: string | null;
+}
+
 export interface IFoundItem extends Document {
   imageUrl: string;
   category: string;
@@ -15,13 +21,32 @@ export interface IFoundItem extends Document {
   questions: string[];
   founderAnswers: string[];
   founderContact: IFounderContact;
-  location: string;
+  found_location: ILocationDetail[];
   status: FoundItemStatus;
   createdBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
 
+
+const locationDetailSchema = new Schema<ILocationDetail>(
+  {
+    location: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    floor_id: {
+      type: String,
+      default: null,
+    },
+    hall_name: {
+      type: String,
+      default: null,
+    },
+  },
+  { _id: false }
+);
 
 const founderContactSchema = new Schema<IFounderContact>(
   {
@@ -49,7 +74,8 @@ const foundItemSchema = new Schema<IFoundItem>(
   {
     imageUrl: {
       type: String,
-      required: true,
+      required: false,
+      default: 'https://via.placeholder.com/400x400/CCCCCC/666666?text=No+Image',
     },
     category: {
       type: String,
@@ -83,10 +109,13 @@ const foundItemSchema = new Schema<IFoundItem>(
       type: founderContactSchema,
       required: true,
     },
-    location: {
-      type: String,
+    found_location: {
+      type: [locationDetailSchema],
       required: true,
-      trim: true,
+      validate: {
+        validator: (v: ILocationDetail[]) => v.length > 0,
+        message: 'At least one location is required',
+      },
     },
     status: {
       type: String,

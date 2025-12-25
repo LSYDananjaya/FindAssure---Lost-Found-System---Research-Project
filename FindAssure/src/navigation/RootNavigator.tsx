@@ -25,6 +25,7 @@ import FindLostResultsScreen from '../screens/owner/FindLostResultsScreen';
 import ItemDetailScreen from '../screens/owner/ItemDetailScreen';
 import AnswerQuestionsVideoScreen from '../screens/owner/AnswerQuestionsVideoScreen';
 import VerificationPendingScreen from '../screens/owner/VerificationPendingScreen';
+import VerificationResultScreen from '../screens/owner/VerificationResultScreen';
 
 // Admin screens
 import AdminLoginScreen from '../screens/admin/AdminLoginScreen';
@@ -134,6 +135,11 @@ export const RootNavigator = () => {
           name="VerificationPending" 
           component={VerificationPendingScreen} 
           options={{ headerShown: false }}
+        />
+        <Stack.Screen 
+          name="VerificationResult" 
+          component={VerificationResultScreen} 
+          options={{ title: 'Verification Result' }}
         />
         
         {/* Admin Flow */}

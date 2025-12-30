@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import AddItem from './pages/AddItem';
 import ItemDetail from './pages/ItemDetail';
+import VerificationResult from './pages/VerificationResult';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import './App.css';
@@ -20,6 +21,7 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="add-item" element={<AddItem />} />
             <Route path="item/:id" element={<ItemDetail />} />
+            <Route path="verification/:verificationId" element={<VerificationResult />} />
           </Route>
         </Routes>
       </Router>

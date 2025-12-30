@@ -15,8 +15,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { LocationPicker } from '../../components/LocationPicker';
+import { LocationDetail } from '../../constants/locationData';
 import { itemsApi } from '../../api/itemsApi';
-import { LOCATIONS } from '../../constants/appConstants';
 import { useAuth } from '../../context/AuthContext';
 
 type ReportFoundLocationNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundLocation'>;
@@ -28,7 +28,7 @@ const ReportFoundLocationScreen = () => {
   const { imageUri, category, description, selectedQuestions, founderAnswers } = route.params;
   const { user } = useAuth(); // Get logged-in user data
 
-  const [location, setLocation] = useState(LOCATIONS[0]);
+  const [location, setLocation] = useState<LocationDetail | null>(null);
   const [founderName, setFounderName] = useState('');
   const [founderEmail, setFounderEmail] = useState('');
   const [founderPhone, setFounderPhone] = useState('');
@@ -44,41 +44,46 @@ const ReportFoundLocationScreen = () => {
   }, [user]);
 
   const handleSubmit = async () => {
-    if (!location || !founderName.trim() || !founderEmail.trim() || !founderPhone.trim()) {
-      Alert.alert('Required Fields', 'Please fill in all fields');
+    if (!location || !location.location || !founderName.trim() || !founderEmail.trim() || !founderPhone.trim()) {
+      Alert.alert('Required Fields', 'Please fill in all fields including location');
+      return;
+    }
+
+    // For founder, if building has floors, must select hall
+    if (location.floor_id && !location.hall_name) {
+      Alert.alert('Required Fields', 'Please select the specific hall where you found the item');
       return;
     }
 
     try {
       setLoading(true);
 
-      // Step 1: Upload image to Cloudinary
-      let uploadedImageUrl = imageUri;
+      // Step 1: Upload image to Cloudinary (optional)
+      let uploadedImageUrl = '';
       try {
-        Alert.alert('Uploading', 'Uploading image to server...');
+        console.log('📤 Starting image upload...');
         uploadedImageUrl = await itemsApi.uploadImage(imageUri);
-      } catch (uploadError) {
-        console.error('Image upload failed:', uploadError);
-        Alert.alert(
-          'Image Upload Failed',
-          'Could not upload image to server. The item will be saved with a placeholder. You can update the image later.',
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => { setLoading(false); return; } },
-            { text: 'Continue Anyway', onPress: () => { /* continue with local URI */ } }
-          ]
-        );
-        // If user cancels, return early
-        return;
+        console.log('✅ Image uploaded successfully:', uploadedImageUrl);
+      } catch (uploadError: any) {
+        console.error('❌ Image upload failed:', uploadError);
+        console.log('⚠️ Continuing without image - will use placeholder');
+        // Continue without image - backend will use placeholder
+        uploadedImageUrl = '';
       }
 
-      // Step 2: Submit to backend with uploaded image URL
+      // Step 2: Submit to backend (with or without image)
+      console.log('📝 Submitting found item...');
       await itemsApi.reportFoundItem({
-        imageUrl: uploadedImageUrl,
+        imageUrl: uploadedImageUrl || '',  // Empty string if upload failed
         category,
         description,
         questions: selectedQuestions,
         founderAnswers,
-        location: location,
+        found_location: [{
+          location: location.location,
+          floor_id: location.floor_id,
+          hall_name: location.hall_name,
+        }],
         founderContact: {
           name: founderName.trim(),
           email: founderEmail.trim(),
@@ -86,8 +91,10 @@ const ReportFoundLocationScreen = () => {
         },
       });
 
+      console.log('✅ Found item submitted successfully');
       navigation.navigate('ReportFoundSuccess');
     } catch (error: any) {
+      console.error('❌ Submission failed:', error);
       Alert.alert(
         'Submission Failed', 
         error.message || 'Could not submit the found item. Please try again.'
@@ -119,6 +126,8 @@ const ReportFoundLocationScreen = () => {
                 <LocationPicker
                   selectedValue={location}
                   onValueChange={setLocation}
+                  userType="founder"
+                  error={!location ? undefined : ''}
                 />
               </View>
             </View>

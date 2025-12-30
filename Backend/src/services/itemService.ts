@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { FoundItem, IFoundItem, FoundItemStatus, IFounderContact } from '../models/FoundItem';
+import { FoundItem, IFoundItem, FoundItemStatus, IFounderContact, ILocationDetail } from '../models/FoundItem';
 import { LostRequest, ILostRequest } from '../models/LostRequest';
 
 export interface CreateFoundItemData {
@@ -8,7 +8,7 @@ export interface CreateFoundItemData {
   description: string;
   questions: string[];
   founderAnswers: string[];
-  location: string;
+  found_location: ILocationDetail[];
   founderContact: IFounderContact;
   createdBy?: string;
 }
@@ -21,8 +21,10 @@ export interface FoundItemFilters {
 export interface CreateLostRequestData {
   category: string;
   description: string;
-  location: string;
-  confidenceLevel: number;
+  owner_location: string;
+  floor_id?: string | null;
+  hall_name?: string | null;
+  owner_location_confidence_stage: number;
 }
 
 /**
@@ -35,7 +37,7 @@ export const createFoundItem = async (data: CreateFoundItemData): Promise<IFound
     description: data.description,
     questions: data.questions,
     founderAnswers: data.founderAnswers,
-    location: data.location,
+    found_location: data.found_location,
     founderContact: data.founderContact,
     status: 'available',
     ...(data.createdBy && { createdBy: new Types.ObjectId(data.createdBy) }),
@@ -117,8 +119,10 @@ export const createLostRequest = async (
     ownerId: new Types.ObjectId(ownerId),
     category: data.category,
     description: data.description,
-    location: data.location,
-    confidenceLevel: data.confidenceLevel,
+    owner_location: data.owner_location,
+    floor_id: data.floor_id,
+    hall_name: data.hall_name,
+    owner_location_confidence_stage: data.owner_location_confidence_stage,
   });
 
   return lostRequest;

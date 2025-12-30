@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateQuestions, createFoundItem } from '../services/api';
+import { LocationPicker } from '../components/LocationPicker';
+import { LocationDetail } from '../constants/locationData';
 import './AddItem.css';
 
 const CATEGORIES = [
@@ -24,7 +26,7 @@ const AddItem: React.FC = () => {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
-  const [location, setLocation] = useState('');
+  const [location, setLocation] = useState<LocationDetail | null>(null);
   
   // Step 2: AI Generated Questions
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
@@ -94,6 +96,17 @@ const AddItem: React.FC = () => {
       return;
     }
 
+    if (!location || !location.location) {
+      setError('Please select a location');
+      return;
+    }
+
+    // For founder, if building has floors, must select hall
+    if (location.floor_id && !location.hall_name) {
+      setError('Please select the specific hall where you found the item');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -104,7 +117,11 @@ const AddItem: React.FC = () => {
         description,
         questions: selectedQuestions,
         founderAnswers,
-        location,
+        found_location: [{
+          location: location.location,
+          floor_id: location.floor_id,
+          hall_name: location.hall_name,
+        }],
         founderContact: {
           name: founderName,
           email: founderEmail,
@@ -173,13 +190,11 @@ const AddItem: React.FC = () => {
       </div>
 
       <div className="form-group">
-        <label>Location Found *</label>
-        <input
-          type="text"
+        <LocationPicker
           value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          className="form-input"
-          placeholder="e.g., Main Library, Building A - 3rd Floor"
+          onChange={setLocation}
+          userType="founder"
+          label="Location Found"
           required
         />
       </div>
@@ -198,7 +213,7 @@ const AddItem: React.FC = () => {
           type="button"
           onClick={handleGenerateQuestions}
           className="btn btn-primary"
-          disabled={generatingQuestions || !category || !description || !imageUrl || !location}
+          disabled={generatingQuestions || !category || !description || !imageUrl || !location || !location.location}
         >
           {generatingQuestions ? 'Generating Questions...' : 'Generate Questions with AI'}
         </button>
@@ -408,7 +423,13 @@ const AddItem: React.FC = () => {
             <strong>Category:</strong> {category}
           </div>
           <div className="summary-item">
-            <strong>Location:</strong> {location}
+            <strong>Location:</strong> {location ? (
+              <>
+                {location.location.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                {location.floor_id && ` - Floor ${location.floor_id}`}
+                {location.hall_name && ` - ${location.hall_name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}`}
+              </>
+            ) : 'Not selected'}
           </div>
           <div className="summary-item">
             <strong>Questions:</strong> {selectedQuestions.length} answered

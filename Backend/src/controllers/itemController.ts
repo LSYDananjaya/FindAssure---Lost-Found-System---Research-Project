@@ -19,13 +19,13 @@ export const createFoundItem = async (
       description,
       questions,
       founderAnswers,
-      location,
+      found_location,
       founderContact,
     } = req.body;
 
-    // Validation
-    if (!imageUrl || !category || !description || !questions || !founderAnswers || !location || !founderContact) {
-      res.status(400).json({ message: 'All fields are required' });
+    // Validation (imageUrl is optional)
+    if (!category || !description || !questions || !founderAnswers || !found_location || !founderContact) {
+      res.status(400).json({ message: 'Required fields: category, description, questions, founderAnswers, found_location, founderContact' });
       return;
     }
 
@@ -40,12 +40,12 @@ export const createFoundItem = async (
     }
 
     const foundItem = await itemService.createFoundItem({
-      imageUrl,
+      imageUrl: imageUrl || 'https://via.placeholder.com/400x400/CCCCCC/666666?text=No+Image',
       category,
       description,
       questions,
       founderAnswers,
-      location,
+      found_location,
       founderContact,
       createdBy: req.user?.id,
     });
@@ -130,46 +130,30 @@ export const createLostRequest = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { category, description, location, confidenceLevel } = req.body;
-
-    if (!category || !description || !location || confidenceLevel === undefined) {
-      res.status(400).json({ message: 'Category, description, location, and confidence level are required' });
+    if (!req.user) {
+      res.status(401).json({ message: 'Authentication required' });
       return;
     }
 
-    if (confidenceLevel < 1 || confidenceLevel > 100) {
-      res.status(400).json({ message: 'Confidence level must be between 1 and 100' });
+    const { category, description, owner_location, floor_id, hall_name, owner_location_confidence_stage } = req.body;
+
+    if (!category || !description || !owner_location || owner_location_confidence_stage === undefined) {
+      res.status(400).json({ message: 'Category, description, owner_location, and confidence stage are required' });
       return;
     }
 
-    // Use authenticated user ID or create/use a demo user
-    let ownerId: string;
-    
-    if (req.user) {
-      ownerId = req.user.id;
-    } else {
-      // For testing/demo: find or create a demo user
-      const User = require('../models/User').User;
-      let demoUser = await User.findOne({ email: 'demo@suggestionui.com' });
-      
-      if (!demoUser) {
-        demoUser = await User.create({
-          email: 'demo@suggestionui.com',
-          firebaseUid: 'demo-suggestion-ui',
-          role: 'owner',
-          name: 'Demo User (Suggestion UI)',
-        });
-        console.log('✅ Created demo user for Suggestion UI');
-      }
-      
-      ownerId = demoUser._id.toString();
+    if (owner_location_confidence_stage < 1 || owner_location_confidence_stage > 3) {
+      res.status(400).json({ message: 'Confidence stage must be 1 (Pretty Sure), 2 (Sure), or 3 (Not Sure)' });
+      return;
     }
 
-    const lostRequest = await itemService.createLostRequest(ownerId, {
+    const lostRequest = await itemService.createLostRequest(req.user.id, {
       category,
       description,
-      location,
-      confidenceLevel,
+      owner_location,
+      floor_id,
+      hall_name,
+      owner_location_confidence_stage,
     });
 
     res.status(201).json(lostRequest);
@@ -318,35 +302,3 @@ export const generateQuestions = async (
     next(error);
   }
 };
-
-/**
- * Get multiple found items by IDs (batch)
- * POST /api/items/found/batch
- */
-export const getFoundItemsByIds = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const { itemIds } = req.body;
-
-    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-      res.status(400).json({ message: 'itemIds array is required' });
-      return;
-    }
-
-    // Limit batch size to prevent abuse
-    if (itemIds.length > 50) {
-      res.status(400).json({ message: 'Maximum 50 items can be fetched at once' });
-      return;
-    }
-
-    const items = await itemService.getFoundItemsByIds(itemIds);
-
-    res.status(200).json(items);
-  } catch (error) {
-    next(error);
-  }
-};
-

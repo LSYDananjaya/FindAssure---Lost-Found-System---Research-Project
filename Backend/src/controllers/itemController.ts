@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import * as itemService from '../services/itemService';
 import * as verificationService from '../services/verificationService';
 import * as geminiService from '../services/geminiService';
+import { User } from '../models/User';
 
 /**
  * Create a found item
@@ -298,6 +299,57 @@ export const generateQuestions = async (
     });
 
     res.status(200).json({ questions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get multiple found items by IDs (batch)
+ * POST /api/items/found/batch
+ */
+export const getFoundItemsByIds = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { itemIds } = req.body;
+
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      res.status(400).json({ message: 'itemIds array is required' });
+      return;
+    }
+
+    // Limit batch size to prevent abuse
+    if (itemIds.length > 50) {
+      res.status(400).json({ message: 'Maximum 50 items can be fetched at once' });
+      return;
+    }
+
+    const items = await itemService.getFoundItemsByIds(itemIds);
+
+    res.status(200).json(items);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get all users (public endpoint for suggestion system)
+ * GET /api/items/users
+ */
+export const getAllUsersPublic = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // Only return basic user info, exclude sensitive data
+    const users = await User.find()
+      .select('name email role createdAt firebaseUid')
+      .sort({ createdAt: -1 });
+    res.status(200).json(users);
   } catch (error) {
     next(error);
   }

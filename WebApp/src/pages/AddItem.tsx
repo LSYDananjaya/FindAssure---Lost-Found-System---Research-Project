@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generateQuestions, createFoundItem } from '../services/api';
 import { LocationPicker } from '../components/LocationPicker';
-import { LocationDetail } from '../constants/locationData';
+import type { LocationDetail } from '../constants/locationData';
 import './AddItem.css';
 
 const CATEGORIES = [

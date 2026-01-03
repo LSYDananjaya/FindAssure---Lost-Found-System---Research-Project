@@ -1,4 +1,4 @@
-import { Floor } from './locationData';
+import type { Floor } from './locationData';
 
 export const NEW_BUILDING_FLOORS: Floor[] = [
   {

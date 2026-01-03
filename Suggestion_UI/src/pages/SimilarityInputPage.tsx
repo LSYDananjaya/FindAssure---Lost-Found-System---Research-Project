@@ -1,103 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { SimilarItem, SimilarityInput } from '../types';
-import LocationSelector from '../components/LocationSelector';
-import { findMatchingItems } from '../services/locationMatchService';
+import type { SimilarItem, SimilarityInput, User, FoundItem, LocationDetail } from '../types';
+import LocationPicker from '../components/LocationPicker';
+import ConfidenceStageSelector from '../components/ConfidenceStageSelector';
+import { getAllUsers, getFoundItems, findItems, type FindItemsRequest } from '../services/itemService';
 
 const SimilarityInputPage: React.FC = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [foundItems, setFoundItems] = useState<FoundItem[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadingItems, setLoadingItems] = useState(true);
   
   const [formData, setFormData] = useState<SimilarityInput>({
     ownerId: '',
-    categoryName: '',
-    descriptionMatchConfidence: 90,
-    ownerLocation: '',
-    ownerFloorId: null,
-    ownerHallName: null,
-    ownerLocationConfidenceStage: 2,
+    owner_location: '',
+    floor_id: null,
+    hall_name: null,
+    owner_location_confidence_stage: 0,
     items: [],
   });
 
   const [currentItem, setCurrentItem] = useState<SimilarItem>({
     itemId: '',
     similarityScore: 0,
-    location: '',
-    floorId: null,
-    hallName: null,
+    confidenceLevel: 0,
   });
 
-  // Parse location details from LocationSelector
-  const handleOwnerLocationChange = (location: string) => {
-    // Check if location contains explicit floor pattern (e.g., "new_building_floor_2")
-    // This pattern specifically looks for "_floor_" followed by digits
-    const floorMatch = location.match(/^(.+)_floor_(\d+)$/);
-    if (floorMatch) {
-      const baseLocation = floorMatch[1];
-      const floorId = parseInt(floorMatch[2]);
-      
-      setFormData({
-        ...formData,
-        ownerLocation: baseLocation,
-        ownerFloorId: floorId,
-        ownerHallName: null,
-      });
-    } else {
-      // Regular location without floor (e.g., "basketball_court", "tennis_court")
-      setFormData({
-        ...formData,
-        ownerLocation: location,
-        ownerFloorId: null,
-        ownerHallName: null,
-      });
-    }
-  };
+  // Fetch users and items on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [usersData, itemsData] = await Promise.all([
+          getAllUsers(),
+          getFoundItems()
+        ]);
+        setUsers(usersData.filter(u => u.role === 'owner')); // Only show owners
+        setFoundItems(itemsData.filter(item => item.status === 'available')); // Only available items
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        alert('Failed to load users or items. Please try again.');
+      } finally {
+        setLoadingUsers(false);
+        setLoadingItems(false);
+      }
+    };
 
-  const handleItemLocationChange = (location: string) => {
-    console.log('Item location changed:', location); // Debug log
-    
-    // Check if location contains explicit floor pattern (e.g., "new_building_floor_2")
-    // This pattern specifically looks for "_floor_" followed by digits
-    const floorMatch = location.match(/^(.+)_floor_(\d+)$/);
-    if (floorMatch) {
-      const baseLocation = floorMatch[1];
-      const floorId = parseInt(floorMatch[2]);
-      
-      setCurrentItem({
-        ...currentItem,
-        location: baseLocation,
-        floorId: floorId,
-        hallName: null,
-      });
-    } else {
-      // Regular location without floor (e.g., "basketball_court", "tennis_court")
-      setCurrentItem({
-        ...currentItem,
-        location: location,
-        floorId: null,
-        hallName: null,
-      });
-    }
+    fetchData();
+  }, []);
+
+  const handleLocationChange = (location: LocationDetail) => {
+    setFormData({
+      ...formData,
+      owner_location: location.location,
+      floor_id: location.floor_id || null,
+      hall_name: location.hall_name || null,
+    });
   };
 
   const handleAddItem = () => {
-    console.log('Add Item clicked. Current item:', currentItem); // Debug log
-    
-    if (currentItem.itemId && currentItem.location) {
+    if (currentItem.itemId && currentItem.similarityScore > 0 && currentItem.confidenceLevel > 0) {
       setFormData({
         ...formData,
-        items: [...formData.items, { ...currentItem }],
+        items: [...formData.items, currentItem],
       });
       setCurrentItem({
         itemId: '',
         similarityScore: 0,
-        location: '',
-        floorId: null,
-        hallName: null,
+        confidenceLevel: 0,
       });
     } else {
-      console.log('Validation failed - itemId:', currentItem.itemId, 'location:', currentItem.location);
+      alert('Please fill in all item fields (Item ID, Similarity Score, and Confidence Level)');
     }
   };
 
@@ -109,238 +82,279 @@ const SimilarityInputPage: React.FC = () => {
   };
 
   const handleNext = async () => {
-    // Validation
-    if (!formData.ownerId || !formData.categoryName || !formData.ownerLocation || formData.items.length === 0) {
-      setError('Please fill in all required fields and add at least one item');
-      return;
-    }
+    if (formData.ownerId && formData.owner_location && formData.owner_location_confidence_stage > 0 && formData.items.length > 0) {
+      try {
+        // Get first item's category as the main category
+        const firstItem = getSelectedItem(formData.items[0].itemId);
+        if (!firstItem) {
+          alert('Could not find the first selected item. Please try again.');
+          return;
+        }
 
-    setLoading(true);
-    setError(null);
+        // Calculate average similarity score as description_match_cofidence
+        const avgSimilarity = formData.items.reduce((sum, item) => sum + item.similarityScore, 0) / formData.items.length;
+        const descriptionMatchConfidence = Math.round(avgSimilarity * 100);
 
-    try {
-      // Call Python backend API
-      const response = await findMatchingItems(formData);
-      
-      if (!response.success) {
-        throw new Error('Location matching failed');
+        // Generate a numeric owner_id from the string _id (using hash or index)
+        const ownerIndex = users.findIndex(u => u._id === formData.ownerId);
+        const numericOwnerId = ownerIndex >= 0 ? ownerIndex + 100 : 100; // Start from 100 to avoid conflicts
+
+        // Build the request payload
+        const requestData: FindItemsRequest = {
+          owner_id: numericOwnerId,
+          categary_name: firstItem.category.toLowerCase(),
+          categary_data: formData.items.map(item => {
+            const foundItem = getSelectedItem(item.itemId);
+            // Extract numeric ID from MongoDB ObjectId string or use a hash
+            const numericItemId = parseInt(item.itemId.substring(item.itemId.length - 6), 16) % 10000;
+            return {
+              id: numericItemId,
+              description_scrore: Math.round(item.similarityScore * 100),
+              found_location: foundItem?.found_location.map(loc => ({
+                location: loc.location,
+                floor_id: loc.floor_id ? parseInt(loc.floor_id) : null,
+                hall_name: loc.hall_name || null,
+              })) || [{
+                location: 'unknown',
+                floor_id: null,
+                hall_name: null,
+              }],
+            };
+          }),
+          description_match_cofidence: descriptionMatchConfidence,
+          owner_location: formData.owner_location,
+          floor_id: formData.floor_id ? parseInt(formData.floor_id) : null,
+          hall_name: formData.hall_name,
+          owner_location_confidence_stage: formData.owner_location_confidence_stage,
+        };
+
+        console.log('Sending request to find-items API:', requestData);
+
+        // Call the API
+        const response = await findItems(requestData);
+        
+        console.log('Response from find-items API:', response);
+
+        if (response.success) {
+          // Store both the form data and the response for the next page
+          sessionStorage.setItem('similarityData', JSON.stringify(formData));
+          sessionStorage.setItem('matchedResults', JSON.stringify(response));
+          navigate('/matched-items');
+        } else {
+          alert('No matches found. Please try different items or locations.');
+        }
+      } catch (error: any) {
+        console.error('Error calling find-items API:', error);
+        alert(`Failed to find matching items: ${error.response?.data?.message || error.message || 'Unknown error'}`);
       }
-
-      // Store both the original data and the matched results
-      sessionStorage.setItem('similarityData', JSON.stringify(formData));
-      sessionStorage.setItem('matchedItemIds', JSON.stringify(response.matched_item_ids));
-      sessionStorage.setItem('matchedLocations', JSON.stringify(response.matched_locations));
-      sessionStorage.setItem('locationMatch', JSON.stringify(response.location_match));
-      
-      // Navigate to item selection page with matched items
-      navigate('/select-items');
-    } catch (err) {
-      console.error('Error calling Python backend:', err);
-      setError(err instanceof Error ? err.message : 'Failed to match items. Please ensure the Python backend is running.');
-    } finally {
-      setLoading(false);
+    } else {
+      alert('Please fill in all required fields: Owner, Location, Confidence Stage, and add at least one item');
     }
   };
+
+  const getSelectedUser = () => {
+    return users.find(u => u._id === formData.ownerId);
+  };
+
+  const getSelectedItem = (itemId: string) => {
+    return foundItems.find(item => item._id === itemId);
+  };
+
+  const currentLocation: LocationDetail | null = formData.owner_location ? {
+    location: formData.owner_location,
+    floor_id: formData.floor_id,
+    hall_name: formData.hall_name,
+  } : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
       <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-xl p-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Location-Based Item Suggestion</h1>
-        
-        {error && (
-          <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">Location Similarity Input</h1>
+        <p className="text-gray-600 mb-6">Configure owner location and similar found items for testing</p>
         
         {/* Owner Information */}
         <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4">Owner Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <h2 className="text-xl font-semibold text-gray-700 mb-4">👤 Owner Information</h2>
+          <div className="grid grid-cols-1 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Owner ID *
+                Select Owner <span className="text-red-500">*</span>
               </label>
-              <input
-                type="text"
-                value={formData.ownerId}
-                onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter owner ID (e.g., 692e7edb5c6402c6e07dc156)"
-              />
+              {loadingUsers ? (
+                <div className="text-gray-500">Loading users...</div>
+              ) : (
+                <select
+                  value={formData.ownerId}
+                  onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                >
+                  <option value="">Choose an owner...</option>
+                  {users.map((user) => (
+                    <option key={user._id} value={user._id}>
+                      {user.name || user.email} - {user.email}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {getSelectedUser() && (
+                <div className="mt-2 text-sm text-gray-600 bg-gray-50 p-2 rounded">
+                  <strong>ID:</strong> {getSelectedUser()?._id}
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Category Name *
-              </label>
-              <input
-                type="text"
-                value={formData.categoryName}
-                onChange={(e) => setFormData({ ...formData, categoryName: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter category (e.g., laptop)"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description Match Confidence (0-100) *
-              </label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={formData.descriptionMatchConfidence}
-                onChange={(e) => setFormData({ ...formData, descriptionMatchConfidence: parseInt(e.target.value) || 0 })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter confidence (0-100)"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Owner Location Confidence Stage *
-              </label>
-              <select
-                value={formData.ownerLocationConfidenceStage}
-                onChange={(e) => setFormData({ ...formData, ownerLocationConfidenceStage: parseInt(e.target.value) })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value={1}>Stage 1 - Low Confidence</option>
-                <option value={2}>Stage 2 - Medium Confidence</option>
-                <option value={3}>Stage 3 - High Confidence</option>
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <LocationSelector
-                value={formData.ownerLocation}
-                onChange={handleOwnerLocationChange}
-                label="Owner Location"
-                required={true}
-              />
-            </div>
+            
+            <LocationPicker
+              value={currentLocation}
+              onChange={handleLocationChange}
+              label="Owner Location"
+              required={true}
+              userType="owner"
+              allowDoNotRemember={true}
+            />
+            
+            <ConfidenceStageSelector
+              value={formData.owner_location_confidence_stage}
+              onChange={(stage) => setFormData({ ...formData, owner_location_confidence_stage: stage })}
+              label="Owner Location Confidence Stage"
+              required={true}
+            />
           </div>
         </div>
 
-        {/* Add Items */}
+        {/* Add Similar Items */}
         <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4">Add Found Items</h2>
-          <div className="bg-gray-50 p-6 rounded-lg mb-4">
+          <h2 className="text-xl font-semibold text-gray-700 mb-4">📦 Add Similar Found Items</h2>
+          <div className="bg-gray-50 p-6 rounded-lg mb-4 border border-gray-200">
             <div className="grid grid-cols-1 gap-6 mb-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Item ID (Found Item) *
+                  Found Item <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={currentItem.itemId}
-                  onChange={(e) => setCurrentItem({ ...currentItem, itemId: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter found item ID (e.g., 692e7edb5c6402c6e07dc156)"
-                />
+                {loadingItems ? (
+                  <div className="text-gray-500">Loading items...</div>
+                ) : (
+                  <>
+                    <select
+                      value={currentItem.itemId}
+                      onChange={(e) => setCurrentItem({ ...currentItem, itemId: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="">Select a found item...</option>
+                      {foundItems.map((item) => (
+                        <option key={item._id} value={item._id}>
+                          {item.category} - {item.description.substring(0, 50)}...
+                        </option>
+                      ))}
+                    </select>
+                    {currentItem.itemId && getSelectedItem(currentItem.itemId) && (
+                      <div className="mt-2 text-sm text-gray-600 bg-white p-3 rounded border">
+                        <div><strong>ID:</strong> {currentItem.itemId}</div>
+                        <div><strong>Category:</strong> {getSelectedItem(currentItem.itemId)?.category}</div>
+                        <div><strong>Location:</strong> {getSelectedItem(currentItem.itemId)?.found_location[0]?.location}</div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description Score (0-100) *
+                  Similarity Score (0-1) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
+                  step="0.01"
                   min="0"
-                  max="100"
+                  max="1"
                   value={currentItem.similarityScore}
                   onChange={(e) => setCurrentItem({ ...currentItem, similarityScore: parseFloat(e.target.value) || 0 })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter score (0-100)"
+                  placeholder="0.00 - 1.00"
+                  required
                 />
+                <small className="text-gray-500 text-xs">Enter a value between 0.00 and 1.00</small>
               </div>
-              <div>
-                <LocationSelector
-                  value={currentItem.location}
-                  onChange={handleItemLocationChange}
-                  label="Item Location"
-                  required={false}
-                />
-              </div>
+              
+              <ConfidenceStageSelector
+                value={currentItem.confidenceLevel}
+                onChange={(stage) => setCurrentItem({ ...currentItem, confidenceLevel: stage })}
+                label="Item Confidence Level"
+                required={true}
+              />
             </div>
-            
-            {/* Debug Info - Remove after testing */}
-            <div className="bg-gray-100 p-3 rounded text-xs">
-              <p><strong>Debug:</strong></p>
-              <p>Item ID: {currentItem.itemId || '(empty)'}</p>
-              <p>Location: {currentItem.location || '(empty)'}</p>
-              <p>Score: {currentItem.similarityScore}</p>
-              <p>Button enabled: {currentItem.itemId && currentItem.location ? 'YES' : 'NO'}</p>
-            </div>
-            
             <button
               onClick={handleAddItem}
-              disabled={!currentItem.itemId || !currentItem.location}
-              className="w-full md:w-auto px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              disabled={!currentItem.itemId || currentItem.similarityScore <= 0 || currentItem.confidenceLevel === 0}
+              className="w-full md:w-auto px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
             >
-              Add Item
+              ➕ Add Item
             </button>
           </div>
 
           {/* Items List */}
           {formData.items.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-lg font-medium text-gray-700">Added Items ({formData.items.length})</h3>
-              {formData.items.map((item, index) => (
-                <div key={index} className="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center">
-                  <div className="grid grid-cols-3 gap-4 flex-1">
-                    <div>
-                      <span className="text-sm text-gray-500">Item ID:</span>
-                      <p className="font-medium">{item.itemId}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-500">Score:</span>
-                      <p className="font-medium">{item.similarityScore}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-500">Location:</span>
-                      <p className="font-medium">{item.location}</p>
-                      {item.floorId && <p className="text-xs text-gray-500">Floor: {item.floorId}</p>}
-                      {item.hallName && <p className="text-xs text-gray-500">Hall: {item.hallName}</p>}
+              <h3 className="text-lg font-medium text-gray-700">
+                📋 Added Items ({formData.items.length})
+              </h3>
+              {formData.items.map((item, index) => {
+                const foundItem = getSelectedItem(item.itemId);
+                const confidenceLabels = ['', '😊 Pretty Sure', '🙂 Sure', '🤔 Not Sure'];
+                return (
+                  <div key={index} className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-xs text-gray-500 uppercase font-semibold">Item</span>
+                          <p className="font-medium text-gray-800">{foundItem?.category || 'Unknown'}</p>
+                          <p className="text-sm text-gray-600 truncate">{item.itemId}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs text-gray-500 uppercase font-semibold">Similarity Score</span>
+                          <p className="font-medium text-blue-600 text-lg">{item.similarityScore.toFixed(2)}</p>
+                        </div>
+                        <div className="md:col-span-2">
+                          <span className="text-xs text-gray-500 uppercase font-semibold">Confidence</span>
+                          <p className="font-medium text-gray-800">{confidenceLabels[item.confidenceLevel]}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveItem(index)}
+                        className="ml-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium"
+                      >
+                        Remove
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleRemoveItem(index)}
-                    className="ml-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Next Button */}
-        <div className="flex justify-end">
-          <button
-            onClick={handleNext}
-            disabled={loading || !formData.ownerId || !formData.categoryName || !formData.ownerLocation || formData.items.length === 0}
-            className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Matching Items...
-              </>
-            ) : (
-              'Find Matches →'
-            )}
-          </button>
+        {/* Summary and Next Button */}
+        <div className="border-t pt-6">
+          <div className="bg-blue-50 p-4 rounded-lg mb-4">
+            <h3 className="font-semibold text-blue-900 mb-2">📊 Summary</h3>
+            <div className="text-sm text-blue-800 space-y-1">
+              <div><strong>Owner:</strong> {getSelectedUser()?.name || getSelectedUser()?.email || 'Not selected'}</div>
+              <div><strong>Location:</strong> {formData.owner_location || 'Not selected'}</div>
+              <div><strong>Confidence Stage:</strong> {['Not selected', '😊 Pretty Sure', '🙂 Sure', '🤔 Not Sure'][formData.owner_location_confidence_stage]}</div>
+              <div><strong>Similar Items:</strong> {formData.items.length} item(s) added</div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <button
+              onClick={handleNext}
+              disabled={!formData.ownerId || !formData.owner_location || formData.owner_location_confidence_stage === 0 || formData.items.length === 0}
+              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium shadow-lg"
+            >
+              Next Step →
+            </button>
+          </div>
         </div>
       </div>
     </div>

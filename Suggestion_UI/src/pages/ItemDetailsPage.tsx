@@ -141,20 +141,24 @@ const ItemDetailsPage: React.FC = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <span className="text-sm font-medium text-gray-500">Location:</span>
-                          <p className="text-gray-700 font-medium">{item.location}</p>
+                          <p className="text-gray-700 font-medium">
+                            {item.found_location?.[0]?.location || 'Location not specified'}
+                            {item.found_location?.[0]?.floor_id && `, Floor ${item.found_location[0].floor_id}`}
+                            {item.found_location?.[0]?.hall_name && `, ${item.found_location[0].hall_name}`}
+                          </p>
                         </div>
                         <div>
                           <span className="text-sm font-medium text-gray-500">Found Date:</span>
                           <p className="text-gray-700 font-medium">
-                            {new Date(item.foundDate).toLocaleDateString()}
+                            {new Date(item.createdAt).toLocaleDateString()}
                           </p>
                         </div>
                       </div>
 
-                      {item.contactInfo && (
+                      {item.founderContact && (
                         <div>
                           <span className="text-sm font-medium text-gray-500">Contact:</span>
-                          <p className="text-gray-700 font-medium">{item.contactInfo}</p>
+                          <p className="text-gray-700 font-medium">{item.founderContact.name} - {item.founderContact.email}</p>
                         </div>
                       )}
 

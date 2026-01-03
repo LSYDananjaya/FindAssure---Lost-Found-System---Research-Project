@@ -4,8 +4,8 @@ import {
   getFloorOptions,
   getHallOptions,
   hasFloors,
-  LocationDetail,
 } from '../constants/locationData';
+import type { LocationDetail } from '../constants/locationData';
 import './LocationPicker.css';
 
 interface LocationPickerProps {

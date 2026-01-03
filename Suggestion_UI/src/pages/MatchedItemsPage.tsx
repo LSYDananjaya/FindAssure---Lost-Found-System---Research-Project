@@ -5,7 +5,7 @@ import type { FoundItem } from '../types';
 
 interface MatchedResults {
   location_match: boolean;
-  matched_item_ids: number[];
+  matched_item_ids: (string | number)[]; // Support both ID formats
   matched_locations: string[];
   success: boolean;
 }
@@ -30,6 +30,8 @@ const MatchedItemsPage: React.FC = () => {
         const results: MatchedResults = JSON.parse(resultsStr);
         setMatchedResults(results);
 
+        console.log('Matched results from Python backend:', results);
+
         if (results.matched_item_ids.length === 0) {
           alert('No matching items found.');
           setLoading(false);
@@ -38,7 +40,10 @@ const MatchedItemsPage: React.FC = () => {
 
         // Fetch full item details for matched IDs
         const itemIds = results.matched_item_ids.map(id => id.toString());
+        console.log('Fetching items with IDs:', itemIds);
+        
         const items = await getFoundItemsByIds(itemIds);
+        console.log('Fetched items:', items);
         setMatchedItems(items);
       } catch (error) {
         console.error('Error loading matched items:', error);

@@ -63,7 +63,7 @@ const ItemSelectionPage: React.FC = () => {
             </div>
             <div>
               <span className="text-sm text-gray-600">Owner Location:</span>
-              <p className="font-medium text-gray-800">{similarityData.ownerLocation}</p>
+              <p className="font-medium text-gray-800">{similarityData.owner_location}</p>
             </div>
           </div>
         </div>
@@ -118,10 +118,7 @@ const ItemSelectionPage: React.FC = () => {
                           {(item.similarityScore * 100).toFixed(1)}%
                         </p>
                       </div>
-                      <div>
-                        <span className="text-sm text-gray-500">Location:</span>
-                        <p className="font-medium text-gray-800">{item.location}</p>
-                      </div>
+                     
                     </div>
                   </div>
                   

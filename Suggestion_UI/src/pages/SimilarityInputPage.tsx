@@ -24,7 +24,6 @@ const SimilarityInputPage: React.FC = () => {
   const [currentItem, setCurrentItem] = useState<SimilarItem>({
     itemId: '',
     similarityScore: 0,
-    confidenceLevel: 0,
   });
 
   // Fetch users and items on mount
@@ -59,7 +58,7 @@ const SimilarityInputPage: React.FC = () => {
   };
 
   const handleAddItem = () => {
-    if (currentItem.itemId && currentItem.similarityScore > 0 && currentItem.confidenceLevel > 0) {
+    if (currentItem.itemId && currentItem.similarityScore > 0) {
       setFormData({
         ...formData,
         items: [...formData.items, currentItem],
@@ -67,10 +66,9 @@ const SimilarityInputPage: React.FC = () => {
       setCurrentItem({
         itemId: '',
         similarityScore: 0,
-        confidenceLevel: 0,
       });
     } else {
-      alert('Please fill in all item fields (Item ID, Similarity Score, and Confidence Level)');
+      alert('Please fill in all item fields (Item ID and Similarity Score)');
     }
   };
 
@@ -99,6 +97,9 @@ const SimilarityInputPage: React.FC = () => {
         const ownerIndex = users.findIndex(u => u._id === formData.ownerId);
         const numericOwnerId = ownerIndex >= 0 ? ownerIndex + 100 : 100; // Start from 100 to avoid conflicts
 
+        // Create a mapping between numeric IDs and MongoDB ObjectIds
+        const idMapping: { [key: number]: string } = {};
+
         // Build the request payload
         const requestData: FindItemsRequest = {
           owner_id: numericOwnerId,
@@ -107,6 +108,10 @@ const SimilarityInputPage: React.FC = () => {
             const foundItem = getSelectedItem(item.itemId);
             // Extract numeric ID from MongoDB ObjectId string or use a hash
             const numericItemId = parseInt(item.itemId.substring(item.itemId.length - 6), 16) % 10000;
+            
+            // Store the mapping for later retrieval
+            idMapping[numericItemId] = item.itemId;
+            
             return {
               id: numericItemId,
               description_scrore: Math.round(item.similarityScore * 100),
@@ -124,11 +129,12 @@ const SimilarityInputPage: React.FC = () => {
           description_match_cofidence: descriptionMatchConfidence,
           owner_location: formData.owner_location,
           floor_id: formData.floor_id ? parseInt(formData.floor_id) : null,
-          hall_name: formData.hall_name,
+          hall_name: formData.hall_name || null,
           owner_location_confidence_stage: formData.owner_location_confidence_stage,
         };
 
         console.log('Sending request to find-items API:', requestData);
+        console.log('ID Mapping (numeric -> MongoDB ObjectId):', idMapping);
 
         // Call the API
         const response = await findItems(requestData);
@@ -136,9 +142,22 @@ const SimilarityInputPage: React.FC = () => {
         console.log('Response from find-items API:', response);
 
         if (response.success) {
+          // Convert numeric IDs back to MongoDB ObjectIds
+          const realItemIds = response.matched_item_ids
+            .map(numericId => idMapping[Number(numericId)])
+            .filter(id => id !== undefined); // Remove any that don't have a mapping
+
+          console.log('Converted matched IDs to MongoDB ObjectIds:', realItemIds);
+
+          // Store the real MongoDB ObjectIds instead of numeric IDs
+          const responseWithRealIds = {
+            ...response,
+            matched_item_ids: realItemIds
+          };
+
           // Store both the form data and the response for the next page
           sessionStorage.setItem('similarityData', JSON.stringify(formData));
-          sessionStorage.setItem('matchedResults', JSON.stringify(response));
+          sessionStorage.setItem('matchedResults', JSON.stringify(responseWithRealIds));
           navigate('/matched-items');
         } else {
           alert('No matches found. Please try different items or locations.');
@@ -261,32 +280,24 @@ const SimilarityInputPage: React.FC = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Similarity Score (0-1) <span className="text-red-500">*</span>
+                  Similarity Score (0-100) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
-                  step="0.01"
                   min="0"
-                  max="1"
+                  max="100"
                   value={currentItem.similarityScore}
                   onChange={(e) => setCurrentItem({ ...currentItem, similarityScore: parseFloat(e.target.value) || 0 })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0.00 - 1.00"
+                  placeholder="0 - 100"
                   required
                 />
-                <small className="text-gray-500 text-xs">Enter a value between 0.00 and 1.00</small>
+                <small className="text-gray-500 text-xs">Description match score between 0 and 100</small>
               </div>
-              
-              <ConfidenceStageSelector
-                value={currentItem.confidenceLevel}
-                onChange={(stage) => setCurrentItem({ ...currentItem, confidenceLevel: stage })}
-                label="Item Confidence Level"
-                required={true}
-              />
             </div>
             <button
               onClick={handleAddItem}
-              disabled={!currentItem.itemId || currentItem.similarityScore <= 0 || currentItem.confidenceLevel === 0}
+              disabled={!currentItem.itemId || currentItem.similarityScore <= 0}
               className="w-full md:w-auto px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
             >
               ➕ Add Item
@@ -315,10 +326,7 @@ const SimilarityInputPage: React.FC = () => {
                           <span className="text-xs text-gray-500 uppercase font-semibold">Similarity Score</span>
                           <p className="font-medium text-blue-600 text-lg">{item.similarityScore.toFixed(2)}</p>
                         </div>
-                        <div className="md:col-span-2">
-                          <span className="text-xs text-gray-500 uppercase font-semibold">Confidence</span>
-                          <p className="font-medium text-gray-800">{confidenceLabels[item.confidenceLevel]}</p>
-                        </div>
+                       
                       </div>
                       <button
                         onClick={() => handleRemoveItem(index)}

@@ -109,7 +109,7 @@ const ItemDetailsPage: React.FC = () => {
                     <div className="h-48 bg-gray-200 overflow-hidden">
                       <img
                         src={item.imageUrl}
-                        alt={item.itemName}
+                        alt={item.category}
                         className="w-full h-full object-cover"
                       />
                     </div>
@@ -118,7 +118,7 @@ const ItemDetailsPage: React.FC = () => {
                   <div className="p-6">
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        <h2 className="text-2xl font-bold text-gray-800 mb-1">{item.itemName}</h2>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-1">{item.category}</h2>
                         <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
                           {item.category}
                         </span>

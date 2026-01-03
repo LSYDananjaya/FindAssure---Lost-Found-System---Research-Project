@@ -33,10 +33,10 @@ export const getAllUsers = async (): Promise<User[]> => {
 };
 
 export interface FindItemsRequest {
-  owner_id: number;
+  owner_id: string | number;
   categary_name: string;
   categary_data: Array<{
-    id: number;
+    id: string | number; // Support both MongoDB ObjectId (string) and numeric IDs
     description_scrore: number;
     found_location: Array<{
       location: string;
@@ -53,7 +53,7 @@ export interface FindItemsRequest {
 
 export interface FindItemsResponse {
   location_match: boolean;
-  matched_item_ids: number[];
+  matched_item_ids: (string | number)[]; // Support both ID formats
   matched_locations: string[];
   success: boolean;
 }

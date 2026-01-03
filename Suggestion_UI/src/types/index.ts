@@ -8,8 +8,7 @@ export interface LocationDetail {
 
 export interface SimilarItem {
   itemId: string;
-  similarityScore: number;
-  confidenceLevel: number; // 1 = Pretty Sure, 2 = Sure, 3 = Not Sure
+  similarityScore: number; // Description score 0-100
 }
 
 export interface SimilarityInput {
@@ -17,7 +16,7 @@ export interface SimilarityInput {
   owner_location: string;
   floor_id?: string | null;
   hall_name?: string | null;
-  owner_location_confidence_stage: number; // 1-3
+  owner_location_confidence_stage: number; // 1-4 (Python backend supports 1-4)
   items: SimilarItem[];
 }
 

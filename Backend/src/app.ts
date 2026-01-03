@@ -27,6 +27,7 @@ export const createApp = (): Application => {
       origin: [
         ...allowedOrigins,
         'http://localhost:3000',  // Web frontend (Vite)
+        'http://localhost:5173',  // Location Similarity Web (Vite)
         'http://192.168.113.106:8081',  // Mobile app (network)
         'http://localhost:19006',  // Expo dev server
         'http://192.168.113.106:19006'

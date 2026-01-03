@@ -83,4 +83,19 @@ router.get('/verification/:id', requireAuth, itemController.getVerificationById)
  */
 router.get('/verification/me', requireAuth, itemController.getMyVerifications);
 
+
+/**
+ * @route   POST /api/items/found/batch
+ * @desc    Get multiple found items by IDs (batch)
+ * @access  Public
+ */
+router.post('/found/batch', itemController.getFoundItemsByIds);
+
+/**
+ * @route   GET /api/items/users
+ * @desc    Get all users (for suggestion system)
+ * @access  Public
+ */
+router.get('/users', itemController.getAllUsersPublic);
+
 export default router;

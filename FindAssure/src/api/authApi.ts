@@ -25,4 +25,10 @@ export const authApi = {
     const response = await axiosClient.patch<User>('/auth/me', data);
     return response.data;
   },
+
+  // Get claimed items
+  getClaimedItems: async (): Promise<any[]> => {
+    const response = await axiosClient.get<any[]>('/auth/claimed-items');
+    return response.data;
+  },
 };

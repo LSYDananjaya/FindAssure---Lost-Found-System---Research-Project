@@ -16,6 +16,8 @@ interface User {
   email: string;
   phone?: string;
   role: 'owner' | 'admin';
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface AuthContextType {
@@ -26,6 +28,7 @@ interface AuthContextType {
   signIn: (credentials: { email: string; password: string }) => Promise<void>;
   signUp: (data: { email: string; password: string; name: string; phone?: string }) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (data: { name?: string; phone?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -170,6 +173,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const updateProfile = async (data: { name?: string; phone?: string }) => {
+    try {
+      const response = await apiClient.patch('/auth/me', data);
+      setUser(response.data);
+    } catch (error: any) {
+      console.error('Update profile error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to update profile');
+    }
+  };
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -178,7 +191,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       loading, 
       signIn, 
       signUp, 
-      signOut
+      signOut,
+      updateProfile
     }}>
       {children}
     </AuthContext.Provider>

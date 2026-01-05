@@ -277,7 +277,6 @@ const SimilarityInputPage: React.FC = () => {
                   </>
                 )}
               </div>
-              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Similarity Score (0-100) <span className="text-red-500">*</span>

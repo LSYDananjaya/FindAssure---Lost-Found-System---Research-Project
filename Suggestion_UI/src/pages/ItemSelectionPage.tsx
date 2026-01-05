@@ -118,10 +118,8 @@ const ItemSelectionPage: React.FC = () => {
                           {(item.similarityScore * 100).toFixed(1)}%
                         </p>
                       </div>
-                     
                     </div>
                   </div>
-                  
                   {isSelected && (
                     <div className="ml-4">
                       <div className="bg-blue-500 text-white rounded-full w-10 h-10 flex items-center justify-center">

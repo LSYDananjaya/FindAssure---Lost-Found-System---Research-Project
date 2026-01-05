@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../types/models';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 // Import screens
+import OnboardingScreen from '../screens/OnboardingScreen';
 import HomeScreen from '../screens/HomeScreen';
 
 // Auth screens
@@ -37,13 +40,31 @@ const Stack = createStackNavigator<RootStackParamList>();
 
 export const RootNavigator = () => {
   const { user, loading } = useAuth();
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
 
-  if (loading) {
-    return null; // Or a loading screen
+  useEffect(() => {
+    checkOnboardingStatus();
+  }, []);
+
+  const checkOnboardingStatus = async () => {
+    try {
+      const value = await AsyncStorage.getItem('hasSeenOnboarding');
+      setHasSeenOnboarding(value === 'true');
+    } catch (error) {
+      console.error('Error checking onboarding status:', error);
+      setHasSeenOnboarding(false);
+    }
+  };
+
+  if (loading || hasSeenOnboarding === null) {
+    return <LoadingScreen message="Initializing..." />;
   }
+
+  const initialRouteName = hasSeenOnboarding ? 'Home' : 'Onboarding';
 
   return (
     <Stack.Navigator
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerStyle: {
           backgroundColor: '#4A90E2',
@@ -54,6 +75,13 @@ export const RootNavigator = () => {
         },
       }}
     >
+      {/* Onboarding Screen */}
+      <Stack.Screen 
+        name="Onboarding" 
+        component={OnboardingScreen} 
+        options={{ headerShown: false }}
+      />
+      
       {/* Main Screens */}
       <Stack.Screen 
         name="Home" 

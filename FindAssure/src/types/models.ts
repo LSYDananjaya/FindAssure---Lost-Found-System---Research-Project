@@ -95,6 +95,7 @@ export interface AuthResponse {
 
 // Navigation types
 export type RootStackParamList = {
+  Onboarding: undefined;
   Home: undefined;
   Login: undefined;
   Register: undefined;

@@ -242,17 +242,6 @@
     }
   },
   {
-    "actual_location": "reception",
-    "directions": {
-      "left": "sliit_islands",
-      "right": "road",
-      "top": "n/a",
-      "bottom": "gymnasium",
-      "front": "road",
-      "back": "p&S_canteen"
-    }
-  },
-  {
     "actual_location": "guard_room",
     "directions": {
       "left": "n/a",

@@ -79,49 +79,49 @@ const MatchedItemsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-xl p-8 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">🎯 Matched Items</h1>
-              <p className="text-gray-600 mt-2">
-                Found {matchedItems.length} matching item{matchedItems.length !== 1 ? 's' : ''} based on location and similarity
-              </p>
-            </div>
-            <button
-              onClick={handleBack}
-              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-            >
-              ← Back
-            </button>
+    <div className="max-w-7xl mx-auto">
+      {/* Header with Back Button on Left */}
+      <div className="bg-white rounded-lg shadow-xl p-8 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={handleBack}
+            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+          >
+            ← Back
+          </button>
+          <div className="flex-1 ml-6">
+            <h1 className="text-3xl font-bold text-gray-800">🎯 Matched Items</h1>
+            <p className="text-gray-600 mt-2">
+              Found {matchedItems.length} matching item{matchedItems.length !== 1 ? 's' : ''} based on location and similarity
+            </p>
           </div>
+        </div>
 
           {/* Match Summary */}
-          {matchedResults && (
-            <div className="bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-lg p-6 mt-4">
-              <h2 className="text-xl font-semibold text-green-800 mb-3">✅ Match Summary</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="font-semibold text-gray-700">Location Match:</span>
-                  <p className={`text-lg font-bold ${matchedResults.location_match ? 'text-green-600' : 'text-red-600'}`}>
-                    {matchedResults.location_match ? '✓ YES' : '✗ NO'}
-                  </p>
-                </div>
-                <div>
-                  <span className="font-semibold text-gray-700">Matched Items:</span>
-                  <p className="text-lg font-bold text-blue-600">{matchedResults.matched_item_ids.length}</p>
-                </div>
-                <div>
-                  <span className="font-semibold text-gray-700">Matched Locations:</span>
-                  <p className="text-sm text-gray-800 mt-1">
-                    {matchedResults.matched_locations.join(', ') || 'None'}
-                  </p>
-                </div>
+        {matchedResults && (
+          <div className="bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-lg p-6 mt-4">
+            <h2 className="text-xl font-semibold text-green-800 mb-3">✅ Match Summary</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="font-semibold text-gray-700">Location Match:</span>
+                <p className={`text-lg font-bold ${matchedResults.location_match ? 'text-green-600' : 'text-red-600'}`}>
+                  {matchedResults.location_match ? '✓ YES' : '✗ NO'}
+                </p>
+              </div>
+              <div>
+                <span className="font-semibold text-gray-700">Matched Items:</span>
+                <p className="text-lg font-bold text-blue-600">{matchedResults.matched_item_ids.length}</p>
+              </div>
+              <div>
+                <span className="font-semibold text-gray-700">Matched Locations:</span>
+                <p className="text-sm text-gray-800 mt-1">
+                  {matchedResults.matched_locations.join(', ') || 'None'}
+                </p>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
         {/* Matched Items Grid */}
         {matchedItems.length > 0 ? (

@@ -91,9 +91,14 @@ def verify_owner():
         else:
             gem_score = None
 
+        # 🎯 IMPROVED LOGIC: If Gemini is very confident (≥90%), trust it completely
         if gem_score is None:
             fused = local_score
+        elif gem_score >= 0.90:
+            # Gemini is very confident - ignore NLP score completely
+            fused = gem_score
         else:
+            # Gemini unsure - blend with NLP (60% NLP + 40% Gemini)
             fused = (local_score * 0.6) + (gem_score * 0.4)
 
         final_scores.append(fused)
@@ -112,13 +117,28 @@ def verify_owner():
     avg_gemini = sum(gemini_scores) / len(gemini_scores) if gemini_scores else None
     avg_final = sum(final_scores) / len(final_scores)
 
+    # 🚨 CRITICAL SECURITY CHECK: If ANY question has 0% or very low similarity, REJECT
+    min_score = min(final_scores)
+    has_zero_match = min_score <= 0.10  # 10% threshold for "essentially zero"
+    
+    # If any question fails completely, reject ownership regardless of other scores
+    if has_zero_match:
+        is_owner = False
+        rejection_reason = f"Critical failure: Question {final_scores.index(min_score) + 1} has {to_percent(min_score)} similarity (≤10%). Owner failed to provide valid information for at least one question."
+    else:
+        is_owner = avg_final >= 0.70
+        rejection_reason = None
+
     response = {
         "owner_id": owner_id,
         "category": category,
         "average_local_score": to_percent(avg_local),
         "average_gemini_score": to_percent(avg_gemini),
         "final_confidence": to_percent(avg_final),
-        "is_absolute_owner": avg_final >= 0.70,
+        "is_absolute_owner": is_owner,
+        "has_zero_match_question": has_zero_match,
+        "minimum_question_score": to_percent(min_score),
+        "rejection_reason": rejection_reason,
         "gemini_overall_score": to_percent(gemini_overall),
         "gemini_recommendation": gemini_recommendation,
         "gemini_reasoning": gemini_reasoning,

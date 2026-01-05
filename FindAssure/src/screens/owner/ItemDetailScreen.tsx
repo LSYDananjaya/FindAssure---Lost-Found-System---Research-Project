@@ -50,22 +50,6 @@ const ItemDetailScreen = () => {
               })}
             </Text>
           </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>❓ Ownership Questions</Text>
-            <Text style={styles.questionsInfo}>
-              To verify ownership, you'll need to answer the following questions:
-            </Text>
-            {foundItem.questions.map((question, index) => (
-              <View key={index} style={styles.questionItem}>
-                <Text style={styles.questionNumber}>{index + 1}.</Text>
-                <Text style={styles.questionText}>{question}</Text>
-              </View>
-            ))}
-            <Text style={styles.questionsNote}>
-              ⚠️ Note: You must answer these questions via video to verify ownership
-            </Text>
-          </View>
         </View>
 
         <View style={styles.actionSection}>
@@ -154,36 +138,6 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 15,
     color: '#666666',
-  },
-  questionsInfo: {
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-  questionItem: {
-    flexDirection: 'row',
-    marginBottom: 10,
-    paddingLeft: 8,
-  },
-  questionNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4A90E2',
-    marginRight: 8,
-    minWidth: 20,
-  },
-  questionText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#333333',
-    lineHeight: 20,
-  },
-  questionsNote: {
-    fontSize: 12,
-    color: '#FF9800',
-    marginTop: 12,
-    fontStyle: 'italic',
   },
   actionSection: {
     paddingHorizontal: 20,

@@ -73,6 +73,8 @@ export const RootNavigator = () => {
         headerTitleStyle: {
           fontWeight: '600',
         },
+        headerBackTitleVisible: false,
+        headerBackTitle: '',
       }}
     >
       {/* Onboarding Screen */}

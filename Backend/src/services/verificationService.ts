@@ -122,7 +122,7 @@ export const getVerificationById = async (
   isAdmin: boolean = false
 ): Promise<any> => {
   const verification = await Verification.findById(id)
-    .populate('foundItemId', 'category description imageUrl location')
+    .populate('foundItemId', 'category description imageUrl location founderContact')
     .populate('ownerId', 'name email phone');
 
   if (!verification) {
@@ -157,7 +157,7 @@ export const getVerificationById = async (
 export const getVerificationsByOwner = async (ownerId: string): Promise<IVerification[]> => {
   const verifications = await Verification.find({ ownerId: new Types.ObjectId(ownerId) })
     .sort({ createdAt: -1 })
-    .populate('foundItemId', 'category description imageUrl location');
+    .populate('foundItemId', 'category description imageUrl location founderContact');
 
   return verifications;
 };
@@ -168,7 +168,7 @@ export const getVerificationsByOwner = async (ownerId: string): Promise<IVerific
 export const getAllVerifications = async (): Promise<IVerification[]> => {
   const verifications = await Verification.find()
     .sort({ createdAt: -1 })
-    .populate('foundItemId', 'category description imageUrl location')
+    .populate('foundItemId', 'category description imageUrl location founderContact')
     .populate('ownerId', 'name email phone');
 
   return verifications;

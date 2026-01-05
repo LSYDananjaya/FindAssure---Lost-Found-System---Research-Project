@@ -112,6 +112,9 @@ const ProfileScreen = () => {
               {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
             </Text>
           </View>
+          <Text style={styles.welcomeText}>
+            Welcome back, {user.name.split(' ')[0]}!
+          </Text>
           <Text style={styles.roleText}>Role: Item Owner</Text>
         </View>
 
@@ -250,6 +253,13 @@ const styles = StyleSheet.create({
     fontSize: 40,
     color: '#FFFFFF',
     fontWeight: 'bold',
+  },
+  welcomeText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333333',
+    marginTop: 12,
+    marginBottom: 4,
   },
   roleText: {
     fontSize: 14,

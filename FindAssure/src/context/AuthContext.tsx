@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   getAuth,
   User as FirebaseUser 
 } from 'firebase/auth';
@@ -55,6 +56,7 @@ interface AuthContextType {
   signIn: (credentials: { email: string; password: string }) => Promise<void>;
   signUp: (data: { email: string; password: string; name: string; phone?: string }) => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   updateProfile: (data: Partial<User>) => Promise<User>;
   updateUser: (userData: User) => void;
 }
@@ -216,6 +218,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      
+      // Handle specific error cases with user-friendly messages
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('No account found with this email address.');
+      } else if (error.code === 'auth/invalid-email') {
+        throw new Error('Please enter a valid email address.');
+      } else if (error.code === 'auth/too-many-requests') {
+        throw new Error('Too many requests. Please try again later.');
+      } else if (error.code === 'auth/network-request-failed') {
+        throw new Error('Network error. Please check your internet connection.');
+      }
+      
+      throw new Error(error.message || 'Failed to send password reset email');
+    }
+  };
+
   const updateProfile = async (data: Partial<User>) => {
     try {
       const response = await axiosClient.patch('/auth/me', data);
@@ -241,6 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signIn, 
       signUp, 
       signOut, 
+      resetPassword,
       updateProfile,
       updateUser
     }}>

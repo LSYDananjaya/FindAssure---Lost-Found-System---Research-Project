@@ -76,6 +76,10 @@ const LoginScreen = () => {
     navigation.navigate('Register');
   };
 
+  const handleForgotPassword = () => {
+    navigation.navigate('ForgotPassword');
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -113,6 +117,9 @@ const LoginScreen = () => {
                 autoCapitalize="none"
                 autoComplete="password"
               />
+              <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
             </View>
 
             <PrimaryButton
@@ -186,6 +193,15 @@ const styles = StyleSheet.create({
     borderColor: '#DDDDDD',
     borderRadius: 8,
     padding: 12,
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    color: '#4A90E2',
+    fontWeight: '500',
+  },
     fontSize: 16,
     backgroundColor: '#FAFAFA',
   },

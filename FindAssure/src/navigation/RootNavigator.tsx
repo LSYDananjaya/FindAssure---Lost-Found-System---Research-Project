@@ -12,6 +12,7 @@ import HomeScreen from '../screens/HomeScreen';
 // Auth screens
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ProfileScreen from '../screens/auth/ProfileScreen';
 
 // Founder screens
@@ -90,109 +91,114 @@ export const RootNavigator = () => {
         component={HomeScreen} 
         options={{ title: 'Find Assure' }}
       />
-        
-        {/* Auth Screens */}
-        <Stack.Screen 
-          name="Login" 
-          component={LoginScreen} 
-          options={{ title: 'Login' }}
-        />
-        <Stack.Screen 
-          name="Register" 
-          component={RegisterScreen} 
-          options={{ title: 'Register' }}
-        />
-        <Stack.Screen 
-          name="Profile" 
-          component={ProfileScreen} 
-          options={{ title: 'Profile' }}
-        />
-        
-        {/* Founder Flow */}
-        <Stack.Screen 
-          name="ReportFoundStart" 
-          component={ReportFoundStartScreen} 
-          options={{ title: 'Report Found Item' }}
-        />
-        <Stack.Screen 
-          name="ReportFoundDetails" 
-          component={ReportFoundDetailsScreen} 
-          options={{ title: 'Item Details' }}
-        />
-        <Stack.Screen 
-          name="ReportFoundQuestions" 
-          component={ReportFoundQuestionsScreen} 
-          options={{ title: 'Select Questions' }}
-        />
-        <Stack.Screen 
-          name="ReportFoundAnswers" 
-          component={ReportFoundAnswersScreen} 
-          options={{ title: 'Answer Questions' }}
-        />
-        <Stack.Screen 
-          name="ReportFoundLocation" 
-          component={ReportFoundLocationScreen} 
-          options={{ title: 'Location & Contact' }}
-        />
-        <Stack.Screen 
-          name="ReportFoundSuccess" 
-          component={ReportFoundSuccessScreen} 
-          options={{ headerShown: false }}
-        />
-        
-        {/* Owner Flow */}
-        <Stack.Screen 
-          name="FindLostStart" 
-          component={FindLostStartScreen} 
-          options={{ title: 'Find Lost Item' }}
-        />
-        <Stack.Screen 
-          name="FindLostResults" 
-          component={FindLostResultsScreen} 
-          options={{ title: 'Search Results' }}
-        />
-        <Stack.Screen 
-          name="ItemDetail" 
-          component={ItemDetailScreen} 
-          options={{ title: 'Item Details' }}
-        />
-        <Stack.Screen 
-          name="AnswerQuestionsVideo" 
-          component={AnswerQuestionsVideoScreen} 
-          options={{ title: 'Verify Ownership' }}
-        />
-        <Stack.Screen 
-          name="VerificationPending" 
-          component={VerificationPendingScreen} 
-          options={{ headerShown: false }}
-        />
-        <Stack.Screen 
-          name="VerificationResult" 
-          component={VerificationResultScreen} 
-          options={{ title: 'Verification Result' }}
-        />
-        
-        {/* Admin Flow */}
-        <Stack.Screen 
-          name="AdminLogin" 
-          component={AdminLoginScreen} 
-          options={{ title: 'Admin Login' }}
-        />
-        <Stack.Screen 
-          name="AdminDashboard" 
-          component={AdminDashboardScreen} 
-          options={{ title: 'Admin Dashboard' }}
-        />
-        <Stack.Screen 
-          name="AdminItemDetail" 
-          component={AdminItemDetailScreen} 
-          options={{ title: 'Item Details (Admin)' }}
-        />
-        <Stack.Screen 
-          name="AdminUsers" 
-          component={AdminUsersScreen} 
-          options={{ title: 'User Management' }}
-        />
+      
+      {/* Auth Screens */}
+      <Stack.Screen 
+        name="Login" 
+        component={LoginScreen} 
+        options={{ title: 'Login' }}
+      />
+      <Stack.Screen 
+        name="Register" 
+        component={RegisterScreen} 
+        options={{ title: 'Register' }}
+      />
+      <Stack.Screen 
+        name="ForgotPassword" 
+        component={ForgotPasswordScreen} 
+        options={{ title: 'Reset Password' }}
+      />
+      <Stack.Screen 
+        name="Profile" 
+        component={ProfileScreen} 
+        options={{ title: 'Profile' }}
+      />
+      
+      {/* Founder Flow */}
+      <Stack.Screen 
+        name="ReportFoundStart" 
+        component={ReportFoundStartScreen} 
+        options={{ title: 'Report Found Item' }}
+      />
+      <Stack.Screen 
+        name="ReportFoundDetails" 
+        component={ReportFoundDetailsScreen} 
+        options={{ title: 'Item Details' }}
+      />
+      <Stack.Screen 
+        name="ReportFoundQuestions" 
+        component={ReportFoundQuestionsScreen} 
+        options={{ title: 'Select Questions' }}
+      />
+      <Stack.Screen 
+        name="ReportFoundAnswers" 
+        component={ReportFoundAnswersScreen} 
+        options={{ title: 'Answer Questions' }}
+      />
+      <Stack.Screen 
+        name="ReportFoundLocation" 
+        component={ReportFoundLocationScreen} 
+        options={{ title: 'Location & Contact' }}
+      />
+      <Stack.Screen 
+        name="ReportFoundSuccess" 
+        component={ReportFoundSuccessScreen} 
+        options={{ headerShown: false }}
+      />
+      
+      {/* Owner Flow */}
+      <Stack.Screen 
+        name="FindLostStart" 
+        component={FindLostStartScreen} 
+        options={{ title: 'Find Lost Item' }}
+      />
+      <Stack.Screen 
+        name="FindLostResults" 
+        component={FindLostResultsScreen} 
+        options={{ title: 'Search Results' }}
+      />
+      <Stack.Screen 
+        name="ItemDetail" 
+        component={ItemDetailScreen} 
+        options={{ title: 'Item Details' }}
+      />
+      <Stack.Screen 
+        name="AnswerQuestionsVideo" 
+        component={AnswerQuestionsVideoScreen} 
+        options={{ title: 'Verify Ownership' }}
+      />
+      <Stack.Screen 
+        name="VerificationPending" 
+        component={VerificationPendingScreen} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="VerificationResult" 
+        component={VerificationResultScreen} 
+        options={{ title: 'Verification Result' }}
+      />
+      
+      {/* Admin Flow */}
+      <Stack.Screen 
+        name="AdminLogin" 
+        component={AdminLoginScreen} 
+        options={{ title: 'Admin Login' }}
+      />
+      <Stack.Screen 
+        name="AdminDashboard" 
+        component={AdminDashboardScreen} 
+        options={{ title: 'Admin Dashboard' }}
+      />
+      <Stack.Screen 
+        name="AdminItemDetail" 
+        component={AdminItemDetailScreen} 
+        options={{ title: 'Item Details (Admin)' }}
+      />
+      <Stack.Screen 
+        name="AdminUsers" 
+        component={AdminUsersScreen} 
+        options={{ title: 'User Management' }}
+      />
     </Stack.Navigator>
   );
 };

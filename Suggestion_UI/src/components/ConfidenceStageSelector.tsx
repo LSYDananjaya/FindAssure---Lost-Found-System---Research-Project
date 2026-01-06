@@ -17,6 +17,7 @@ const ConfidenceStageSelector: React.FC<ConfidenceStageSelectorProps> = ({
     { value: 1, label: '😊 Pretty Sure', color: 'bg-green-100 border-green-300 hover:bg-green-200', activeColor: 'bg-green-200 border-green-500' },
     { value: 2, label: '🙂 Sure', color: 'bg-blue-100 border-blue-300 hover:bg-blue-200', activeColor: 'bg-blue-200 border-blue-500' },
     { value: 3, label: '🤔 Not Sure', color: 'bg-yellow-100 border-yellow-300 hover:bg-yellow-200', activeColor: 'bg-yellow-200 border-yellow-500' },
+    { value: 4, label: '🤷 No Idea', color: 'bg-red-100 border-red-300 hover:bg-red-200', activeColor: 'bg-red-200 border-red-500' },
   ];
 
   return (

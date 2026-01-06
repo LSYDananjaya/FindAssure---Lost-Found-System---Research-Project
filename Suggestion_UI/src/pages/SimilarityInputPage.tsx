@@ -348,7 +348,7 @@ const SimilarityInputPage: React.FC = () => {
             <div className="text-sm text-blue-800 space-y-1">
               <div><strong>Owner:</strong> {getSelectedUser()?.name || getSelectedUser()?.email || 'Not selected'}</div>
               <div><strong>Location:</strong> {formData.owner_location || 'Not selected'}</div>
-              <div><strong>Confidence Stage:</strong> {['Not selected', '😊 Pretty Sure', '🙂 Sure', '🤔 Not Sure'][formData.owner_location_confidence_stage]}</div>
+              <div><strong>Confidence Stage:</strong> {['Not selected', '😊 Pretty Sure', '🙂 Sure', '🤔 Not Sure', '🤷 No Idea'][formData.owner_location_confidence_stage]}</div>
               <div><strong>Similar Items:</strong> {formData.items.length} item(s) added</div>
             </div>
           </div>

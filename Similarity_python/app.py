@@ -46,7 +46,7 @@ def verify_owner():
     if not answers:
         return jsonify({"error": "No answers provided"}), 400
 
-    print(f"⏱️ Starting video processing for {len(answers)} videos...")
+    print(f"Starting video processing for {len(answers)} videos...")
     start_time = time.time()
 
     # -----------------------------
@@ -70,7 +70,7 @@ def verify_owner():
                 "success": True
             }
         except Exception as e:
-            print(f"❌ Error processing {key}: {str(e)}")
+            print(f"Error processing {key}: {str(e)}")
             return {
                 "question_id": a.get("question_id", 0),
                 "founder_answer": a.get("founder_answer", ""),
@@ -122,12 +122,12 @@ def verify_owner():
     enriched.sort(key=lambda x: x["question_id"])
     
     video_processing_time = time.time() - start_time
-    print(f"✅ Video processing completed in {video_processing_time:.2f}s (parallel)")
+    print(f" Video processing completed in {video_processing_time:.2f}s (parallel)")
     
     # Check if any videos failed
     if any(not item.get("success", True) for item in enriched):
         failed_count = sum(1 for item in enriched if not item.get("success", True))
-        print(f"⚠️ Warning: {failed_count} video(s) failed to process")
+        print(f" Warning: {failed_count} video(s) failed to process")
 
     # -----------------------------
     # GEMINI BATCH
@@ -153,11 +153,11 @@ def verify_owner():
         # Provide user-friendly error message
         error_msg = gemini.get("message", "Gemini API unavailable")
         if "quota" in error_msg.lower() or "429" in str(error_msg):
-            gemini_reasoning = "⚠️ Using Local NLP verification only (Gemini API quota exceeded). Results based on sentence similarity analysis."
+            gemini_reasoning = " Using Local NLP verification only (Gemini API quota exceeded). Results based on sentence similarity analysis."
         else:
-            gemini_reasoning = f"⚠️ Using Local NLP verification only (Gemini AI unavailable). Results based on sentence similarity analysis."
+            gemini_reasoning = f"Using Local NLP verification only (Gemini AI unavailable). Results based on sentence similarity analysis."
         
-        print(f"⚠️ Gemini API failed: {error_msg}. Falling back to Local NLP only.")
+        print(f" Gemini API failed: {error_msg}. Falling back to Local NLP only.")
     else:
         gemini_details = gemini.get("matchDetails", []) if isinstance(gemini, dict) else []
         gemini_recommendation = gemini.get("recommendation") if isinstance(gemini, dict) else None
@@ -184,7 +184,7 @@ def verify_owner():
             except Exception:
                 gem_score = None
 
-        # ✅ RULE 1: Gemini override when very confident
+        #  RULE 1: Gemini override when very confident
         if gem_score is None:
             fused = local_score
         elif gem_score >= 0.80:
@@ -208,7 +208,7 @@ def verify_owner():
 
     avg_final = sum(final_scores) / len(final_scores)
 
-    # ✅ RULE 2: Critical security reject if ANY question <= 10%
+    #  RULE 2: Critical security reject if ANY question <= 25%
     min_score = min(final_scores)
     has_zero_match = min_score <= 0.25
 
@@ -224,7 +224,7 @@ def verify_owner():
         rejection_reason = None
 
     total_time = time.time() - start_time
-    print(f"🎯 Total verification time: {total_time:.2f}s")
+    print(f" Total verification time: {total_time:.2f}s")
 
     return jsonify({
         "owner_id": owner_id,

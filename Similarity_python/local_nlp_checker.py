@@ -181,7 +181,7 @@ class LocalNLP:
         founder_norm = self.normalize(founder)
         owner_norm = self.normalize(owner)
 
-        # ✅ EXACT MATCH CHECK FIRST (handles cases like "toyota" == "toyota")
+        #  EXACT MATCH CHECK FIRST (handles cases like "toyota" == "toyota")
         if founder_norm == owner_norm:
             return {
                 "fused": 1.0,
@@ -196,7 +196,7 @@ class LocalNLP:
                 }
             }
 
-        # ✅ OPPOSITE/NEGATION CHECK (yes vs no, true vs false, etc.)
+        #  OPPOSITE/NEGATION CHECK (yes vs no, true vs false, etc.)
         opposite_pairs = [
             ("yes", "no"), ("no", "yes"),
             ("true", "false"), ("false", "true"),
@@ -227,7 +227,7 @@ class LocalNLP:
                     }
                 }
 
-        # ✅ SUBSTRING MATCH - Only for whole words or meaningful phrases
+        # SUBSTRING MATCH - Only for whole words or meaningful phrases
         # Split into words for whole word matching
         founder_words = set(founder_norm.split())
         owner_words = set(owner_norm.split())
@@ -236,10 +236,10 @@ class LocalNLP:
         # IMPORTANT: Both must be non-empty (to avoid empty set matching everything)
         if founder_words and owner_words and len(founder_words) > 0 and len(owner_words) > 0:
             # Check subset only if both have meaningful words
-            # Prevent empty set from matching (e.g., Japanese text normalized to "" shouldn't match "toyota")
+            # Prevent empty set from matching 
             if founder_words.issubset(owner_words) or owner_words.issubset(founder_words):
                 # One answer contains all words from the other
-                # e.g., "toyota" vs "toyota corolla" or "black bag" vs "black"
+           
                 substring_score = 0.85
                 return {
                     "fused": substring_score,

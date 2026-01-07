@@ -1,15 +1,16 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
   initializeAuth,
-  getReactNativePersistence,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
   getAuth,
-  User as FirebaseUser 
+  Auth,
+  User as FirebaseUser,
+  browserLocalPersistence
 } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosClient from '../api/axiosClient';
@@ -25,20 +26,11 @@ const firebaseConfig = {
   measurementId: "G-YKXTBZ6L6M"
 };
 
-// Initialize Firebase (prevent re-initialization)
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Initialize Firebase
+const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Auth with AsyncStorage persistence (prevent re-initialization)
-let auth;
-try {
-  // Try to get existing auth instance first
-  auth = getAuth(app);
-} catch (error) {
-  // If it doesn't exist, initialize it
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage)
-  });
-}
+// Initialize Auth
+const auth: Auth = getAuth(app);
 
 interface User {
   _id: string;
@@ -53,7 +45,8 @@ interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   token: string | null;
   loading: boolean;
-  signIn: (credentials: { email: string; password: string }) => Promise<void>;
+  keepLoggedIn: boolean;
+  signIn: (credentials: { email: string; password: string; keepLoggedIn?: boolean }) => Promise<void>;
   signUp: (data: { email: string; password: string; name: string; phone?: string }) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -68,11 +61,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+  const tokenRefreshIntervalRef = React.useRef<any>(null);
+
+  // Setup automatic token refresh
+  const setupTokenRefresh = (firebaseUser: FirebaseUser) => {
+    // Clear any existing interval
+    if (tokenRefreshIntervalRef.current) {
+      clearInterval(tokenRefreshIntervalRef.current);
+    }
+
+    // Refresh token every 45 minutes (tokens expire after 1 hour)
+    tokenRefreshIntervalRef.current = setInterval(async () => {
+      try {
+        console.log('🔄 Auto-refreshing token...');
+        const newToken = await firebaseUser.getIdToken(true); // Force refresh
+        setToken(newToken);
+        axiosClient.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        console.log('✅ Token refreshed successfully');
+      } catch (error) {
+        console.error('❌ Token refresh failed:', error);
+      }
+    }, 45 * 60 * 1000); // 45 minutes
+  };
+
+  // Clear token refresh
+  const clearTokenRefresh = () => {
+    if (tokenRefreshIntervalRef.current) {
+      clearInterval(tokenRefreshIntervalRef.current);
+      tokenRefreshIntervalRef.current = null;
+    }
+  };
 
   // Sync user with backend
-  const syncUserWithBackend = async (firebaseUser: FirebaseUser) => {
+  const syncUserWithBackend = async (firebaseUser: FirebaseUser, forceRefresh = false) => {
     try {
-      const idToken = await firebaseUser.getIdToken();
+      const idToken = await firebaseUser.getIdToken(forceRefresh);
       setToken(idToken);
 
       // Set token for axios requests
@@ -97,19 +121,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    // Load keepLoggedIn preference on mount
+    const loadPreferences = async () => {
+      try {
+        const storedPreference = await AsyncStorage.getItem('keepLoggedIn');
+        const shouldKeepLoggedIn = storedPreference === 'true';
+        setKeepLoggedIn(shouldKeepLoggedIn);
+      } catch (error) {
+        console.error('Error loading preferences:', error);
+      }
+    };
+
+    loadPreferences();
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setFirebaseUser(firebaseUser);
       setLoading(false);
 
       if (firebaseUser) {
         await syncUserWithBackend(firebaseUser);
+        
+        // Get current keepLoggedIn preference
+        const storedPreference = await AsyncStorage.getItem('keepLoggedIn');
+        const shouldKeepLoggedIn = storedPreference === 'true';
+        
+        // Setup token refresh if keep logged in is enabled
+        if (shouldKeepLoggedIn) {
+          setupTokenRefresh(firebaseUser);
+        }
       } else {
         setUser(null);
         setToken(null);
+        clearTokenRefresh();
       }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      clearTokenRefresh();
+    };
   }, []);
 
   const signUp = async (data: { email: string; password: string; name: string; phone?: string }) => {
@@ -173,15 +223,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signIn = async (credentials: { email: string; password: string }) => {
+  const signIn = async (credentials: { email: string; password: string; keepLoggedIn?: boolean }) => {
     try {
-      const { email, password } = credentials;
+      const { email, password, keepLoggedIn: keepLogin = false } = credentials;
+      
+      // Save keepLoggedIn preference
+      await AsyncStorage.setItem('keepLoggedIn', keepLogin.toString());
+      setKeepLoggedIn(keepLogin);
       
       // 1. Sign in with Firebase
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
       // 2. Sync with backend
       await syncUserWithBackend(userCredential.user);
+      
+      // 3. Setup token refresh if keepLoggedIn is enabled
+      if (keepLogin) {
+        setupTokenRefresh(userCredential.user);
+        console.log('✅ Auto token refresh enabled - you will stay logged in');
+      }
       
     } catch (error: any) {
       console.error('Sign in error:', error);
@@ -209,6 +269,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
+      // Clear token refresh
+      clearTokenRefresh();
+      
+      // Clear keepLoggedIn preference
+      await AsyncStorage.removeItem('keepLoggedIn');
+      setKeepLoggedIn(false);
+      
       await firebaseSignOut(auth);
       setUser(null);
       setToken(null);
@@ -260,7 +327,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user, 
       firebaseUser, 
       token, 
-      loading, 
+      loading,
+      keepLoggedIn, 
       signIn, 
       signUp, 
       signOut, 

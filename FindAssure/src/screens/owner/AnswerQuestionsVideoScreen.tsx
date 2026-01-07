@@ -1,15 +1,17 @@
 // AnswerQuestionsVideoScreen – Video recording with 5-second limit, preview, and retake
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
-  TextInput,
   StyleSheet, 
   ScrollView, 
   Alert,
   TouchableOpacity,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ActivityIndicator,
+  Animated,
+  Modal
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -26,10 +28,6 @@ const AnswerQuestionsVideoScreen = () => {
   const route = useRoute<AnswerQuestionsVideoRouteProp>();
   const { foundItem } = route.params;
 
-  // Store text answers for each question
-  const [textAnswers, setTextAnswers] = useState<string[]>(
-    new Array(foundItem.questions.length).fill('')
-  );
   // Store video URIs for each question
   const [videoAnswers, setVideoAnswers] = useState<(string | null)[]>(
     new Array(foundItem.questions.length).fill(null)
@@ -37,12 +35,65 @@ const AnswerQuestionsVideoScreen = () => {
   // Track which question is being recorded
   const [recordingQuestionIndex, setRecordingQuestionIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Uploading your answers...');
+  const progressAnim = useState(new Animated.Value(0))[0];
+  const pulseAnim = useState(new Animated.Value(1))[0];
 
-  const handleAnswerChange = (index: number, text: string) => {
-    const newAnswers = [...textAnswers];
-    newAnswers[index] = text;
-    setTextAnswers(newAnswers);
-  };
+  // Animated loading messages
+  const loadingMessages = [
+    'Uploading your answers...',
+    'Processing video answers...',
+    'Running AI analysis...',
+    'Comparing with found item details...',
+    'Calculating similarity scores...',
+    'Almost done, finalizing results...'
+  ];
+
+  useEffect(() => {
+    if (loading) {
+      // Start pulse animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.2,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
+      // Simulate progress updates
+      let progress = 0;
+      let messageIndex = 0;
+      const interval = setInterval(() => {
+        progress += Math.random() * 15 + 5; // Random increment between 5-20%
+        if (progress > 95) progress = 95; // Cap at 95% until actually done
+        
+        setLoadingProgress(progress);
+        
+        // Update message based on progress
+        const newMessageIndex = Math.floor((progress / 100) * loadingMessages.length);
+        if (newMessageIndex !== messageIndex && newMessageIndex < loadingMessages.length) {
+          messageIndex = newMessageIndex;
+          setLoadingMessage(loadingMessages[newMessageIndex]);
+        }
+        
+        Animated.timing(progressAnim, {
+          toValue: progress,
+          duration: 500,
+          useNativeDriver: false,
+        }).start();
+      }, 1500);
+
+      return () => clearInterval(interval);
+    }
+  }, [loading]);
 
   const handleRecordVideo = (index: number) => {
     setRecordingQuestionIndex(index);
@@ -68,13 +119,11 @@ const AnswerQuestionsVideoScreen = () => {
   };
 
   const handleSubmit = async () => {
-    // Check if all questions have either text or video answers
-    const allAnswered = textAnswers.every((answer, index) => 
-      answer.trim().length > 0 || videoAnswers[index] !== null
-    );
+    // Check if all questions have video answers
+    const allAnswered = videoAnswers.every(video => video !== null);
 
     if (!allAnswered) {
-      Alert.alert('Incomplete', 'Please answer all questions with either text or video');
+      Alert.alert('Incomplete', 'Please record video answers for all questions');
       return;
     }
 
@@ -85,15 +134,14 @@ const AnswerQuestionsVideoScreen = () => {
       const numberWords = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 
       // Build unified owner answers array with questionId, answer, videoKey, and videoUri
-      const ownerAnswers: OwnerAnswerInput[] = textAnswers.map((answer, index) => {
-        const hasVideo = videoAnswers[index] !== null;
+      const ownerAnswers: OwnerAnswerInput[] = videoAnswers.map((videoUri, index) => {
         const videoKey = `owner_answer_${numberWords[index] || index + 1}`; // Match Python backend format
 
         return {
           questionId: index,
-          answer: hasVideo ? '[Video Answer]' : answer.trim(),
+          answer: '[Video Answer]',
           videoKey: videoKey,
-          videoUri: hasVideo ? videoAnswers[index]! : undefined,
+          videoUri: videoUri!,
         };
       });
 
@@ -110,6 +158,13 @@ const AnswerQuestionsVideoScreen = () => {
       });
 
       console.log('✅ Verification response:', response);
+
+      // Set progress to 100% before navigating
+      setLoadingProgress(100);
+      setLoadingMessage('Success! Redirecting...');
+      
+      // Small delay to show completion
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       // Navigate to verification result screen with the verification ID
       navigation.navigate('VerificationResult', { 
@@ -136,7 +191,7 @@ const AnswerQuestionsVideoScreen = () => {
           <View style={styles.header}>
             <Text style={styles.title}>Answer the Questions</Text>
             <Text style={styles.subtitle}>
-              Answer each question with video or text to verify your ownership
+              Record video answers (max 5 seconds each) to verify your ownership
             </Text>
           </View>
 
@@ -169,29 +224,13 @@ const AnswerQuestionsVideoScreen = () => {
                     </View>
                   </View>
                 ) : (
-                  <>
-                    {/* Video Recording Button */}
-                    <TouchableOpacity 
-                      style={styles.recordButton}
-                      onPress={() => handleRecordVideo(index)}
-                    >
-                      <Text style={styles.recordIcon}>🎥</Text>
-                      <Text style={styles.recordText}>Record Video Answer (Max 5s)</Text>
-                    </TouchableOpacity>
-
-                    <Text style={styles.orText}>OR</Text>
-
-                    {/* Text Input Option */}
-                    <TextInput
-                      style={styles.answerInput}
-                      placeholder="Type your answer here..."
-                      value={textAnswers[index]}
-                      onChangeText={(text) => handleAnswerChange(index, text)}
-                      multiline
-                      numberOfLines={3}
-                      textAlignVertical="top"
-                    />
-                  </>
+                  <TouchableOpacity 
+                    style={styles.recordButton}
+                    onPress={() => handleRecordVideo(index)}
+                  >
+                    <Text style={styles.recordIcon}>🎥</Text>
+                    <Text style={styles.recordText}>Record Video Answer (Max 5s)</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             ))}
@@ -199,9 +238,10 @@ const AnswerQuestionsVideoScreen = () => {
 
           <View style={styles.infoBox}>
             <Text style={styles.infoText}>
-              📝 Answer Tips:
+              📝 Video Answer Tips:
             </Text>
-            <Text style={styles.infoText}>• Record a video (max 5 seconds) or type your answer</Text>
+            <Text style={styles.infoText}>• Record video answers (max 5 seconds each)</Text>
+            <Text style={styles.infoText}>• Speak clearly and look at the camera</Text>
             <Text style={styles.infoText}>• Be specific and accurate</Text>
             <Text style={styles.infoText}>• Provide details only the true owner would know</Text>
             <Text style={styles.infoText}>• You can preview and retake videos before submitting</Text>
@@ -225,6 +265,57 @@ const AnswerQuestionsVideoScreen = () => {
           onCancel={handleCancelRecording}
         />
       )}
+
+      {/* Enhanced Loading Modal */}
+      <Modal
+        visible={loading}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            {/* Animated Icon */}
+            <Animated.View style={[styles.loadingIconContainer, { transform: [{ scale: pulseAnim }] }]}>
+              <Text style={styles.loadingIcon}>🔍</Text>
+            </Animated.View>
+
+            <Text style={styles.loadingTitle}>Processing Verification</Text>
+            <Text style={styles.loadingSubtitle}>{loadingMessage}</Text>
+
+            {/* Progress Bar */}
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressBarBackground}>
+                <Animated.View 
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: progressAnim.interpolate({
+                        inputRange: [0, 100],
+                        outputRange: ['0%', '100%']
+                      })
+                    }
+                  ]} 
+                />
+              </View>
+              <Text style={styles.progressText}>{Math.round(loadingProgress)}%</Text>
+            </View>
+
+            {/* Activity Indicator */}
+            <ActivityIndicator size="large" color="#2563EB" style={styles.spinner} />
+
+            {/* Fun Facts */}
+            <View style={styles.tipsContainer}>
+              <Text style={styles.tipsTitle}>💡 Did you know?</Text>
+              <Text style={styles.tipsText}>
+                Our AI analyzes multiple factors including voice patterns, answer details, 
+                and confidence levels to accurately verify ownership.
+              </Text>
+            </View>
+
+            <Text style={styles.pleaseWaitText}>Please don't close the app...</Text>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -392,6 +483,105 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-});
+  // Loading Modal Styles
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 30,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  loadingIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  loadingIcon: {
+    fontSize: 40,
+  },
+  loadingTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loadingSubtitle: {
+    fontSize: 15,
+    color: '#6B7280',
+    marginBottom: 24,
+    textAlign: 'center',
+    paddingHorizontal: 10,
+  },
+  progressBarContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  progressBarBackground: {
+    width: '100%',
+    height: 10,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 5,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#2563EB',
+    borderRadius: 5,
+  },
+  progressText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563EB',
+    textAlign: 'center',
+  },
+  spinner: {
+    marginVertical: 16,
+  },
+  tipsContainer: {
+    backgroundColor: '#FFF9E6',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    width: '100%',
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFC107',
+  },
+  tipsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  tipsText: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  pleaseWaitText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginTop: 16,
+    textAlign: 'center',
+  },});
 
 export default AnswerQuestionsVideoScreen;

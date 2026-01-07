@@ -1,6 +1,6 @@
 // ItemDetailScreen – follow the spec (IMPORTANT: DO NOT show founderAnswers)
-import React from 'react';
-import { View, Text, Image, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Image, StyleSheet, ScrollView, Modal, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../types/models';
@@ -13,9 +13,31 @@ const ItemDetailScreen = () => {
   const navigation = useNavigation<ItemDetailNavigationProp>();
   const route = useRoute<ItemDetailRouteProp>();
   const { foundItem } = route.params;
+  const [showTipsModal, setShowTipsModal] = useState(false);
 
   const handleAnswerQuestions = () => {
+    setShowTipsModal(true);
+  };
+
+  const handleProceedToQuestions = () => {
+    setShowTipsModal(false);
     navigation.navigate('AnswerQuestionsVideo', { foundItem });
+  };
+
+  const handleCloseTips = () => {
+    setShowTipsModal(false);
+  };
+
+  // Format location display
+  const formatLocation = (locations: typeof foundItem.found_location) => {
+    if (!locations || locations.length === 0) return 'Location not specified';
+    
+    return locations.map((loc, index) => {
+      let locationStr = loc.location;
+      if (loc.floor_id) locationStr += ` - Floor: ${loc.floor_id}`;
+      if (loc.hall_name) locationStr += ` - Hall: ${loc.hall_name}`;
+      return locationStr;
+    }).join('\n');
   };
 
   return (
@@ -37,7 +59,7 @@ const ItemDetailScreen = () => {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>📍 Found Location</Text>
-            <Text style={styles.locationText}>{foundItem.location}</Text>
+            <Text style={styles.locationText}>{formatLocation(foundItem.found_location)}</Text>
           </View>
 
           <View style={styles.section}>
@@ -63,6 +85,109 @@ const ItemDetailScreen = () => {
           </Text>
         </View>
       </View>
+
+      {/* Tips Modal */}
+      <Modal
+        visible={showTipsModal}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseTips}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalIcon}>📹</Text>
+              <Text style={styles.modalTitle}>Important Tips Before You Start</Text>
+              <Text style={styles.modalSubtitle}>Follow these guidelines for successful verification</Text>
+            </View>
+
+            <ScrollView style={styles.tipsScroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.tipCard}>
+                <View style={styles.tipIconContainer}>
+                  <Text style={styles.tipIcon}>👀</Text>
+                </View>
+                <View style={styles.tipContent}>
+                  <Text style={styles.tipTitle}>Look at the Camera</Text>
+                  <Text style={styles.tipText}>Face the camera directly and maintain eye contact while recording</Text>
+                </View>
+              </View>
+
+              <View style={styles.tipCard}>
+                <View style={styles.tipIconContainer}>
+                  <Text style={styles.tipIcon}>🗣️</Text>
+                </View>
+                <View style={styles.tipContent}>
+                  <Text style={styles.tipTitle}>Speak Clearly</Text>
+                  <Text style={styles.tipText}>Give your answers in clear English with proper pronunciation</Text>
+                </View>
+              </View>
+
+              <View style={styles.tipCard}>
+                <View style={styles.tipIconContainer}>
+                  <Text style={styles.tipIcon}>⏱️</Text>
+                </View>
+                <View style={styles.tipContent}>
+                  <Text style={styles.tipTitle}>Keep It Short</Text>
+                  <Text style={styles.tipText}>Maximum video length is 5 seconds per answer - be concise</Text>
+                </View>
+              </View>
+
+              <View style={styles.tipCard}>
+                <View style={styles.tipIconContainer}>
+                  <Text style={styles.tipIcon}>🔊</Text>
+                </View>
+                <View style={styles.tipContent}>
+                  <Text style={styles.tipTitle}>Quiet Environment</Text>
+                  <Text style={styles.tipText}>Record in a quiet place to ensure your voice is heard clearly</Text>
+                </View>
+              </View>
+
+              <View style={styles.tipCard}>
+                <View style={styles.tipIconContainer}>
+                  <Text style={styles.tipIcon}>💡</Text>
+                </View>
+                <View style={styles.tipContent}>
+                  <Text style={styles.tipTitle}>Good Lighting</Text>
+                  <Text style={styles.tipText}>Ensure your face is well-lit and clearly visible</Text>
+                </View>
+              </View>
+
+              <View style={styles.tipCard}>
+                <View style={styles.tipIconContainer}>
+                  <Text style={styles.tipIcon}>✓</Text>
+                </View>
+                <View style={styles.tipContent}>
+                  <Text style={styles.tipTitle}>Be Specific & Accurate</Text>
+                  <Text style={styles.tipText}>Provide detailed answers that only the true owner would know</Text>
+                </View>
+              </View>
+
+              <View style={styles.noteBox}>
+                <Text style={styles.noteIcon}>ℹ️</Text>
+                <Text style={styles.noteText}>
+                  You can preview and retake your videos before final submission.
+                  Alternatively, you can type your answers if you prefer.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={handleCloseTips}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.proceedButton}
+                onPress={handleProceedToQuestions}
+              >
+                <Text style={styles.proceedButtonText}>I Understand, Proceed</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -150,6 +275,131 @@ const styles = StyleSheet.create({
     color: '#666666',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    paddingTop: 24,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  modalIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  tipsScroll: {
+    paddingHorizontal: 20,
+    maxHeight: 400,
+  },
+  tipCard: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4A90E2',
+  },
+  tipIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  tipIcon: {
+    fontSize: 20,
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  tipText: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  noteBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF9E6',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FFC107',
+  },
+  noteIcon: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  noteText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  proceedButton: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: '#4A90E2',
+    alignItems: 'center',
+  },
+  proceedButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

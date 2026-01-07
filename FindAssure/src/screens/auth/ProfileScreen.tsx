@@ -159,14 +159,21 @@ const ProfileScreen = () => {
             loading={loading}
             style={styles.saveButton}
           />
-
-          <PrimaryButton
-            title="Logout"
-            onPress={handleLogout}
-            style={styles.logoutButton}
-            textStyle={styles.logoutButtonText}
-          />
         </View>
+
+        {/* Logout Button - Prominent */}
+        <TouchableOpacity 
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.logoutIcon}>🚪</Text>
+          <View style={styles.logoutContent}>
+            <Text style={styles.logoutTitle}>Logout</Text>
+            <Text style={styles.logoutSubtitle}>Sign out of your account</Text>
+          </View>
+          <Text style={styles.logoutArrow}>›</Text>
+        </TouchableOpacity>
 
         <View style={styles.infoSection}>
           <Text style={styles.infoTitle}>Account Information</Text>
@@ -307,18 +314,47 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   logoutButton: {
-    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
     borderWidth: 2,
     borderColor: '#E53935',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  logoutButtonText: {
+  logoutIcon: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  logoutContent: {
+    flex: 1,
+  },
+  logoutTitle: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#E53935',
+    marginBottom: 2,
+  },
+  logoutSubtitle: {
+    fontSize: 13,
+    color: '#999999',
+  },
+  logoutArrow: {
+    fontSize: 32,
+    color: '#E53935',
+    fontWeight: '300',
   },
   infoSection: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
+    marginBottom: 20,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler, Alert } from 'react-native';
 import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../types/models';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { Ionicons } from '@expo/vector-icons';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -34,20 +35,23 @@ const HomeScreen = () => {
     navigation.navigate('Login');
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      // Reset navigation stack after logout
-      navigation.dispatch(
-        CommonActions.reset({
-          index: 0,
-          routes: [{ name: 'Home' }],
-        })
-      );
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
+  // Set up header button
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => user ? handleProfile() : handleLogin()}
+          style={{ marginRight: 15 }}
+        >
+          <Ionicons 
+            name={user ? "person-circle" : "log-in"} 
+            size={28} 
+            color="#FFFFFF" 
+          />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, user]);
 
   // Handle Android back button for logged-in users
   useFocusEffect(
@@ -95,22 +99,15 @@ const HomeScreen = () => {
             <View style={styles.userCard}>
               <Text style={styles.greeting}>Welcome back, {user.name}! 👋</Text>
               <Text style={styles.userRole}>Role: {user.role}</Text>
-              <View style={styles.userActions}>
-                {user.role === 'admin' && (
-                  <TouchableOpacity 
-                    style={styles.linkButton} 
-                    onPress={() => navigation.navigate('AdminDashboard')}
-                  >
-                    <Text style={[styles.linkText, styles.adminLinkText]}>Admin Dashboard</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity style={styles.linkButton} onPress={handleProfile}>
-                  <Text style={styles.linkText}>View Profile</Text>
+              {user.role === 'admin' && (
+                <TouchableOpacity 
+                  style={styles.adminButton} 
+                  onPress={() => navigation.navigate('AdminDashboard')}
+                >
+                  <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" />
+                  <Text style={styles.adminButtonText}>Admin Dashboard</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.linkButton} onPress={handleLogout}>
-                  <Text style={styles.linkText}>Logout</Text>
-                </TouchableOpacity>
-              </View>
+              )}
             </View>
           ) : (
             <View style={styles.guestCard}>
@@ -246,23 +243,22 @@ const styles = StyleSheet.create({
   userRole: {
     fontSize: 14,
     color: '#666666',
-    marginBottom: 12,
     textTransform: 'capitalize',
   },
-  userActions: {
+  adminButton: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+    backgroundColor: '#E53935',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
   },
-  linkButton: {
-    paddingVertical: 8,
-  },
-  linkText: {
-    color: '#4A90E2',
+  adminButtonText: {
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
-  },
-  adminLinkText: {
-    color: '#E53935',
   },
   guestCard: {
     backgroundColor: '#FFFFFF',

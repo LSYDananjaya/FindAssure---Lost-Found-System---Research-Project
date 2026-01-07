@@ -38,6 +38,8 @@ interface User {
   email: string;
   phone?: string;
   role: 'owner' | 'admin'; // Only owners and admins register
+  createdAt: string;
+  updatedAt?: string;
 }
 
 interface AuthContextType {

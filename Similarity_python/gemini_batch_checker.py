@@ -1,13 +1,9 @@
 import os
 import json
 import requests
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
-
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
-API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+GEMINI_KEY = "AIzaSyCGEhbmSLSzGLDRf4qQfnZLzMMzyNruBi0"
+API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
 
 
 def gemini_batch_similarity(q_list):

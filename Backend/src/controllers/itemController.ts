@@ -71,12 +71,24 @@ export const listFoundItems = async (
 
     const filters: itemService.FoundItemFilters = {};
     if (category) filters.category = category as string;
-    if (status) filters.status = status as any;
+    
+    // If status is explicitly provided, use it
+    // Otherwise, exclude claimed items by default (only show available and pending_verification)
+    if (status) {
+      filters.status = status as any;
+    } else {
+      // Don't set a status filter - we'll filter in the query below
+    }
 
     const items = await itemService.listFoundItems(filters);
 
+    // Filter out claimed items unless explicitly requested
+    const filteredItems = status 
+      ? items 
+      : items.filter(item => item.status !== 'claimed');
+
     // For owner view, remove founderAnswers from all items
-    const itemsForOwner = items.map((item) => {
+    const itemsForOwner = filteredItems.map((item) => {
       const itemObj = item.toObject();
       const { founderAnswers, ...ownerView } = itemObj;
       return ownerView;

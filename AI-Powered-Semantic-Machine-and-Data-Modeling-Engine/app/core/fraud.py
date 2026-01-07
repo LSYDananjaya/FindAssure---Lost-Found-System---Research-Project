@@ -20,12 +20,11 @@ class FraudDetectionEngine:
         if os.path.exists(model_path):
             with open(model_path, 'rb') as f:
                 self.model = pickle.load(f)
-            print("✅ Fraud Model Loaded.")
+            print("Fraud Model Loaded.")
         else:
-            print("⚠️ Training new Isolation Forest model...")
+            print("Training new Isolation Forest model...")
             self.model = IsolationForest(contamination=0.1, random_state=42)
-            print("✅ New model initialized.")
-
+            print("New model initialized.")
     def extract_features(self, user_metadata: dict):
         """
         Extract behavioral features from user metadata

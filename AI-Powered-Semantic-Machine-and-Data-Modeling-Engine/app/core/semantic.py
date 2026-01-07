@@ -20,21 +20,21 @@ class SemanticEngine:
         return cls._instance
 
     def _initialize(self):
-        print("🤖 Loading Semantic Model...")
+        print("Loading Semantic Model...")
         try:
             self.model = SentenceTransformer(settings.MODEL_PATH)
-            print("✅ Loaded Fine-Tuned Model")
+            print("Loaded Fine-Tuned Model")
         except Exception as e:
-            print("📥 Loading High-Performance Model...")
+            print("Loading High-Performance Model...")
             # Using better model for improved accuracy
             # all-mpnet-base-v2 is one of the best models for semantic similarity
             # Falls back to all-MiniLM-L6-v2 if mpnet fails (faster, still good)
             try:
                 self.model = SentenceTransformer('all-mpnet-base-v2')
-                print("✅ Loaded all-mpnet-base-v2 (High Accuracy)")
+                print("Loaded all-mpnet-base-v2 (High Accuracy)")
             except:
                 self.model = SentenceTransformer('all-MiniLM-L6-v2')
-                print("✅ Loaded all-MiniLM-L6-v2 (Balanced)")
+                print("Loaded all-MiniLM-L6-v2 (Balanced)")
 
         # Get actual dimension from model
         self.dimension = self.model.get_sentence_embedding_dimension()
@@ -44,11 +44,11 @@ class SemanticEngine:
         # Vectors will be normalized, so IP = cosine similarity
         if os.path.exists(settings.INDEX_PATH):
             try:
-                print("📂 Loading FAISS index from disk...")
+                print("Loading FAISS index from disk...")
                 self.index = faiss.read_index(settings.INDEX_PATH)
-                print("✅ Index loaded successfully")
+                print("Index loaded successfully")
             except Exception as e:
-                print("🆕 Creating fresh FAISS IndexFlatIP (cosine similarity)...")
+                print("Creating fresh FAISS IndexFlatIP (cosine similarity)...")
                 self.index = faiss.IndexFlatIP(self.dimension)  # Inner Product for cosine
                 # Delete corrupted file
                 try:
@@ -62,12 +62,12 @@ class SemanticEngine:
         # Load or create metadata
         if os.path.exists(settings.METADATA_PATH):
             try:
-                print("📂 Loading metadata from cache...")
+                print("Loading metadata from cache...")
                 with open(settings.METADATA_PATH, 'rb') as f:
                     self.items_metadata = pickle.load(f)
-                print(f"✅ Loaded {len(self.items_metadata)} items from cache")
+                print(f"Loaded {len(self.items_metadata)} items from cache")
             except Exception as e:
-                print("🆕 Starting with empty metadata")
+                print("Starting with empty metadata")
                 self.items_metadata = []
                 # Delete corrupted file
                 try:

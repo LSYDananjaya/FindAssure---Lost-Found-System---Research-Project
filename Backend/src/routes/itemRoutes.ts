@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/authMiddleware';
 import * as itemController from '../controllers/itemController';
+import { uploadVideos } from '../utils/cloudinary';
 
 const router = Router();
 
@@ -67,7 +68,7 @@ router.post('/generate-questions', itemController.generateQuestions);
  * @desc    Create verification with video answers
  * @access  Private
  */
-router.post('/verification', requireAuth, itemController.createVerification);
+router.post('/verification', requireAuth, uploadVideos.any(), itemController.createVerification);
 
 /**
  * @route   GET /api/items/verification/:id

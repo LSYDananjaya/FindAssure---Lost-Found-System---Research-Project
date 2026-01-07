@@ -81,13 +81,27 @@ const AnswerQuestionsVideoScreen = () => {
     try {
       setLoading(true);
 
-      // Build unified owner answers array with questionId, answer, and videoKey
-      // Note: Video URIs are stored temporarily and will be sent to Python backend in future
-      const ownerAnswers: OwnerAnswerInput[] = textAnswers.map((answer, index) => ({
-        questionId: index,
-        answer: videoAnswers[index] ? `[Video Answer: ${videoAnswers[index]}]` : answer.trim(),
-        videoKey: videoAnswers[index] || 'default_video_placeholder',
-      }));
+      // Map question index to word format (0 -> one, 1 -> two, etc.)
+      const numberWords = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+
+      // Build unified owner answers array with questionId, answer, videoKey, and videoUri
+      const ownerAnswers: OwnerAnswerInput[] = textAnswers.map((answer, index) => {
+        const hasVideo = videoAnswers[index] !== null;
+        const videoKey = `owner_answer_${numberWords[index] || index + 1}`; // Match Python backend format
+
+        return {
+          questionId: index,
+          answer: hasVideo ? '[Video Answer]' : answer.trim(),
+          videoKey: videoKey,
+          videoUri: hasVideo ? videoAnswers[index]! : undefined,
+        };
+      });
+
+      console.log('📤 Submitting verification:', {
+        foundItemId: foundItem._id,
+        answersCount: ownerAnswers.length,
+        videoCount: ownerAnswers.filter(a => a.videoUri).length,
+      });
 
       // Submit verification request
       const response = await itemsApi.submitVerification({
@@ -95,11 +109,14 @@ const AnswerQuestionsVideoScreen = () => {
         ownerAnswers,
       });
 
+      console.log('✅ Verification response:', response);
+
       // Navigate to verification result screen with the verification ID
       navigation.navigate('VerificationResult', { 
         verificationId: response._id 
       });
     } catch (error: any) {
+      console.error('❌ Submission error:', error);
       Alert.alert(
         'Submission Failed',
         error.message || 'Could not submit verification. Please try again.'

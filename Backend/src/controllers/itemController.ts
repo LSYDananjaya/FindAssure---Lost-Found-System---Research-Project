@@ -201,17 +201,48 @@ export const createVerification = async (
       return;
     }
 
-    const { foundItemId, ownerAnswers } = req.body;
+    // Parse form data - expect 'data' field with JSON
+    const dataField = req.body.data;
+    
+    if (!dataField) {
+      res.status(400).json({ message: 'Missing data field in request' });
+      return;
+    }
+
+    let parsedData;
+    try {
+      parsedData = typeof dataField === 'string' ? JSON.parse(dataField) : dataField;
+    } catch (error) {
+      res.status(400).json({ message: 'Invalid JSON in data field' });
+      return;
+    }
+
+    const { foundItemId, ownerAnswers } = parsedData;
 
     if (!foundItemId || !ownerAnswers) {
       res.status(400).json({ message: 'foundItemId and ownerAnswers are required' });
       return;
     }
 
+    // Extract video files from request
+    const files = req.files as Express.Multer.File[];
+    const videoFiles = new Map<string, any>();
+
+    if (files && files.length > 0) {
+      for (const file of files) {
+        videoFiles.set(file.fieldname, {
+          buffer: file.buffer,
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+        });
+      }
+    }
+
     const verification = await verificationService.createVerification({
       foundItemId,
       ownerId: req.user.id,
       ownerAnswers,
+      videoFiles,
     });
 
     res.status(201).json(verification);

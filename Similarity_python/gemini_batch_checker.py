@@ -55,12 +55,39 @@ Return ONLY JSON:
 
     try:
         r = requests.post(f"{API_URL}?key={GEMINI_KEY}", json=body, timeout=40)
+        r.raise_for_status()  # Raise error for bad status codes
         data = r.json()
+
+        # Check for error in response
+        if "error" in data:
+            error_message = data["error"].get("message", "Unknown Gemini API error")
+            return {
+                "error": "GEMINI_API_ERROR",
+                "message": error_message,
+                "fallback_mode": True
+            }
 
         text = data["candidates"][0]["content"]["parts"][0]["text"]
         text = text.replace("```json", "").replace("```", "").strip()
 
         return json.loads(text)
 
+    except requests.exceptions.HTTPError as e:
+        # Handle HTTP errors (like 429 quota exceeded)
+        try:
+            error_data = r.json()
+            error_message = error_data.get("error", {}).get("message", str(e))
+        except:
+            error_message = str(e)
+        
+        return {
+            "error": "GEMINI_API_ERROR",
+            "message": error_message,
+            "fallback_mode": True
+        }
     except Exception as e:
-        return {"error": str(e), "raw": r.text if "r" in locals() else None}
+        return {
+            "error": "GEMINI_API_ERROR",
+            "message": str(e),
+            "fallback_mode": True
+        }

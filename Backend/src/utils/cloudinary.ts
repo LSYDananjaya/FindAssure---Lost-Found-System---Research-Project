@@ -29,6 +29,24 @@ export const upload = multer({
   },
 });
 
+// Configure Multer for video files (for verification)
+const videoFileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  // Accept video files only
+  if (file.mimetype.startsWith('video/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only video files are allowed'));
+  }
+};
+
+export const uploadVideos = multer({
+  storage: storage,
+  fileFilter: videoFileFilter,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB max file size for videos
+  },
+});
+
 /**
  * Upload image buffer to Cloudinary
  * @param buffer Image buffer from multer

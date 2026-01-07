@@ -66,4 +66,4 @@ class RLRankingAgent:
         os.makedirs(os.path.dirname(self.q_table_path), exist_ok=True)
         with open(self.q_table_path, 'wb') as f:
             pickle.dump(self.q_table, f)
-        print("✅ Q-Table saved.")
+        print("Q-Table saved.")

@@ -12,19 +12,19 @@ MODEL_SAVE_PATH = os.path.join(BASE_DIR, '../data/models/fine_tuned_bert')
 
 def train_model():
     print("=" * 70)
-    print("🎓 ENGLISH-ONLY SEMANTIC FINE-TUNING FOR MAXIMUM ACCURACY")
+    print("ENGLISH-ONLY SEMANTIC FINE-TUNING FOR MAXIMUM ACCURACY")
     print("=" * 70)
     
-    print("\n1️⃣ Loading Best English Model...")
+    print("\nLoading Best English Model...")
     # Use the best English model
     try:
         model = SentenceTransformer('all-mpnet-base-v2')
-        print("   ✅ Loaded all-mpnet-base-v2 (768-dim, Best for English)")
+        print("   Loaded all-mpnet-base-v2 (768-dim, Best for English)")
     except:
         model = SentenceTransformer('all-MiniLM-L6-v2')
-        print("   ✅ Loaded all-MiniLM-L6-v2 (384-dim, Fast & Accurate)")
+        print("   Loaded all-MiniLM-L6-v2 (384-dim, Fast & Accurate)")
 
-    print("\n2️⃣ Loading English Training Data...")
+    print("\nLoading English Training Data...")
     train_examples = []
     eval_examples = []
     
@@ -43,8 +43,8 @@ def train_model():
         train_data = data[:split_idx]
         eval_data = data[split_idx:]
         
-        print(f"   📊 Dataset: {len(train_data)} train, {len(eval_data)} eval")
-        print(f"   📊 Total pairs: {len(data)}")
+        print(f"   Dataset: {len(train_data)} train, {len(eval_data)} eval")
+        print(f"   Total pairs: {len(data)}")
         
         # Prepare training examples with augmentation
         for item in train_data:
@@ -64,8 +64,8 @@ def train_model():
             eval_sentences2.append(item['positive'])
             eval_scores.append(1.0)  # Positive pairs
     
-    print(f"   ✅ {len(train_examples)} training examples (with augmentation)")
-    print(f"   ✅ {len(eval_sentences1)} evaluation pairs")
+    print(f"   {len(train_examples)} training examples (with augmentation)")
+    print(f"   {len(eval_sentences1)} evaluation pairs")
 
     # 3. Create evaluator
     evaluator = EmbeddingSimilarityEvaluator(
@@ -89,7 +89,7 @@ def train_model():
     num_epochs = 20  # Extended training for better accuracy with detailed descriptions
     warmup_steps = int(len(train_dataloader) * num_epochs * 0.1)
     
-    print("\n3️⃣ Optimized Training Configuration:")
+    print("\nOptimized Training Configuration:")
     print("   " + "-" * 60)
     print(f"   Base Model:        {type(model).__name__}")
     print(f"   Loss Function:     MultipleNegativesRankingLoss")
@@ -102,7 +102,7 @@ def train_model():
     print(f"   Best Model:        Auto-saved")
     print("   " + "-" * 60)
     
-    print("\n4️⃣ Starting Fine-Tuning...")
+    print("\nStarting Fine-Tuning...")
     print("   Focus: English semantic understanding")
     print("   Goal: 95%+ accuracy on lost & found matching")
     print("   Time: ~10-15 minutes\n")
@@ -121,13 +121,13 @@ def train_model():
     )
 
     print("\n" + "=" * 70)
-    print("✅ ENGLISH FINE-TUNING COMPLETE!")
+    print("ENGLISH FINE-TUNING COMPLETE!")
     print("=" * 70)
     
-    print(f"\n📁 Fine-tuned model saved to: {MODEL_SAVE_PATH}")
+    print(f"\nFine-tuned model saved to: {MODEL_SAVE_PATH}")
     
     # Test the model
-    print("\n5️⃣ Testing Fine-tuned Model...")
+    print("\nTesting Fine-tuned Model...")
     test_queries = [
         ("Lost my black wallet", "Black leather wallet found"),
         ("Missing brown wallet with cards", "Brown wallet discovered with credit cards"),
@@ -145,7 +145,7 @@ def train_model():
         print(f"     Cosine Similarity: {similarity:.4f} ({similarity*100:.1f}%)")
     
     print("\n" + "=" * 70)
-    print("📊 NEXT STEPS:")
+    print("NEXT STEPS:")
     print("=" * 70)
     print("1. DELETE old index files:")
     print("   rm data/indices/faiss.index")

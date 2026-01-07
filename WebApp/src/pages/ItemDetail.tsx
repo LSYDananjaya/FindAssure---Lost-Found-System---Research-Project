@@ -205,7 +205,9 @@ const ItemDetail: React.FC = () => {
               <p className="item-description-full">{item.description}</p>
               <div className="item-meta-grid">
                 <div className="meta-item">
-                  <strong>📍 Location:</strong> {item.location}
+                  <strong>📍 Location:</strong> {item.found_location?.[0]?.location || 'Location not specified'}
+                  {item.found_location?.[0]?.floor_id && `, Floor ${item.found_location[0].floor_id}`}
+                  {item.found_location?.[0]?.hall_name && `, ${item.found_location[0].hall_name}`}
                 </div>
                 <div className="meta-item">
                   <strong>📅 Found on:</strong> {formatDate(item.createdAt)}
@@ -316,25 +318,12 @@ const ItemDetail: React.FC = () => {
               </div>
             )}
 
-            <div className="section contact-section">
-              <h2>Founder Contact Information</h2>
+            <div className="section info-section">
+              <h2>ℹ️ Next Steps</h2>
               <p className="section-description">
-                Once your verification is approved, you can contact the founder using the information below.
+                After submitting your answers, our AI system will verify your responses against the founder's answers. 
+                If the verification is successful, you'll receive the founder's contact information to arrange item collection.
               </p>
-              <div className="contact-grid">
-                <div className="contact-item">
-                  <strong>Name:</strong>
-                  <span>{item.founderContact.name}</span>
-                </div>
-                <div className="contact-item">
-                  <strong>Email:</strong>
-                  <span>{item.founderContact.email}</span>
-                </div>
-                <div className="contact-item">
-                  <strong>Phone:</strong>
-                  <span>{item.founderContact.phone}</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>

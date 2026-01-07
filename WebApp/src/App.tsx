@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout';
@@ -8,6 +8,7 @@ import ItemDetail from './pages/ItemDetail';
 import VerificationResult from './pages/VerificationResult';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Profile from './pages/Profile';
 import './App.css';
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
             <Route path="add-item" element={<AddItem />} />
             <Route path="item/:id" element={<ItemDetail />} />
             <Route path="verification/:verificationId" element={<VerificationResult />} />
+            <Route path="profile" element={<Profile />} />
           </Route>
         </Routes>
       </Router>

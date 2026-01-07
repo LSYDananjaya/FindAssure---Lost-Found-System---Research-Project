@@ -1,0 +1,44 @@
+{
+  "owner_id": 101,
+  "categary_name": "bag",
+  "categary_data": [
+    {
+      "id": 1,
+      "description_scrore": 90,
+      "found_location": [
+        {
+          "location": "new_building",
+          "floor_id": 1,
+          "lab_id": null
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "description_scrore": 60,
+      "found_location": [
+        {
+          "location": "gym",
+          "floor_id": null,
+          "lab_id": null
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "description_scrore": 45,
+      "found_location": [
+        {
+          "location": "canteen",
+          "floor_id": null,
+          "lab_id": null
+        }
+      ]
+    }
+  ],
+  "description_match_cofidence": 85,
+  "owner_location": "new_building",
+  "floor_id": 1,
+  "lab_id": null,
+  "owner_location_confidence_stage": 1
+}

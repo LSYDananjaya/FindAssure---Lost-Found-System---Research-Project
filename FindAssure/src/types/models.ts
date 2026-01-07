@@ -54,6 +54,7 @@ export interface OwnerAnswerInput {
   questionId: number;
   answer: string;
   videoKey?: string;
+  videoUri?: string; // Local video file URI for mobile app
 }
 
 export interface VerificationRequest {

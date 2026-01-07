@@ -106,3 +106,68 @@ export const requireAdmin = (
 
   next();
 };
+
+/**
+ * Optional auth middleware - tries to authenticate but continues without auth if no token
+ * Useful for endpoints that work with or without authentication
+ */
+export const optionalAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    // If no auth header, continue without authentication
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      next();
+      return;
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+
+    if (!token) {
+      next();
+      return;
+    }
+
+    // Try to verify Firebase token
+    try {
+      const decodedToken = await verifyIdToken(token);
+      const { uid, email } = decodedToken;
+
+      if (email) {
+        // Find or create user in MongoDB
+        let user = await User.findOne({ firebaseUid: uid });
+
+        if (!user) {
+          user = await User.create({
+            firebaseUid: uid,
+            email,
+            role: 'owner',
+          });
+        }
+
+        // Attach user to request
+        req.user = {
+          id: user._id.toString(),
+          firebaseUid: user.firebaseUid,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        };
+      }
+    } catch (tokenError) {
+      // Token verification failed, but continue without auth
+      console.log('Token verification failed, continuing without auth');
+    }
+
+    next();
+  } catch (error: any) {
+    // Continue without authentication on any error
+    console.error('Optional auth error:', error);
+    next();
+  }
+};
+

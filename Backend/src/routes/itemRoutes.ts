@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/authMiddleware';
+import { requireAuth, optionalAuth } from '../middleware/authMiddleware';
 import * as itemController from '../controllers/itemController';
+import { uploadVideos } from '../utils/cloudinary';
 
 const router = Router();
 
@@ -36,9 +37,9 @@ router.get('/found/:id', itemController.getFoundItemById);
 /**
  * @route   POST /api/items/lost
  * @desc    Create a lost item request
- * @access  Private
+ * @access  Private (preferred) / Public (demo mode with auto-created demo user)
  */
-router.post('/lost', requireAuth, itemController.createLostRequest);
+router.post('/lost', optionalAuth, itemController.createLostRequest);
 
 /**
  * @route   GET /api/items/lost/me
@@ -67,7 +68,7 @@ router.post('/generate-questions', itemController.generateQuestions);
  * @desc    Create verification with video answers
  * @access  Private
  */
-router.post('/verification', requireAuth, itemController.createVerification);
+router.post('/verification', requireAuth, uploadVideos.any(), itemController.createVerification);
 
 /**
  * @route   GET /api/items/verification/:id
@@ -82,5 +83,20 @@ router.get('/verification/:id', requireAuth, itemController.getVerificationById)
  * @access  Private
  */
 router.get('/verification/me', requireAuth, itemController.getMyVerifications);
+
+
+/**
+ * @route   POST /api/items/found/batch
+ * @desc    Get multiple found items by IDs (batch)
+ * @access  Public
+ */
+router.post('/found/batch', itemController.getFoundItemsByIds);
+
+/**
+ * @route   GET /api/items/users
+ * @desc    Get all users (for suggestion system)
+ * @access  Public
+ */
+router.get('/users', itemController.getAllUsersPublic);
 
 export default router;

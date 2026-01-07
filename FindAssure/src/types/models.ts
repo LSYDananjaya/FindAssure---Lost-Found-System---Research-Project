@@ -16,6 +16,12 @@ export interface FounderContact {
   phone: string;
 }
 
+export interface LocationDetail {
+  location: string;
+  floor_id?: string | null;
+  hall_name?: string | null;
+}
+
 export interface FoundItem {
   _id: string;
   imageUrl: string;
@@ -24,7 +30,7 @@ export interface FoundItem {
   questions: string[];        // Questions chosen by founder (5 questions)
   founderAnswers: string[];   // Founder's text answers - DO NOT SHOW to owner in UI
   founderContact: FounderContact;
-  location: string;           // Where item was found - MUST be stored
+  found_location: LocationDetail[]; // Array of location details
   status: 'available' | 'pending_verification' | 'claimed';
   createdAt: string;
   updatedAt?: string;
@@ -54,6 +60,7 @@ export interface OwnerAnswerInput {
   questionId: number;
   answer: string;
   videoKey?: string;
+  videoUri?: string; // Local video file URI for mobile app
 }
 
 export interface VerificationRequest {
@@ -95,9 +102,11 @@ export interface AuthResponse {
 
 // Navigation types
 export type RootStackParamList = {
+  Onboarding: undefined;
   Home: undefined;
   Login: undefined;
   Register: undefined;
+  ForgotPassword: undefined;
   Profile: undefined;
   
   // Founder Flow

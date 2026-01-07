@@ -31,7 +31,7 @@ const Layout: React.FC = () => {
               <>
                 {user ? (
                   <div className="user-menu">
-                    <span className="user-name">👤 {user.name}</span>
+                    <Link to="/profile" className="nav-link">👤 {user.name}</Link>
                     <button onClick={handleSignOut} className="btn-signout">
                       Sign Out
                     </button>

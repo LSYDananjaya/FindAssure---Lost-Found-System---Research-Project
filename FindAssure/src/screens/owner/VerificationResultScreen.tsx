@@ -108,25 +108,6 @@ const VerificationResultScreen = () => {
           </Text>
         </View>
 
-        {/* Verification Score */}
-        {pythonResult && (
-          <View style={styles.scoreCard}>
-            <Text style={styles.scoreTitle}>Confidence Score</Text>
-            <Text style={styles.scoreValue}>{pythonResult.final_confidence}</Text>
-            <Text style={styles.scoreLabel}>
-              {pythonResult.gemini_recommendation}
-            </Text>
-          </View>
-        )}
-
-        {/* AI Reasoning */}
-        {pythonResult?.gemini_reasoning && (
-          <View style={styles.reasoningCard}>
-            <Text style={styles.reasoningTitle}>AI Analysis</Text>
-            <Text style={styles.reasoningText}>{pythonResult.gemini_reasoning}</Text>
-          </View>
-        )}
-
         {/* Founder Contact Info - Only show if verified */}
         {isVerified && verification.foundItemId.founderContact && (
           <View style={styles.contactCard}>
@@ -150,19 +131,6 @@ const VerificationResultScreen = () => {
             </Text>
           </View>
         )}
-
-        {/* Item Details */}
-        <View style={styles.itemCard}>
-          <Text style={styles.itemTitle}>Item Details</Text>
-          <View style={styles.itemDetail}>
-            <Text style={styles.itemLabel}>Category:</Text>
-            <Text style={styles.itemValue}>{verification.foundItemId.category}</Text>
-          </View>
-          <View style={styles.itemDetail}>
-            <Text style={styles.itemLabel}>Location:</Text>
-            <Text style={styles.itemValue}>{verification.foundItemId.location}</Text>
-          </View>
-        </View>
 
         {/* Question Results */}
         {pythonResult?.results && pythonResult.results.length > 0 && (
@@ -259,56 +227,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
   },
-  scoreCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  scoreTitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 8,
-  },
-  scoreValue: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#2563EB',
-    marginBottom: 8,
-  },
-  scoreLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '600',
-  },
-  reasoningCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  reasoningTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#1F2937',
-  },
-  reasoningText: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-  },
   contactCard: {
     backgroundColor: '#EFF6FF',
     padding: 20,
@@ -347,38 +265,6 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontStyle: 'italic',
     textAlign: 'center',
-  },
-  itemCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  itemTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#1F2937',
-  },
-  itemDetail: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  itemLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-    width: 100,
-  },
-  itemValue: {
-    fontSize: 14,
-    color: '#1F2937',
-    flex: 1,
   },
   resultsCard: {
     backgroundColor: '#FFFFFF',

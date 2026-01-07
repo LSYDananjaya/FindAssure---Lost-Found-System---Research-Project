@@ -26,7 +26,7 @@ def build_knowledge_graph():
     with open(GRAPH_SAVE_PATH, 'wb') as f:
         pickle.dump(G, f)
     
-    print(f"✅ Knowledge Graph built with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges")
+    print(f"Knowledge Graph built with {G.number_of_nodes()} nodes and {G.number_of_edges()} edges")
     print(f"   Saved to: {GRAPH_SAVE_PATH}")
 
 if __name__ == "__main__":

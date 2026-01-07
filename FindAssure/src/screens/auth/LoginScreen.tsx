@@ -16,6 +16,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { Ionicons } from '@expo/vector-icons';
 
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -26,6 +27,7 @@ const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -35,7 +37,7 @@ const LoginScreen = () => {
 
     try {
       setLoading(true);
-      await signIn({ email, password });
+      await signIn({ email, password, keepLoggedIn });
       
       // Wait a moment for user data to be synced
       setTimeout(() => {
@@ -76,6 +78,10 @@ const LoginScreen = () => {
     navigation.navigate('Register');
   };
 
+  const handleForgotPassword = () => {
+    navigation.navigate('ForgotPassword');
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -113,7 +119,26 @@ const LoginScreen = () => {
                 autoCapitalize="none"
                 autoComplete="password"
               />
+              <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
             </View>
+
+            <TouchableOpacity 
+              style={styles.keepLoggedInContainer}
+              onPress={() => setKeepLoggedIn(!keepLoggedIn)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, keepLoggedIn && styles.checkboxChecked]}>
+                {keepLoggedIn && (
+                  <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                )}
+              </View>
+              <View style={styles.keepLoggedInTextContainer}>
+                <Text style={styles.keepLoggedInText}>Keep me logged in</Text>
+                <Text style={styles.keepLoggedInSubtext}>Stay signed in on this device</Text>
+              </View>
+            </TouchableOpacity>
 
             <PrimaryButton
               title="Login"
@@ -188,6 +213,49 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: '#FAFAFA',
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+  },
+  forgotPasswordText: {
+    fontSize: 13,
+    color: '#4A90E2',
+    fontWeight: '500',
+  },
+  keepLoggedInContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 5,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#DDDDDD',
+    borderRadius: 6,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  checkboxChecked: {
+    backgroundColor: '#4A90E2',
+    borderColor: '#4A90E2',
+  },
+  keepLoggedInTextContainer: {
+    flex: 1,
+  },
+  keepLoggedInText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333333',
+    marginBottom: 2,
+  },
+  keepLoggedInSubtext: {
+    fontSize: 12,
+    color: '#888888',
   },
   loginButton: {
     marginTop: 10,

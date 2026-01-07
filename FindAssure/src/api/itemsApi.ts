@@ -112,8 +112,73 @@ export const itemsApi = {
     foundItemId: string;
     ownerAnswers: OwnerAnswerInput[];
   }): Promise<any> => {
-    const response = await axiosClient.post('/items/verification', data);
-    return response.data;
+    try {
+      const formData = new FormData();
+
+      // Map question index to word format (0 -> one, 1 -> two, etc.)
+      const numberWords = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+
+      // Prepare the data payload
+      const dataPayload = {
+        foundItemId: data.foundItemId,
+        ownerAnswers: data.ownerAnswers.map(answer => {
+          const videoKey = `owner_answer_${numberWords[answer.questionId] || answer.questionId + 1}`;
+          return {
+            questionId: answer.questionId,
+            answer: answer.answer,
+            videoKey: videoKey,
+          };
+        }),
+      };
+
+      // Add JSON data as a string in the 'data' field (mimicking Python backend format)
+      formData.append('data', JSON.stringify(dataPayload));
+
+      // Add video files if they exist
+      for (const answer of data.ownerAnswers) {
+        if (answer.videoUri) {
+          // Get file info
+          const filename = answer.videoUri.split('/').pop() || `video_${answer.questionId}.mp4`;
+          const match = /\.(\w+)$/.exec(filename);
+          const type = match ? `video/${match[1]}` : 'video/mp4';
+
+          const videoKey = `owner_answer_${numberWords[answer.questionId] || answer.questionId + 1}`;
+
+          console.log(`📤 Adding video for question ${answer.questionId + 1}:`, { 
+            videoKey, 
+            filename, 
+            type,
+            uri: answer.videoUri.substring(0, 50) + '...' 
+          });
+
+          // Append video to form data
+          formData.append(videoKey, {
+            uri: answer.videoUri,
+            name: filename,
+            type: type,
+          } as any);
+        }
+      }
+
+      console.log('📤 Submitting verification with videos...');
+
+      // Send multipart/form-data request
+      const response = await axiosClient.post('/items/verification', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
+        },
+        // Important: Set transformRequest to undefined to let axios handle FormData properly
+        transformRequest: (data) => data,
+        timeout: 120000, // 120 seconds for video upload and processing
+      });
+
+      console.log('✅ Verification submitted successfully');
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Verification submission error:', error.response?.data || error.message);
+      throw new Error(error.response?.data?.message || 'Failed to submit verification');
+    }
   },
 
   // ADMIN ENDPOINTS

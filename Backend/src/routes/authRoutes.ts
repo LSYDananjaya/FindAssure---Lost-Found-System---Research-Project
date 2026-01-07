@@ -39,4 +39,11 @@ router.patch('/me', requireAuth, authController.updateCurrentUser);
  */
 router.post('/register-extra', requireAuth, authController.registerExtraInfo);
 
+/**
+ * @route   GET /api/auth/claimed-items
+ * @desc    Get claimed items for current user
+ * @access  Private
+ */
+router.get('/claimed-items', requireAuth, authController.getClaimedItems);
+
 export default router;

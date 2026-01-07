@@ -38,7 +38,7 @@ class SemanticEngine:
 
         # Get actual dimension from model
         self.dimension = self.model.get_sentence_embedding_dimension()
-        print(f"📏 Model dimension: {self.dimension}")
+        print(f"Model dimension: {self.dimension}")
         
         # Use Inner Product (IP) index for cosine similarity
         # Vectors will be normalized, so IP = cosine similarity
@@ -56,7 +56,7 @@ class SemanticEngine:
                 except:
                     pass
         else:
-            print("🆕 Initializing new FAISS IndexFlatIP (cosine similarity)...")
+            print("Initializing new FAISS IndexFlatIP (cosine similarity)...")
             self.index = faiss.IndexFlatIP(self.dimension)  # Better for semantic similarity
         
         # Load or create metadata
@@ -77,7 +77,7 @@ class SemanticEngine:
         else:
             self.items_metadata = []
             if len(self.items_metadata) == 0:
-                print("💾 Cache is empty - will load from MongoDB")
+                print("Cache is empty - will load from MongoDB")
     
     def _save_to_disk(self):
         """Save FAISS index and metadata to disk"""
@@ -92,9 +92,9 @@ class SemanticEngine:
             with open(settings.METADATA_PATH, 'wb') as f:
                 pickle.dump(self.items_metadata, f)
             
-            print(f"💾 Saved index and metadata ({len(self.items_metadata)} items)")
+            print(f"Saved index and metadata ({len(self.items_metadata)} items)")
         except Exception as e:
-            print(f"⚠️ Could not save to disk: {e}")
+            print(f"Could not save to disk: {e}")
 
     def _preprocess_text(self, text: str) -> str:
         """Clean and normalize text for better matching"""
@@ -155,9 +155,9 @@ class SemanticEngine:
                     "index_position": len(self.items_metadata) - 1
                 }
                 await db.found_items.insert_one(document)
-                print(f"💾 Saved to MongoDB: {item_data['id']}")
+                print(f"Saved to MongoDB: {item_data['id']}")
         except Exception as e:
-            print(f"⚠️ MongoDB save failed: {e}")
+            print(f"MongoDB save failed: {e}")
         
         # 5. Persist to disk every 10 items
         if len(self.items_metadata) % 10 == 0:
@@ -174,24 +174,24 @@ class SemanticEngine:
         try:
             db = get_database()
             if db is None:
-                print("⚠️ MongoDB not available, skipping data load")
+                print("MongoDB not available, skipping data load")
                 return 0
             
             # Verify database is actually responsive
             try:
                 await db.command('ping')
             except Exception as ping_error:
-                print(f"⚠️ MongoDB not responsive: {ping_error}")
+                print(f"MongoDB not responsive: {ping_error}")
                 return 0
             
             cursor = db.found_items.find().sort("created_at", 1)
             items = await cursor.to_list(length=None)
             
             if not items:
-                print("📭 No items found in MongoDB (empty database)")
+                print("No items found in MongoDB (empty database)")
                 return 0
             
-            print(f"📥 Loading {len(items)} items from MongoDB...")
+            print(f"Loading {len(items)} items from MongoDB...")
             
             # Clear existing data
             self.index = faiss.IndexFlatIP(self.dimension)  # FIXED: Use IP for cosine similarity
@@ -211,16 +211,16 @@ class SemanticEngine:
                         "category": item['category']
                     })
                 except Exception as item_error:
-                    print(f"⚠️ Failed to load item {idx}: {item_error}")
+                    print(f"Failed to load item {idx}: {item_error}")
                     continue
             
             # Save to disk
             self._save_to_disk()
-            print(f"✅ Successfully loaded {len(self.items_metadata)} items from MongoDB")
+            print(f"Successfully loaded {len(self.items_metadata)} items from MongoDB")
             return len(self.items_metadata)
             
         except Exception as e:
-            print(f"❌ Critical error loading from MongoDB: {e}")
+            print(f"Critical error loading from MongoDB: {e}")
             import traceback
             traceback.print_exc()
             return 0
@@ -279,21 +279,21 @@ class SemanticEngine:
         logger = logging.getLogger(__name__)
         
         if len(self.items_metadata) == 0:
-            logger.warning("⚠️ Search attempted but index is empty")
+            logger.warning("Search attempted but index is empty")
             return []
         
-        logger.info(f"🔍 Searching for: '{query_text}' (category: {category_filter or 'any'})")
+        logger.info(f"Searching for: '{query_text}' (category: {category_filter or 'any'})")
         
         # Vectorize the LOST item description (normalized)
         query_vec = self.vectorize(query_text, normalize=True)
-        logger.debug(f"📊 Query vector shape: {query_vec.shape}, norm: {np.linalg.norm(query_vec):.4f}")
+        logger.debug(f"Query vector shape: {query_vec.shape}, norm: {np.linalg.norm(query_vec):.4f}")
         
         # Search in FAISS index using cosine similarity
         # With IndexFlatIP and normalized vectors, higher score = more similar
         k = min(limit * 2, len(self.items_metadata))  # Get more candidates for re-ranking
         scores, indices = self.index.search(np.array([query_vec], dtype=np.float32), k)
         
-        logger.info(f"📈 FAISS returned {len(indices[0])} candidates")
+        logger.info(f"FAISS returned {len(indices[0])} candidates")
         
         results = []
         for i, idx in enumerate(indices[0]):
@@ -352,7 +352,7 @@ class SemanticEngine:
         # Sort by hybrid score descending
         results.sort(key=lambda x: x['semantic_score'], reverse=True)
         
-        logger.info(f"✅ Returning top {min(limit, len(results))} results")
+        logger.info(f"Returning top {min(limit, len(results))} results")
         
         # Return top matches
         return results[:limit]

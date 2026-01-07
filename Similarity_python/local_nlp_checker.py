@@ -196,21 +196,83 @@ class LocalNLP:
                 }
             }
 
-        # ✅ SUBSTRING MATCH (e.g., "toyota" in "toyota corolla")
-        if founder_norm in owner_norm or owner_norm in founder_norm:
-            substring_score = 0.85  # High score for substring matches
-            return {
-                "fused": substring_score,
-                "coverage": 0.9,
-                "reason": "substring_match",
-                "features": {
-                    "tfidf": substring_score,
-                    "char_ngram": substring_score,
-                    "jaccard": substring_score,
-                    "sbert": substring_score,
-                    "spacy": substring_score
+        # ✅ OPPOSITE/NEGATION CHECK (yes vs no, true vs false, etc.)
+        opposite_pairs = [
+            ("yes", "no"), ("no", "yes"),
+            ("true", "false"), ("false", "true"),
+            ("correct", "incorrect"), ("incorrect", "correct"),
+            ("right", "wrong"), ("wrong", "right"),
+            ("positive", "negative"), ("negative", "positive"),
+            ("have", "dont have"), ("have", "do not have"),
+            ("has", "doesnt have"), ("has", "does not have"),
+            ("is", "isnt"), ("is", "is not"),
+            ("are", "arent"), ("are", "are not"),
+            ("was", "wasnt"), ("was", "was not"),
+            ("were", "werent"), ("were", "were not")
+        ]
+        
+        for pair1, pair2 in opposite_pairs:
+            if (pair1 in founder_norm and pair2 in owner_norm) or \
+               (pair2 in founder_norm and pair1 in owner_norm):
+                return {
+                    "fused": 0.0,
+                    "coverage": 0.0,
+                    "reason": "opposite_answer",
+                    "features": {
+                        "tfidf": 0.0,
+                        "char_ngram": 0.0,
+                        "jaccard": 0.0,
+                        "sbert": 0.0,
+                        "spacy": 0.0
+                    }
                 }
-            }
+
+        # ✅ SUBSTRING MATCH - Only for whole words or meaningful phrases
+        # Split into words for whole word matching
+        founder_words = set(founder_norm.split())
+        owner_words = set(owner_norm.split())
+        
+        # Check if one is a complete subset of the other (whole word match)
+        # IMPORTANT: Both must be non-empty (to avoid empty set matching everything)
+        if founder_words and owner_words and len(founder_words) > 0 and len(owner_words) > 0:
+            # Check subset only if both have meaningful words
+            # Prevent empty set from matching (e.g., Japanese text normalized to "" shouldn't match "toyota")
+            if founder_words.issubset(owner_words) or owner_words.issubset(founder_words):
+                # One answer contains all words from the other
+                # e.g., "toyota" vs "toyota corolla" or "black bag" vs "black"
+                substring_score = 0.85
+                return {
+                    "fused": substring_score,
+                    "coverage": 0.9,
+                    "reason": "word_subset_match",
+                    "features": {
+                        "tfidf": substring_score,
+                        "char_ngram": substring_score,
+                        "jaccard": substring_score,
+                        "sbert": substring_score,
+                        "spacy": substring_score
+                    }
+                }
+            
+            # Check for significant word overlap (at least 60% of words match)
+            common_words = founder_words & owner_words
+            if common_words:
+                overlap_ratio = len(common_words) / max(len(founder_words), len(owner_words))
+                if overlap_ratio >= 0.6:
+                    # Significant word overlap
+                    word_overlap_score = 0.70 + (overlap_ratio * 0.2)  # 70-90% based on overlap
+                    return {
+                        "fused": word_overlap_score,
+                        "coverage": overlap_ratio,
+                        "reason": "high_word_overlap",
+                        "features": {
+                            "tfidf": word_overlap_score,
+                            "char_ngram": word_overlap_score,
+                            "jaccard": word_overlap_score,
+                            "sbert": word_overlap_score,
+                            "spacy": word_overlap_score
+                        }
+                    }
 
         founder_kw = self.extract_keywords(founder)
         owner_kw = self.extract_keywords(owner)

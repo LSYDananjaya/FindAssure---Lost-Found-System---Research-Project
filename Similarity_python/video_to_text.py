@@ -1,12 +1,18 @@
 import whisper
 import os
+import threading
+import subprocess
 
 # Load model once
 model = whisper.load_model("base")
 
+# Thread lock for Whisper model (model is not thread-safe)
+whisper_lock = threading.Lock()
+
 def extract_text(file_path: str) -> str:
     """
     Convert video to audio and transcribe using Whisper
+    Thread-safe implementation with lock
     """
 
     if not os.path.exists(file_path):
@@ -17,14 +23,32 @@ def extract_text(file_path: str) -> str:
     base_path, ext = os.path.splitext(file_path)
     audio = base_path + "_audio.wav"
 
-    # Extract audio from video using FFmpeg
-    os.system(
-        f'ffmpeg -y -i "{file_path}" -ar 16000 -ac 1 "{audio}" 2>&1'
-    )
+    # Extract audio from video using FFmpeg (suppress verbose output)
+    try:
+        subprocess.run(
+            ['ffmpeg', '-y', '-i', file_path, '-ar', '16000', '-ac', '1', audio],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+            timeout=30
+        )
+    except subprocess.TimeoutExpired:
+        raise Exception("FFmpeg audio extraction timed out")
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"FFmpeg failed to extract audio: {e}")
+    
+    # Check if audio file was created
+    if not os.path.exists(audio) or os.path.getsize(audio) == 0:
+        raise Exception("Audio extraction failed - no audio file created")
 
-    # Transcribe audio using Whisper
-    result = model.transcribe(audio)
-    text = result["text"].strip()
+    # Transcribe audio using Whisper with thread lock
+    # Lock ensures only one thread uses the model at a time
+    with whisper_lock:
+        try:
+            result = model.transcribe(audio)
+            text = result["text"].strip()
+        except Exception as e:
+            raise Exception(f"Whisper transcription failed: {e}")
 
     print("Transcription:", text)
 

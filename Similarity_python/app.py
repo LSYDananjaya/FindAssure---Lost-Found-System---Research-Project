@@ -3,6 +3,8 @@ import os
 import json
 import uuid
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 from video_to_text import extract_text
 from local_nlp_checker import LocalNLP
@@ -12,6 +14,7 @@ app = Flask(__name__)
 nlp = LocalNLP()
 
 TMP_DIR = tempfile.gettempdir()
+MAX_WORKERS = 5  # Process up to 5 videos in parallel
 
 # -----------------------------
 def classify_status(score):
@@ -43,35 +46,88 @@ def verify_owner():
     if not answers:
         return jsonify({"error": "No answers provided"}), 400
 
-    enriched = []
+    print(f"⏱️ Starting video processing for {len(answers)} videos...")
+    start_time = time.time()
 
     # -----------------------------
-    # VIDEO → TEXT
+    # PARALLEL VIDEO → TEXT
     # -----------------------------
-    for a in answers:
+    def process_single_video(answer_data, file_data):
+        """Process a single video file and return enriched data"""
+        a = answer_data
         key = a["video_key"]
-
-        if key not in request.files:
-            return jsonify({"error": f"Missing file: {key}"}), 400
-
-        file = request.files[key]
-        video_path = os.path.join(TMP_DIR, f"{uuid.uuid4().hex}_{file.filename}")
-        file.save(video_path)
-
+        
+        video_path = os.path.join(TMP_DIR, f"{uuid.uuid4().hex}_{file_data.filename}")
+        
         try:
+            file_data.save(video_path)
             owner_text = extract_text(video_path)
+            
+            return {
+                "question_id": a["question_id"],
+                "founder_answer": a["founder_answer"],
+                "owner_answer": owner_text,
+                "success": True
+            }
+        except Exception as e:
+            print(f"❌ Error processing {key}: {str(e)}")
+            return {
+                "question_id": a.get("question_id", 0),
+                "founder_answer": a.get("founder_answer", ""),
+                "owner_answer": "[Processing Error]",
+                "error": str(e),
+                "success": False
+            }
         finally:
-            # avoid temp buildup (doesn't affect other files)
+            # Clean up video file
             try:
-                os.remove(video_path)
+                if os.path.exists(video_path):
+                    os.remove(video_path)
             except Exception:
                 pass
 
-        enriched.append({
-            "question_id": a["question_id"],
-            "founder_answer": a["founder_answer"],
-            "owner_answer": owner_text
+    # Prepare video data with files (access request.files BEFORE threading)
+    video_tasks = []
+    for a in answers:
+        key = a["video_key"]
+        
+        if key not in request.files:
+            return jsonify({"error": f"Missing file: {key}"}), 400
+        
+        video_tasks.append({
+            "answer": a,
+            "file": request.files[key]
         })
+
+    enriched = []
+    
+    # Process all videos in parallel using ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        # Submit all video processing tasks
+        future_to_answer = {
+            executor.submit(process_single_video, task["answer"], task["file"]): task 
+            for task in video_tasks
+        }
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_answer):
+            result = future.result()
+            if result.get("success", False):
+                enriched.append(result)
+            else:
+                # If processing failed, still add it with error message
+                enriched.append(result)
+    
+    # Sort by question_id to maintain order
+    enriched.sort(key=lambda x: x["question_id"])
+    
+    video_processing_time = time.time() - start_time
+    print(f"✅ Video processing completed in {video_processing_time:.2f}s (parallel)")
+    
+    # Check if any videos failed
+    if any(not item.get("success", True) for item in enriched):
+        failed_count = sum(1 for item in enriched if not item.get("success", True))
+        print(f"⚠️ Warning: {failed_count} video(s) failed to process")
 
     # -----------------------------
     # GEMINI BATCH
@@ -167,6 +223,9 @@ def verify_owner():
         is_owner = avg_final >= 0.70
         rejection_reason = None
 
+    total_time = time.time() - start_time
+    print(f"🎯 Total verification time: {total_time:.2f}s")
+
     return jsonify({
         "owner_id": owner_id,
         "category": category,
@@ -178,7 +237,9 @@ def verify_owner():
         "results": results,
         "gemini_recommendation": gemini_recommendation,
         "gemini_reasoning": gemini_reasoning,
-        "verification_mode": "local_nlp_only" if gemini_failed else "gemini_enhanced"
+        "verification_mode": "local_nlp_only" if gemini_failed else "gemini_enhanced",
+        "processing_time_seconds": round(total_time, 2),
+        "video_processing_time_seconds": round(video_processing_time, 2)
     })
 
 

@@ -8,9 +8,9 @@ import {
   ScrollView, 
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  TouchableOpacity
 } from 'react-native';
-import Slider from '@react-native-community/slider';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../context/AuthContext';
@@ -18,8 +18,9 @@ import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { CategoryPicker } from '../../components/CategoryPicker';
 import { LocationPicker } from '../../components/LocationPicker';
+import { LocationDetail } from '../../constants/locationData';
 import { itemsApi } from '../../api/itemsApi';
-import { LOCATIONS, ITEM_CATEGORIES, CONFIDENCE_LEVEL_MIN, CONFIDENCE_LEVEL_MAX, CONFIDENCE_LEVEL_DEFAULT } from '../../constants/appConstants';
+import { ITEM_CATEGORIES, CONFIDENCE_LEVEL_MIN, CONFIDENCE_LEVEL_MAX, CONFIDENCE_LEVEL_DEFAULT } from '../../constants/appConstants';
 
 type FindLostStartNavigationProp = StackNavigationProp<RootStackParamList, 'FindLostStart'>;
 
@@ -29,8 +30,8 @@ const FindLostStartScreen = () => {
 
   const [category, setCategory] = useState(ITEM_CATEGORIES[0]);
   const [description, setDescription] = useState('');
-  const [location, setLocation] = useState(LOCATIONS[0]);
-  const [confidenceLevel, setConfidenceLevel] = useState(CONFIDENCE_LEVEL_DEFAULT);
+  const [location, setLocation] = useState<LocationDetail | null>(null);
+  const [confidenceStage, setConfidenceStage] = useState<number>(2); // 1: Pretty Sure, 2: Sure, 3: Not Sure
   const [loading, setLoading] = useState(false);
 
   const handleSearch = async () => {
@@ -42,7 +43,7 @@ const FindLostStartScreen = () => {
       return;
     }
 
-    if (!category || !description.trim() || !location) {
+    if (!category || !description.trim() || !location || !location.location) {
       Alert.alert('Required Fields', 'Please fill in all fields');
       return;
     }
@@ -50,12 +51,14 @@ const FindLostStartScreen = () => {
     try {
       setLoading(true);
 
-      // Step A: Save the lost request with location and confidence level
+      // Step A: Save the lost request with location details
       await itemsApi.reportLostItem({
         category: category,
         description: description.trim(),
-        location: location,
-        confidenceLevel: confidenceLevel,
+        owner_location: location.location,
+        floor_id: location.floor_id,
+        hall_name: location.hall_name,
+        owner_location_confidence_stage: confidenceStage,
       });
 
       // Step B: Get all found items
@@ -116,6 +119,9 @@ const FindLostStartScreen = () => {
               <LocationPicker
                 selectedValue={location}
                 onValueChange={setLocation}
+                allowDoNotRemember={true}
+                userType="owner"
+                error={!location ? undefined : ''}
               />
               <Text style={styles.helperText}>
                 Select the location where you think you lost the item
@@ -123,27 +129,60 @@ const FindLostStartScreen = () => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                Confidence Level: {confidenceLevel}%
-              </Text>
-              <Slider
-                style={styles.slider}
-                minimumValue={CONFIDENCE_LEVEL_MIN}
-                maximumValue={CONFIDENCE_LEVEL_MAX}
-                step={1}
-                value={confidenceLevel}
-                onValueChange={setConfidenceLevel}
-                minimumTrackTintColor="#007AFF"
-                maximumTrackTintColor="#DDDDDD"
-                thumbTintColor="#007AFF"
-              />
-              <View style={styles.sliderLabels}>
-                <Text style={styles.sliderLabelText}>Not Sure (1%)</Text>
-                <Text style={styles.sliderLabelText}>Very Sure (100%)</Text>
+              <Text style={styles.label}>How sure are you about this location?</Text>
+              
+              <View style={styles.confidenceContainer}>
+                {/* Pretty Sure */}
+                <TouchableOpacity
+                  style={[
+                    styles.confidenceCard,
+                    confidenceStage === 1 && styles.confidenceCardActive,
+                    confidenceStage === 1 && { backgroundColor: '#E8F5E9', borderColor: '#4CAF50' }
+                  ]}
+                  onPress={() => setConfidenceStage(1)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.confidenceEmoji}>😊</Text>
+                  <Text style={[
+                    styles.confidenceTitle,
+                    confidenceStage === 1 && { color: '#4CAF50', fontWeight: '700' }
+                  ]}>Pretty Sure</Text>
+                </TouchableOpacity>
+
+                {/* Sure */}
+                <TouchableOpacity
+                  style={[
+                    styles.confidenceCard,
+                    confidenceStage === 2 && styles.confidenceCardActive,
+                    confidenceStage === 2 && { backgroundColor: '#E3F2FD', borderColor: '#2196F3' }
+                  ]}
+                  onPress={() => setConfidenceStage(2)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.confidenceEmoji}>🙂</Text>
+                  <Text style={[
+                    styles.confidenceTitle,
+                    confidenceStage === 2 && { color: '#2196F3', fontWeight: '700' }
+                  ]}>Sure</Text>
+                </TouchableOpacity>
+
+                {/* Not Sure */}
+                <TouchableOpacity
+                  style={[
+                    styles.confidenceCard,
+                    confidenceStage === 3 && styles.confidenceCardActive,
+                    confidenceStage === 3 && { backgroundColor: '#FFF3E0', borderColor: '#FF9800' }
+                  ]}
+                  onPress={() => setConfidenceStage(3)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.confidenceEmoji}>🤔</Text>
+                  <Text style={[
+                    styles.confidenceTitle,
+                    confidenceStage === 3 && { color: '#FF9800', fontWeight: '700' }
+                  ]}>Not Sure</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.helperText}>
-                How confident are you about this location?
-              </Text>
             </View>
 
             <PrimaryButton
@@ -234,19 +273,39 @@ const styles = StyleSheet.create({
     color: '#999999',
     marginTop: 6,
   },
-  slider: {
-    width: '100%',
-    height: 40,
-    marginVertical: 8,
-  },
-  sliderLabels: {
+  confidenceContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
+    gap: 12,
+    marginTop: 12,
   },
-  sliderLabelText: {
-    fontSize: 11,
+  confidenceCard: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confidenceCardActive: {
+    borderWidth: 3,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+  },
+  confidenceEmoji: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  confidenceTitle: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#666666',
+    textAlign: 'center',
   },
   searchButton: {
     marginTop: 10,

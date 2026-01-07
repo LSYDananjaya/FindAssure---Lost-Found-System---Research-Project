@@ -8,8 +8,7 @@ import {
   ScrollView, 
   Alert,
   KeyboardAvoidingView,
-  Platform,
-  TouchableOpacity
+  Platform
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -61,7 +60,7 @@ const ReportFoundAnswersScreen = () => {
           <View style={styles.header}>
             <Text style={styles.title}>Answer the Questions</Text>
             <Text style={styles.subtitle}>
-              Provide your answers to help verify the true owner
+              Type your answers to help verify the true owner. Owners will provide video answers to claim items.
             </Text>
           </View>
 
@@ -71,32 +70,28 @@ const ReportFoundAnswersScreen = () => {
                 <Text style={styles.questionNumber}>Question {index + 1}</Text>
                 <Text style={styles.questionText}>{question}</Text>
                 
-                {/* Video Option - Placeholder for future implementation */}
-                <TouchableOpacity 
-                  style={styles.videoButton}
-                  onPress={() => Alert.alert(
-                    'Coming Soon', 
-                    'Video recording will be implemented in a future update'
-                  )}
-                >
-                  <Text style={styles.videoIcon}>🎥</Text>
-                  <Text style={styles.videoButtonText}>Record Video Answer (Coming Soon)</Text>
-                </TouchableOpacity>
-
-                <Text style={styles.orText}>OR</Text>
-
-                {/* Text Input Option */}
+                {/* Text Input Only for Founders */}
                 <TextInput
                   style={styles.answerInput}
                   placeholder="Type your answer here..."
                   value={answers[index]}
                   onChangeText={(text) => handleAnswerChange(index, text)}
                   multiline
-                  numberOfLines={3}
+                  numberOfLines={4}
                   textAlignVertical="top"
                 />
               </View>
             ))}
+          </View>
+
+          <View style={styles.tipsBox}>
+            <Text style={styles.tipsTitle}>💡 Tips for Answering Questions:</Text>
+            <Text style={styles.tipText}>• Examine the found item carefully before answering</Text>
+            <Text style={styles.tipText}>• Look at all visible details, labels, and unique features</Text>
+            <Text style={styles.tipText}>• Be specific and accurate in your descriptions</Text>
+            <Text style={styles.tipText}>• Include colors, brands, size, or any identifying marks</Text>
+            <Text style={styles.tipText}>• Your answers will help verify the true owner</Text>
+            <Text style={styles.tipText}>• Only the real owner will be able to match your details</Text>
           </View>
 
           <PrimaryButton
@@ -168,35 +163,27 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
     backgroundColor: '#FAFAFA',
-    minHeight: 80,
+    minHeight: 100,
   },
-  videoButton: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#DDDDDD',
-    borderStyle: 'dashed',
-    marginBottom: 8,
+  tipsBox: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
   },
-  videoIcon: {
-    fontSize: 20,
-    marginRight: 8,
+  tipsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#2E7D32',
+    marginBottom: 12,
   },
-  videoButtonText: {
+  tipText: {
     fontSize: 13,
-    color: '#999999',
-    fontWeight: '500',
-  },
-  orText: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#999999',
-    marginVertical: 8,
-    fontWeight: '600',
+    color: '#1B5E20',
+    lineHeight: 20,
+    marginBottom: 6,
   },
   nextButton: {
     marginBottom: 20,

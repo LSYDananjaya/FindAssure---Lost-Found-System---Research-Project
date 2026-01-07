@@ -7,11 +7,11 @@
 // For development, update the IP address when it changes
 
 // ⚠️ UPDATE THIS IP ADDRESS TO MATCH YOUR BACKEND SERVER
-// Check backend console output for: "📱 Mobile Access: http://YOUR_IP:5000/api"
+// Check backend console output for: "📱 Mobile Access: http://YOUR_IP:5001/api"
 export const API_CONFIG = {
   // Current backend IP (update this when your network changes)
   BACKEND_IP: '172.20.10.2',
-  BACKEND_PORT: 5000,
+  BACKEND_PORT: 5001,
   
   // Timeouts
   REQUEST_TIMEOUT: 60000, // 60 seconds (AI generation can take 5-15 seconds)

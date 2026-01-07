@@ -230,3 +230,38 @@ export const registerExtraInfo = async (
     next(error);
   }
 };
+
+/**
+ * Get claimed items for the current user
+ * GET /api/auth/claimed-items
+ */
+export const getClaimedItems = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: 'Not authenticated' });
+      return;
+    }
+
+    const { Verification } = await import('../models/Verification');
+
+    // Find all passed verifications for this user
+    const claimedItems = await Verification.find({
+      ownerId: req.user.id,
+      status: 'passed',
+    })
+      .populate({
+        path: 'foundItemId',
+        select: 'imageUrl category description found_location founderContact createdAt',
+      })
+      .sort({ createdAt: -1 })
+      .select('-__v');
+
+    res.status(200).json(claimedItems);
+  } catch (error) {
+    next(error);
+  }
+};

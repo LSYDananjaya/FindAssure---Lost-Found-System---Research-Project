@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,48 +7,225 @@ import {
   Modal,
   FlatList,
   Platform,
+  ScrollView,
 } from 'react-native';
-import { LOCATIONS } from '../constants/appConstants';
+import {
+  getLocationOptions,
+  getFloorOptions,
+  getHallOptions,
+  hasFloors,
+  LocationDetail,
+} from '../constants/locationData';
 
 interface LocationPickerProps {
-  selectedValue: string;
-  onValueChange: (value: string) => void;
+  selectedValue: LocationDetail | null;
+  onValueChange: (value: LocationDetail) => void;
+  allowDoNotRemember?: boolean;
+  userType?: 'founder' | 'owner';
+  label?: string;
+  error?: string;
 }
 
 export const LocationPicker: React.FC<LocationPickerProps> = ({
   selectedValue,
   onValueChange,
+  allowDoNotRemember = false,
+  userType = 'founder',
+  label = 'Location',
+  error,
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
+  const [currentStep, setCurrentStep] = useState<'location' | 'floor' | 'hall'>('location');
+  
+  const [selectedLocation, setSelectedLocation] = useState<string>(selectedValue?.location || '');
+  const [selectedFloor, setSelectedFloor] = useState<string | null>(selectedValue?.floor_id || null);
+  const [selectedHall, setSelectedHall] = useState<string | null>(selectedValue?.hall_name || null);
 
-  const handleSelect = (value: string) => {
-    onValueChange(value);
+  const locationOptions = getLocationOptions();
+  const floorOptions = selectedLocation ? getFloorOptions(selectedLocation) : [];
+  const hallOptions = selectedLocation && selectedFloor ? getHallOptions(selectedLocation, selectedFloor) : [];
+
+  const handleLocationSelect = (value: string) => {
+    setSelectedLocation(value);
+    
+    if (hasFloors(value)) {
+      setCurrentStep('floor');
+      setSelectedFloor(null);
+      setSelectedHall(null);
+    } else {
+      // No floors, complete selection
+      onValueChange({
+        location: value,
+        floor_id: null,
+        hall_name: null,
+      });
+      setModalVisible(false);
+      setCurrentStep('location');
+    }
+  };
+
+  const handleFloorSelect = (value: string) => {
+    if (value === 'do_not_remember') {
+      // Owner can choose not to remember
+      onValueChange({
+        location: selectedLocation,
+        floor_id: null,
+        hall_name: null,
+      });
+      setModalVisible(false);
+      setCurrentStep('location');
+      setSelectedFloor(null);
+      setSelectedHall(null);
+    } else {
+      setSelectedFloor(value);
+      // Both founder and owner should see hall selection
+      setCurrentStep('hall');
+      setSelectedHall(null);
+    }
+  };
+
+  const handleHallSelect = (value: string) => {
+    if (value === 'do_not_remember') {
+      // Owner can choose not to remember hall
+      setSelectedHall(null);
+      onValueChange({
+        location: selectedLocation,
+        floor_id: selectedFloor,
+        hall_name: null,
+      });
+    } else {
+      setSelectedHall(value);
+      onValueChange({
+        location: selectedLocation,
+        floor_id: selectedFloor,
+        hall_name: value,
+      });
+    }
     setModalVisible(false);
+    setCurrentStep('location');
+  };
+
+  const handleBack = () => {
+    if (currentStep === 'hall') {
+      setCurrentStep('floor');
+      setSelectedHall(null);
+    } else if (currentStep === 'floor') {
+      setCurrentStep('location');
+      setSelectedFloor(null);
+      setSelectedHall(null);
+    }
+  };
+
+  const handleModalClose = () => {
+    setModalVisible(false);
+    setCurrentStep('location');
+  };
+
+  const getDisplayText = () => {
+    if (!selectedValue || !selectedValue.location) {
+      return 'Select Location';
+    }
+
+    let text = selectedValue.location.split('_').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+
+    if (selectedValue.floor_id) {
+      text += ` - Floor ${selectedValue.floor_id}`;
+    }
+
+    if (selectedValue.hall_name) {
+      text += ` - ${selectedValue.hall_name.split('_').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ')}`;
+    }
+
+    return text;
+  };
+
+  const getModalTitle = () => {
+    switch (currentStep) {
+      case 'location':
+        return 'Select Location';
+      case 'floor':
+        return 'Select Floor';
+      case 'hall':
+        return 'Select Hall';
+      default:
+        return 'Select Location';
+    }
+  };
+
+  const getCurrentOptions = () => {
+    switch (currentStep) {
+      case 'location':
+        return locationOptions;
+      case 'floor':
+        const options = floorOptions;
+        if (userType === 'owner' && allowDoNotRemember) {
+          return [{ label: 'Do Not Remember', value: 'do_not_remember' }, ...options];
+        }
+        return options;
+      case 'hall':
+        const hallOpts = hallOptions;
+        if (userType === 'owner' && allowDoNotRemember) {
+          return [{ label: 'Do Not Remember', value: 'do_not_remember' }, ...hallOpts];
+        }
+        return hallOpts;
+      default:
+        return [];
+    }
+  };
+
+  const handleOptionSelect = (value: string) => {
+    switch (currentStep) {
+      case 'location':
+        handleLocationSelect(value);
+        break;
+      case 'floor':
+        handleFloorSelect(value);
+        break;
+      case 'hall':
+        handleHallSelect(value);
+        break;
+    }
   };
 
   return (
-    <>
+    <View style={styles.container}>
+      {label && <Text style={styles.label}>{label}</Text>}
+      
       <TouchableOpacity
-        style={styles.pickerButton}
+        style={[styles.pickerButton, error ? styles.pickerButtonError : null]}
         onPress={() => setModalVisible(true)}
         activeOpacity={0.7}
       >
-        <Text style={styles.pickerButtonText}>{selectedValue}</Text>
+        <Text style={styles.pickerButtonText}>{getDisplayText()}</Text>
         <Text style={styles.pickerIcon}>▼</Text>
       </TouchableOpacity>
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
 
       <Modal
         visible={modalVisible}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={handleModalClose}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Location</Text>
+              {currentStep !== 'location' && (
+                <TouchableOpacity
+                  onPress={handleBack}
+                  style={styles.backButton}
+                >
+                  <Text style={styles.backButtonText}>← Back</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={styles.modalTitle}>{getModalTitle()}</Text>
               <TouchableOpacity
-                onPress={() => setModalVisible(false)}
+                onPress={handleModalClose}
                 style={styles.closeButton}
               >
                 <Text style={styles.closeButtonText}>✕</Text>
@@ -56,38 +233,37 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
             </View>
 
             <FlatList
-              data={LOCATIONS}
-              keyExtractor={(item) => item}
+              data={getCurrentOptions()}
+              keyExtractor={(item) => item.value}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={[
-                    styles.optionItem,
-                    selectedValue === item && styles.optionItemSelected,
-                  ]}
-                  onPress={() => handleSelect(item)}
+                  style={styles.optionItem}
+                  onPress={() => handleOptionSelect(item.value)}
                 >
-                  <Text
-                    style={[
-                      styles.optionText,
-                      selectedValue === item && styles.optionTextSelected,
-                    ]}
-                  >
-                    {item}
+                  <Text style={styles.optionText}>
+                    {item.label}
                   </Text>
-                  {selectedValue === item && (
-                    <Text style={styles.checkmark}>✓</Text>
-                  )}
+                  <Text style={styles.optionIcon}>→</Text>
                 </TouchableOpacity>
               )}
             />
           </View>
         </View>
       </Modal>
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333333',
+    marginBottom: 8,
+  },
   pickerButton: {
     borderWidth: 1,
     borderColor: '#DDDDDD',
@@ -99,13 +275,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 50,
   },
+  pickerButtonError: {
+    borderColor: '#D32F2F',
+  },
   pickerButtonText: {
     fontSize: 16,
     color: '#333333',
+    flex: 1,
   },
   pickerIcon: {
     fontSize: 12,
     color: '#666666',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#D32F2F',
+    marginTop: 4,
   },
   modalOverlay: {
     flex: 1,
@@ -131,6 +316,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#333333',
+    flex: 1,
+    textAlign: 'center',
+  },
+  backButton: {
+    padding: 5,
+    marginRight: 10,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#1565C0',
+    fontWeight: '500',
   },
   closeButton: {
     padding: 5,
@@ -148,20 +344,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
-  optionItemSelected: {
-    backgroundColor: '#E3F2FD',
-  },
   optionText: {
     fontSize: 16,
     color: '#333333',
+    flex: 1,
   },
-  optionTextSelected: {
-    color: '#1565C0',
-    fontWeight: '600',
-  },
-  checkmark: {
-    fontSize: 20,
-    color: '#1565C0',
-    fontWeight: 'bold',
+  optionIcon: {
+    fontSize: 16,
+    color: '#666666',
   },
 });

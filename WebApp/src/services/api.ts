@@ -11,7 +11,7 @@ import type {
 export type { FoundItemInput, FoundItem, VerificationInput, Verification, OwnerAnswerInput };
 
 // API Base URL - update this to match your backend URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -19,6 +19,20 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Add request interceptor to include auth token
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // ============================================
 // API FUNCTIONS

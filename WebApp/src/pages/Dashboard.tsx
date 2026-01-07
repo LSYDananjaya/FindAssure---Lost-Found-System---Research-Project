@@ -195,7 +195,7 @@ const Dashboard: React.FC = () => {
                 <div className="item-footer">
                   <div className="item-meta">
                     <span className="meta-item">
-                      📍 {item.location}
+                      📍 {item.found_location?.[0]?.location || 'Location not specified'}
                     </span>
                     <span className="meta-item">
                       📅 {formatDate(item.createdAt)}

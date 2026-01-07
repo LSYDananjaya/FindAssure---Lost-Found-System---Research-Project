@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import * as itemService from '../services/itemService';
 import * as verificationService from '../services/verificationService';
 import * as geminiService from '../services/geminiService';
+import { User } from '../models/User';
 
 /**
  * Create a found item
@@ -19,13 +20,13 @@ export const createFoundItem = async (
       description,
       questions,
       founderAnswers,
-      location,
+      found_location,
       founderContact,
     } = req.body;
 
-    // Validation
-    if (!imageUrl || !category || !description || !questions || !founderAnswers || !location || !founderContact) {
-      res.status(400).json({ message: 'All fields are required' });
+    // Validation (imageUrl is optional)
+    if (!category || !description || !questions || !founderAnswers || !found_location || !founderContact) {
+      res.status(400).json({ message: 'Required fields: category, description, questions, founderAnswers, found_location, founderContact' });
       return;
     }
 
@@ -40,12 +41,12 @@ export const createFoundItem = async (
     }
 
     const foundItem = await itemService.createFoundItem({
-      imageUrl,
+      imageUrl: imageUrl || 'https://via.placeholder.com/400x400/CCCCCC/666666?text=No+Image',
       category,
       description,
       questions,
       founderAnswers,
-      location,
+      found_location,
       founderContact,
       createdBy: req.user?.id,
     });
@@ -70,12 +71,24 @@ export const listFoundItems = async (
 
     const filters: itemService.FoundItemFilters = {};
     if (category) filters.category = category as string;
-    if (status) filters.status = status as any;
+    
+    // If status is explicitly provided, use it
+    // Otherwise, exclude claimed items by default (only show available and pending_verification)
+    if (status) {
+      filters.status = status as any;
+    } else {
+      // Don't set a status filter - we'll filter in the query below
+    }
 
     const items = await itemService.listFoundItems(filters);
 
+    // Filter out claimed items unless explicitly requested
+    const filteredItems = status 
+      ? items 
+      : items.filter(item => item.status !== 'claimed');
+
     // For owner view, remove founderAnswers from all items
-    const itemsForOwner = items.map((item) => {
+    const itemsForOwner = filteredItems.map((item) => {
       const itemObj = item.toObject();
       const { founderAnswers, ...ownerView } = itemObj;
       return ownerView;
@@ -135,23 +148,25 @@ export const createLostRequest = async (
       return;
     }
 
-    const { category, description, location, confidenceLevel } = req.body;
+    const { category, description, owner_location, floor_id, hall_name, owner_location_confidence_stage } = req.body;
 
-    if (!category || !description || !location || confidenceLevel === undefined) {
-      res.status(400).json({ message: 'Category, description, location, and confidence level are required' });
+    if (!category || !description || !owner_location || owner_location_confidence_stage === undefined) {
+      res.status(400).json({ message: 'Category, description, owner_location, and confidence stage are required' });
       return;
     }
 
-    if (confidenceLevel < 1 || confidenceLevel > 100) {
-      res.status(400).json({ message: 'Confidence level must be between 1 and 100' });
+    if (owner_location_confidence_stage < 1 || owner_location_confidence_stage > 3) {
+      res.status(400).json({ message: 'Confidence stage must be 1 (Pretty Sure), 2 (Sure), or 3 (Not Sure)' });
       return;
     }
 
     const lostRequest = await itemService.createLostRequest(req.user.id, {
       category,
       description,
-      location,
-      confidenceLevel,
+      owner_location,
+      floor_id,
+      hall_name,
+      owner_location_confidence_stage,
     });
 
     res.status(201).json(lostRequest);
@@ -198,17 +213,48 @@ export const createVerification = async (
       return;
     }
 
-    const { foundItemId, ownerAnswers } = req.body;
+    // Parse form data - expect 'data' field with JSON
+    const dataField = req.body.data;
+    
+    if (!dataField) {
+      res.status(400).json({ message: 'Missing data field in request' });
+      return;
+    }
+
+    let parsedData;
+    try {
+      parsedData = typeof dataField === 'string' ? JSON.parse(dataField) : dataField;
+    } catch (error) {
+      res.status(400).json({ message: 'Invalid JSON in data field' });
+      return;
+    }
+
+    const { foundItemId, ownerAnswers } = parsedData;
 
     if (!foundItemId || !ownerAnswers) {
       res.status(400).json({ message: 'foundItemId and ownerAnswers are required' });
       return;
     }
 
+    // Extract video files from request
+    const files = req.files as Express.Multer.File[];
+    const videoFiles = new Map<string, any>();
+
+    if (files && files.length > 0) {
+      for (const file of files) {
+        videoFiles.set(file.fieldname, {
+          buffer: file.buffer,
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+        });
+      }
+    }
+
     const verification = await verificationService.createVerification({
       foundItemId,
       ownerId: req.user.id,
       ownerAnswers,
+      videoFiles,
     });
 
     res.status(201).json(verification);
@@ -296,6 +342,57 @@ export const generateQuestions = async (
     });
 
     res.status(200).json({ questions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get multiple found items by IDs (batch)
+ * POST /api/items/found/batch
+ */
+export const getFoundItemsByIds = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { itemIds } = req.body;
+
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      res.status(400).json({ message: 'itemIds array is required' });
+      return;
+    }
+
+    // Limit batch size to prevent abuse
+    if (itemIds.length > 50) {
+      res.status(400).json({ message: 'Maximum 50 items can be fetched at once' });
+      return;
+    }
+
+    const items = await itemService.getFoundItemsByIds(itemIds);
+
+    res.status(200).json(items);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get all users (public endpoint for suggestion system)
+ * GET /api/items/users
+ */
+export const getAllUsersPublic = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // Only return basic user info, exclude sensitive data
+    const users = await User.find()
+      .select('name email role createdAt firebaseUid')
+      .sort({ createdAt: -1 });
+    res.status(200).json(users);
   } catch (error) {
     next(error);
   }

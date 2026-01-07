@@ -26,6 +26,18 @@ const AdminItemDetailScreen = () => {
   const [currentStatus, setCurrentStatus] = useState(foundItem.status);
   const [loading, setLoading] = useState(false);
 
+  // Format location display
+  const formatLocation = (locations: typeof foundItem.found_location) => {
+    if (!locations || locations.length === 0) return 'Location not specified';
+    
+    return locations.map((loc, index) => {
+      let locationStr = loc.location;
+      if (loc.floor_id) locationStr += ` - Floor: ${loc.floor_id}`;
+      if (loc.hall_name) locationStr += ` - Hall: ${loc.hall_name}`;
+      return locationStr;
+    }).join('\n');
+  };
+
   const handleChangeStatus = async (newStatus: string) => {
     Alert.alert(
       'Confirm Status Change',
@@ -77,7 +89,7 @@ const AdminItemDetailScreen = () => {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>📍 Found Location</Text>
-            <Text style={styles.locationText}>{foundItem.location}</Text>
+            <Text style={styles.locationText}>{formatLocation(foundItem.found_location)}</Text>
           </View>
 
           <View style={styles.section}>

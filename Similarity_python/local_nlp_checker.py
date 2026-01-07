@@ -177,6 +177,41 @@ class LocalNLP:
         if not owner or len(owner.strip()) < 3:
             return {"fused": 0.0, "reason": "empty_answer"}
 
+        # Normalize for comparison
+        founder_norm = self.normalize(founder)
+        owner_norm = self.normalize(owner)
+
+        # ✅ EXACT MATCH CHECK FIRST (handles cases like "toyota" == "toyota")
+        if founder_norm == owner_norm:
+            return {
+                "fused": 1.0,
+                "coverage": 1.0,
+                "reason": "exact_match",
+                "features": {
+                    "tfidf": 1.0,
+                    "char_ngram": 1.0,
+                    "jaccard": 1.0,
+                    "sbert": 1.0,
+                    "spacy": 1.0
+                }
+            }
+
+        # ✅ SUBSTRING MATCH (e.g., "toyota" in "toyota corolla")
+        if founder_norm in owner_norm or owner_norm in founder_norm:
+            substring_score = 0.85  # High score for substring matches
+            return {
+                "fused": substring_score,
+                "coverage": 0.9,
+                "reason": "substring_match",
+                "features": {
+                    "tfidf": substring_score,
+                    "char_ngram": substring_score,
+                    "jaccard": substring_score,
+                    "sbert": substring_score,
+                    "spacy": substring_score
+                }
+            }
+
         founder_kw = self.extract_keywords(founder)
         owner_kw = self.extract_keywords(owner)
 

@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
-  TextInput,
   StyleSheet, 
   ScrollView, 
   Alert,
@@ -29,10 +28,6 @@ const AnswerQuestionsVideoScreen = () => {
   const route = useRoute<AnswerQuestionsVideoRouteProp>();
   const { foundItem } = route.params;
 
-  // Store text answers for each question
-  const [textAnswers, setTextAnswers] = useState<string[]>(
-    new Array(foundItem.questions.length).fill('')
-  );
   // Store video URIs for each question
   const [videoAnswers, setVideoAnswers] = useState<(string | null)[]>(
     new Array(foundItem.questions.length).fill(null)
@@ -100,12 +95,6 @@ const AnswerQuestionsVideoScreen = () => {
     }
   }, [loading]);
 
-  const handleAnswerChange = (index: number, text: string) => {
-    const newAnswers = [...textAnswers];
-    newAnswers[index] = text;
-    setTextAnswers(newAnswers);
-  };
-
   const handleRecordVideo = (index: number) => {
     setRecordingQuestionIndex(index);
   };
@@ -130,13 +119,11 @@ const AnswerQuestionsVideoScreen = () => {
   };
 
   const handleSubmit = async () => {
-    // Check if all questions have either text or video answers
-    const allAnswered = textAnswers.every((answer, index) => 
-      answer.trim().length > 0 || videoAnswers[index] !== null
-    );
+    // Check if all questions have video answers
+    const allAnswered = videoAnswers.every(video => video !== null);
 
     if (!allAnswered) {
-      Alert.alert('Incomplete', 'Please answer all questions with either text or video');
+      Alert.alert('Incomplete', 'Please record video answers for all questions');
       return;
     }
 
@@ -147,15 +134,14 @@ const AnswerQuestionsVideoScreen = () => {
       const numberWords = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 
       // Build unified owner answers array with questionId, answer, videoKey, and videoUri
-      const ownerAnswers: OwnerAnswerInput[] = textAnswers.map((answer, index) => {
-        const hasVideo = videoAnswers[index] !== null;
+      const ownerAnswers: OwnerAnswerInput[] = videoAnswers.map((videoUri, index) => {
         const videoKey = `owner_answer_${numberWords[index] || index + 1}`; // Match Python backend format
 
         return {
           questionId: index,
-          answer: hasVideo ? '[Video Answer]' : answer.trim(),
+          answer: '[Video Answer]',
           videoKey: videoKey,
-          videoUri: hasVideo ? videoAnswers[index]! : undefined,
+          videoUri: videoUri!,
         };
       });
 
@@ -205,7 +191,7 @@ const AnswerQuestionsVideoScreen = () => {
           <View style={styles.header}>
             <Text style={styles.title}>Answer the Questions</Text>
             <Text style={styles.subtitle}>
-              Answer each question with video or text to verify your ownership
+              Record video answers (max 5 seconds each) to verify your ownership
             </Text>
           </View>
 
@@ -238,29 +224,13 @@ const AnswerQuestionsVideoScreen = () => {
                     </View>
                   </View>
                 ) : (
-                  <>
-                    {/* Video Recording Button */}
-                    <TouchableOpacity 
-                      style={styles.recordButton}
-                      onPress={() => handleRecordVideo(index)}
-                    >
-                      <Text style={styles.recordIcon}>🎥</Text>
-                      <Text style={styles.recordText}>Record Video Answer (Max 5s)</Text>
-                    </TouchableOpacity>
-
-                    <Text style={styles.orText}>OR</Text>
-
-                    {/* Text Input Option */}
-                    <TextInput
-                      style={styles.answerInput}
-                      placeholder="Type your answer here..."
-                      value={textAnswers[index]}
-                      onChangeText={(text) => handleAnswerChange(index, text)}
-                      multiline
-                      numberOfLines={3}
-                      textAlignVertical="top"
-                    />
-                  </>
+                  <TouchableOpacity 
+                    style={styles.recordButton}
+                    onPress={() => handleRecordVideo(index)}
+                  >
+                    <Text style={styles.recordIcon}>🎥</Text>
+                    <Text style={styles.recordText}>Record Video Answer (Max 5s)</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             ))}
@@ -268,9 +238,10 @@ const AnswerQuestionsVideoScreen = () => {
 
           <View style={styles.infoBox}>
             <Text style={styles.infoText}>
-              📝 Answer Tips:
+              📝 Video Answer Tips:
             </Text>
-            <Text style={styles.infoText}>• Record a video (max 5 seconds) or type your answer</Text>
+            <Text style={styles.infoText}>• Record video answers (max 5 seconds each)</Text>
+            <Text style={styles.infoText}>• Speak clearly and look at the camera</Text>
             <Text style={styles.infoText}>• Be specific and accurate</Text>
             <Text style={styles.infoText}>• Provide details only the true owner would know</Text>
             <Text style={styles.infoText}>• You can preview and retake videos before submitting</Text>

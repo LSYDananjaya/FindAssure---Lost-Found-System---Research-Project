@@ -16,18 +16,18 @@ def print_separator(char="=", length=60):
 
 async def test_accuracy():
     print_separator()
-    print("🧪 SEMANTIC MATCHING ACCURACY TEST")
+    print("SEMANTIC MATCHING ACCURACY TEST")
     print_separator()
     
     # Initialize engine
-    print("\n1️⃣ Initializing Semantic Engine...")
+    print("\nInitializing Semantic Engine...")
     engine = SemanticEngine()
     print(f"   Model: {engine.model}")
     print(f"   Dimension: {engine.dimension}")
     print(f"   Index Type: {type(engine.index).__name__}")
     
     # Test data
-    print("\n2️⃣ Adding Test Items...")
+    print("\nAdding Test Items...")
     test_items = [
         {"id": "W001", "description": "Black leather wallet with cards", "category": "Wallet"},
         {"id": "W002", "description": "Brown wallet found in parking lot", "category": "Wallet"},
@@ -44,10 +44,10 @@ async def test_accuracy():
     for item in test_items:
         await engine.add_item(item)
     
-    print(f"   ✅ Added {len(test_items)} test items")
+    print(f"   Added {len(test_items)} test items")
     
     # Test queries
-    print("\n3️⃣ Running Test Queries...")
+    print("\nRunning Test Queries...")
     print_separator("-")
     
     test_queries = [
@@ -87,7 +87,7 @@ async def test_accuracy():
         
         results = engine.search(query, limit=3)
         
-        print(f"\n📝 Test {i}/{total_queries}: \"{query}\"")
+        print(f"\nTest {i}/{total_queries}: \"{query}\"")
         print(f"   Expected: {expected_id}")
         
         if results and len(results) > 0:
@@ -95,39 +95,39 @@ async def test_accuracy():
             top_id = top_result['item']['id']
             
             print(f"   Got: {top_id} ({top_result['item']['description']})")
-            print(f"   📊 Scores:")
+            print(f"   Scores:")
             print(f"      • Final Score: {top_result['semantic_score']}%")
             print(f"      • Semantic: {top_result['details']['semantic']}%")
             print(f"      • Keyword: {top_result['details']['keyword']}%")
             print(f"      • Cosine Sim: {top_result['cosine_similarity']}")
             
             if top_id == expected_id:
-                print(f"   ✅ CORRECT!")
+                print(f"   CORRECT!")
                 correct_predictions += 1
             else:
-                print(f"   ❌ WRONG (Expected {expected_id})")
+                print(f"   WRONG (Expected {expected_id})")
                 
             # Show top 3
             print(f"\n   Top 3 Matches:")
             for j, r in enumerate(results[:3], 1):
                 print(f"      {j}. {r['item']['id']}: {r['semantic_score']}% - {r['item']['description']}")
         else:
-            print(f"   ❌ NO RESULTS")
+            print(f"   NO RESULTS")
         
         print_separator("-")
     
     # Calculate accuracy
     accuracy = (correct_predictions / total_queries) * 100
     
-    print("\n4️⃣ RESULTS SUMMARY")
+    print("\nRESULTS SUMMARY")
     print_separator("=")
     print(f"   Correct Predictions: {correct_predictions}/{total_queries}")
     print(f"   Accuracy: {accuracy:.1f}%")
-    print(f"   Status: {'✅ EXCELLENT' if accuracy >= 80 else '⚠️ NEEDS IMPROVEMENT' if accuracy >= 60 else '❌ POOR'}")
+    print(f"   Status: {'EXCELLENT' if accuracy >= 80 else 'NEEDS IMPROVEMENT' if accuracy >= 60 else 'POOR'}")
     print_separator("=")
     
     # Performance benchmark
-    print("\n5️⃣ Performance Benchmark...")
+    print("\nPerformance Benchmark...")
     import time
     
     start_time = time.time()
@@ -140,13 +140,13 @@ async def test_accuracy():
     print(f"   Throughput: {1000/avg_time_ms:.0f} queries/second")
     
     # Model info
-    print("\n6️⃣ Model Information")
+    print("\nModel Information")
     print(f"   Model Type: {type(engine.model).__name__}")
     print(f"   Embedding Dimension: {engine.dimension}")
     print(f"   Total Items Indexed: {len(engine.items_metadata)}")
     print(f"   Index Type: {type(engine.index).__name__}")
     
-    print("\n✨ Test Complete!")
+    print("\nTest Complete!")
     print_separator("=")
 
 if __name__ == "__main__":

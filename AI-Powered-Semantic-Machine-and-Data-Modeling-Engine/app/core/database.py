@@ -33,27 +33,27 @@ async def connect_to_mongo(max_retries: int = 3, retry_delay: int = 2) -> bool:
             
             # Test connection with ping - THIS IS CRITICAL
             await mongodb.client.admin.command('ping')
-            logger.info("✅ MongoDB ping successful")
+            logger.info("MongoDB ping successful")
             
             # Create indexes for better performance
             await mongodb.db.found_items.create_index([("item_id", ASCENDING)], unique=True)
             await mongodb.db.found_items.create_index([("category", ASCENDING)])
             await mongodb.db.found_items.create_index([("created_at", DESCENDING)])
-            logger.info("✅ Database indexes created")
+            logger.info("Database indexes created")
             
             mongodb._connected = True
-            logger.info(f"✅ Connected to MongoDB: {settings.DATABASE_NAME}")
+            logger.info(f"Connected to MongoDB: {settings.DATABASE_NAME}")
             return True
             
         except Exception as e:
-            logger.error(f"❌ MongoDB connection attempt {attempt} failed: {e}")
+            logger.error(f"MongoDB connection attempt {attempt} failed: {e}")
             
             if attempt < max_retries:
-                logger.info(f"⏳ Retrying in {retry_delay} seconds...")
+                logger.info(f"Retrying in {retry_delay} seconds...")
                 await asyncio.sleep(retry_delay)
             else:
-                logger.error("❌ All MongoDB connection attempts failed")
-                logger.info("⚠️ System will run in standalone mode with disk cache")
+                logger.error("All MongoDB connection attempts failed")
+                logger.info("System will run in standalone mode with disk cache")
                 mongodb._connected = False
                 return False
     

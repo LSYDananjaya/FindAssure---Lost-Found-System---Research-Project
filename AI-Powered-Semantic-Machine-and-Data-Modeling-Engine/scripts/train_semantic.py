@@ -12,23 +12,23 @@ MODEL_SAVE_PATH = os.path.join(BASE_DIR, '../data/models/fine_tuned_bert')
 
 def train_model():
     print("=" * 70)
-    print("🎓 ADVANCED SEMANTIC SIMILARITY FINE-TUNING")
+    print("ADVANCED SEMANTIC SIMILARITY FINE-TUNING")
     print("=" * 70)
     
-    print("\n1️⃣ Loading High-Performance Base Model...")
+    print("\nLoading High-Performance Base Model...")
     # Use better base model for improved accuracy
     try:
         model = SentenceTransformer('all-mpnet-base-v2')
-        print("   ✅ Loaded all-mpnet-base-v2 (768-dim, State-of-the-art)")
+        print("   Loaded all-mpnet-base-v2 (768-dim, State-of-the-art)")
     except:
         try:
             model = SentenceTransformer('all-MiniLM-L6-v2')
-            print("   ✅ Loaded all-MiniLM-L6-v2 (384-dim, Fast & Accurate)")
+            print("   Loaded all-MiniLM-L6-v2 (384-dim, Fast & Accurate)")
         except:
             model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-            print("   ✅ Loaded multilingual-MiniLM (384-dim, Multilingual)")
+            print("   Loaded multilingual-MiniLM (384-dim, Multilingual)")
 
-    print("\n2️⃣ Loading and Preparing Training Data...")
+    print("\nLoading and Preparing Training Data...")
     train_examples = []
     eval_examples = []
     
@@ -47,7 +47,7 @@ def train_model():
         train_data = data[:split_idx]
         eval_data = data[split_idx:]
         
-        print(f"   📊 Dataset split: {len(train_data)} train, {len(eval_data)} eval")
+        print(f"   Dataset split: {len(train_data)} train, {len(eval_data)} eval")
         
         # Prepare training examples with multiple augmentations
         for item in train_data:
@@ -67,8 +67,8 @@ def train_model():
             eval_sentences2.append(item['positive'])
             eval_scores.append(1.0)  # These are positive pairs
     
-    print(f"   ✅ Created {len(train_examples)} training examples (with augmentation)")
-    print(f"   ✅ Created {len(eval_sentences1)} evaluation pairs")
+    print(f"   Created {len(train_examples)} training examples (with augmentation)")
+    print(f"   Created {len(eval_sentences1)} evaluation pairs")
 
     # 3. Create evaluator for monitoring training progress
     evaluator = EmbeddingSimilarityEvaluator(
@@ -93,7 +93,7 @@ def train_model():
     num_epochs = 10  # More epochs for better convergence
     warmup_steps = int(len(train_dataloader) * num_epochs * 0.1)  # 10% warmup
     
-    print("\n3️⃣ Training Configuration:")
+    print("\nTraining Configuration:")
     print("   " + "-" * 60)
     print(f"   Loss Function:     MultipleNegativesRankingLoss (BEST for retrieval)")
     print(f"   Batch Size:        16 (larger for stable gradients)")
@@ -104,7 +104,7 @@ def train_model():
     print(f"   Evaluation:        Every epoch")
     print("   " + "-" * 60)
     
-    print("\n4️⃣ Starting Training...")
+    print("\nStarting Training...")
     print("   (This may take 10-20 minutes depending on your hardware)\n")
     
     # Train the model
@@ -121,13 +121,13 @@ def train_model():
     )
 
     print("\n" + "=" * 70)
-    print("✅ TRAINING COMPLETE!")
+    print("TRAINING COMPLETE!")
     print("=" * 70)
     
-    print(f"\n📁 Model saved to: {MODEL_SAVE_PATH}")
+    print(f"\nModel saved to: {MODEL_SAVE_PATH}")
     
     # Test the model with sample queries
-    print("\n5️⃣ Testing Fine-tuned Model...")
+    print("\nTesting Fine-tuned Model...")
     test_queries = [
         "Lost my black wallet",
         "Mata phone eka haruna",
@@ -140,7 +140,7 @@ def train_model():
         print(f"   ✓ '{query}' → vector shape: {embedding.shape}")
     
     print("\n" + "=" * 70)
-    print("📊 NEXT STEPS:")
+    print("NEXT STEPS:")
     print("=" * 70)
     print("1. Delete old index files:")
     print("   - data/indices/faiss.index")

@@ -25,11 +25,11 @@ class RLRankingAgent:
         if os.path.exists(self.q_table_path):
             with open(self.q_table_path, 'rb') as f:
                 self.q_table = pickle.load(f)
-            print("✅ RL Q-Table Loaded.")
+            print("RL Q-Table Loaded.")
         else:
             # Initialize Q-table: state -> action -> Q-value
             self.q_table = {}
-            print("✅ New Q-Table initialized.")
+            print("New Q-Table initialized.")
         
         self.alpha = 0.1  # Learning rate
         self.gamma = 0.9  # Discount factor
@@ -66,4 +66,4 @@ class RLRankingAgent:
         os.makedirs(os.path.dirname(self.q_table_path), exist_ok=True)
         with open(self.q_table_path, 'wb') as f:
             pickle.dump(self.q_table, f)
-        print("✅ Q-Table saved.")
+        print("Q-Table saved.")

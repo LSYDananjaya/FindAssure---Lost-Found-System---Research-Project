@@ -21,10 +21,12 @@ cp .env.example .env
 Then edit `.env` and add your Gemini API key:
 
 ```env
-GEMINI_API_KEY=your_actual_gemini_api_key_here
+GOOGLE_API_KEY=your_actual_gemini_api_key_here
 FLASK_ENV=development
 FLASK_DEBUG=True
 ```
+
+**Get your API key from:** https://ai.google.dev/
 
 **Important:** Never commit the `.env` file to git. It's already included in `.gitignore`.
 

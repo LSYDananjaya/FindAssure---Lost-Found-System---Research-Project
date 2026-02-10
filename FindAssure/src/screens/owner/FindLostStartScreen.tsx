@@ -28,10 +28,10 @@ const FindLostStartScreen = () => {
   const navigation = useNavigation<FindLostStartNavigationProp>();
   const { user } = useAuth();
 
-  const [category, setCategory] = useState(ITEM_CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(ITEM_CATEGORIES[0]);
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState<LocationDetail | null>(null);
-  const [confidenceStage, setConfidenceStage] = useState<number>(2); // 1: Pretty Sure, 2: Sure, 3: Not Sure
+  const [confidenceStage, setConfidenceStage] = useState<number>(2); // 1: Pretty Sure, 2: Sure, 3: Not Sure, 4: Do not remember surely
   const [loading, setLoading] = useState(false);
 
   const handleSearch = async () => {
@@ -110,7 +110,7 @@ const FindLostStartScreen = () => {
                 textAlignVertical="top"
               />
               <Text style={styles.helperText}>
-                Include color, brand, where you lost it, when you lost it, etc.
+                Include color, brand, and specific item details that can identify item identically.
               </Text>
             </View>
 
@@ -181,6 +181,23 @@ const FindLostStartScreen = () => {
                     styles.confidenceTitle,
                     confidenceStage === 3 && { color: '#FF9800', fontWeight: '700' }
                   ]}>Not Sure</Text>
+                </TouchableOpacity>
+
+                {/* Do not remember surely */}
+                <TouchableOpacity
+                  style={[
+                    styles.confidenceCard,
+                    confidenceStage === 4 && styles.confidenceCardActive,
+                    confidenceStage === 4 && { backgroundColor: '#FFEBEE', borderColor: '#F44336' }
+                  ]}
+                  onPress={() => setConfidenceStage(4)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.confidenceEmoji}>😕</Text>
+                  <Text style={[
+                    styles.confidenceTitle,
+                    confidenceStage === 4 && { color: '#F44336', fontWeight: '700' }
+                  ]}>Do not remember surely</Text>
                 </TouchableOpacity>
               </View>
             </View>

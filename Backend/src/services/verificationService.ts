@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { Verification, IVerification, VerificationStatus, IVerificationAnswer } from '../models/Verification';
 import { FoundItem } from '../models/FoundItem';
-import { verifyOwnershipWithPython, PythonVerificationRequest, PythonVerificationResponse } from './pythonVerificationService';
+import { verifyOwnershipWithPython, PythonVerificationRequest, PythonVerificationResponse, VideoFile } from './pythonVerificationService';
 
 export interface OwnerAnswerInput {
   questionId: number;
@@ -13,6 +13,7 @@ export interface CreateVerificationData {
   foundItemId: string;
   ownerId: string;
   ownerAnswers: OwnerAnswerInput[];
+  videoFiles?: Map<string, VideoFile>;
 }
 
 export interface EvaluateVerificationData {
@@ -83,7 +84,10 @@ export const createVerification = async (
       })),
     };
 
-    const pythonResponse = await verifyOwnershipWithPython(pythonRequest);
+    const pythonResponse = await verifyOwnershipWithPython(
+      pythonRequest,
+      data.videoFiles || new Map()
+    );
 
     // Update verification with Python backend results
     const finalScore = parseFloat(pythonResponse.final_confidence.replace('%', '')) / 100;
@@ -122,7 +126,7 @@ export const getVerificationById = async (
   isAdmin: boolean = false
 ): Promise<any> => {
   const verification = await Verification.findById(id)
-    .populate('foundItemId', 'category description imageUrl location')
+    .populate('foundItemId', 'category description imageUrl location founderContact')
     .populate('ownerId', 'name email phone');
 
   if (!verification) {
@@ -157,7 +161,7 @@ export const getVerificationById = async (
 export const getVerificationsByOwner = async (ownerId: string): Promise<IVerification[]> => {
   const verifications = await Verification.find({ ownerId: new Types.ObjectId(ownerId) })
     .sort({ createdAt: -1 })
-    .populate('foundItemId', 'category description imageUrl location');
+    .populate('foundItemId', 'category description imageUrl location founderContact');
 
   return verifications;
 };
@@ -168,7 +172,7 @@ export const getVerificationsByOwner = async (ownerId: string): Promise<IVerific
 export const getAllVerifications = async (): Promise<IVerification[]> => {
   const verifications = await Verification.find()
     .sort({ createdAt: -1 })
-    .populate('foundItemId', 'category description imageUrl location')
+    .populate('foundItemId', 'category description imageUrl location founderContact')
     .populate('ownerId', 'name email phone');
 
   return verifications;

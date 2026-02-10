@@ -149,3 +149,39 @@ export const getAllFoundItemsForAdmin = async (): Promise<IFoundItem[]> => {
 
   return items;
 };
+
+/**
+ * Get multiple found items by IDs (batch operation)
+ */
+export const getFoundItemsByIds = async (ids: string[]): Promise<IFoundItem[]> => {
+  try {
+    // Validate and convert IDs to ObjectIds
+    const objectIds = ids
+      .filter(id => {
+        // Check if ID is a valid MongoDB ObjectId
+        if (Types.ObjectId.isValid(id)) {
+          return true;
+        }
+        console.warn(`Invalid ObjectId format: ${id}`);
+        return false;
+      })
+      .map(id => new Types.ObjectId(id));
+
+    if (objectIds.length === 0) {
+      console.warn('No valid ObjectIds found in the provided IDs');
+      return [];
+    }
+
+    const items = await FoundItem.find({
+      _id: { $in: objectIds }
+    })
+      .populate('createdBy', 'name email')
+      .sort({ createdAt: -1 });
+
+    console.log(`Found ${items.length} items out of ${objectIds.length} requested IDs`);
+    return items;
+  } catch (error) {
+    console.error('Error in getFoundItemsByIds:', error);
+    throw error;
+  }
+};

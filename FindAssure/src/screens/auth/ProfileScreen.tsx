@@ -6,7 +6,9 @@ import {
   TextInput, 
   StyleSheet, 
   ScrollView, 
-  Alert 
+  Alert,
+  Image,
+  TouchableOpacity,
 } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -25,14 +27,29 @@ const ProfileScreen = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [claimedItems, setClaimedItems] = useState<any[]>([]);
+  const [loadingClaimed, setLoadingClaimed] = useState(false);
 
   useEffect(() => {
     if (user) {
       setName(user.name || '');
       setEmail(user.email || '');
       setPhone(user.phone || '');
+      fetchClaimedItems();
     }
   }, [user]);
+
+  const fetchClaimedItems = async () => {
+    try {
+      setLoadingClaimed(true);
+      const items = await authApi.getClaimedItems();
+      setClaimedItems(items);
+    } catch (error: any) {
+      console.error('Failed to fetch claimed items:', error);
+    } finally {
+      setLoadingClaimed(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!name || !email || !phone) {
@@ -95,6 +112,9 @@ const ProfileScreen = () => {
               {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
             </Text>
           </View>
+          <Text style={styles.welcomeText}>
+            Welcome back, {user.name.split(' ')[0]}!
+          </Text>
           <Text style={styles.roleText}>Role: Item Owner</Text>
         </View>
 
@@ -139,14 +159,21 @@ const ProfileScreen = () => {
             loading={loading}
             style={styles.saveButton}
           />
-
-          <PrimaryButton
-            title="Logout"
-            onPress={handleLogout}
-            style={styles.logoutButton}
-            textStyle={styles.logoutButtonText}
-          />
         </View>
+
+        {/* Logout Button - Prominent */}
+        <TouchableOpacity 
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.logoutIcon}>🚪</Text>
+          <View style={styles.logoutContent}>
+            <Text style={styles.logoutTitle}>Logout</Text>
+            <Text style={styles.logoutSubtitle}>Sign out of your account</Text>
+          </View>
+          <Text style={styles.logoutArrow}>›</Text>
+        </TouchableOpacity>
 
         <View style={styles.infoSection}>
           <Text style={styles.infoTitle}>Account Information</Text>
@@ -160,6 +187,48 @@ const ProfileScreen = () => {
               {new Date(user.createdAt).toLocaleDateString()}
             </Text>
           </View>
+        </View>
+
+        {/* Claimed Items Section */}
+        <View style={styles.claimedSection}>
+          <Text style={styles.sectionTitle}>My Claimed Items</Text>
+          {loadingClaimed ? (
+            <Text style={styles.loadingText}>Loading claimed items...</Text>
+          ) : claimedItems.length === 0 ? (
+            <Text style={styles.emptyText}>No claimed items yet</Text>
+          ) : (
+            claimedItems.map((item, index) => (
+              <View key={index} style={styles.claimedItemCard}>
+                <Image
+                  source={{ uri: item.foundItemId?.imageUrl || 'https://via.placeholder.com/100' }}
+                  style={styles.itemImage}
+                />
+                <View style={styles.itemDetails}>
+                  <Text style={styles.itemCategory}>{item.foundItemId?.category}</Text>
+                  <Text style={styles.itemDescription} numberOfLines={2}>
+                    {item.foundItemId?.description}
+                  </Text>
+                  <Text style={styles.claimedDate}>
+                    Claimed: {new Date(item.createdAt).toLocaleDateString()}
+                  </Text>
+                  
+                  {/* Founder Contact Information */}
+                  <View style={styles.founderInfo}>
+                    <Text style={styles.founderTitle}>Founder Contact:</Text>
+                    <Text style={styles.founderText}>
+                      {item.foundItemId?.founderContact?.name || 'N/A'}
+                    </Text>
+                    <Text style={styles.founderText}>
+                      📧 {item.foundItemId?.founderContact?.email || 'N/A'}
+                    </Text>
+                    <Text style={styles.founderText}>
+                      📱 {item.foundItemId?.founderContact?.phone || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
         </View>
       </View>
     </ScrollView>
@@ -191,6 +260,13 @@ const styles = StyleSheet.create({
     fontSize: 40,
     color: '#FFFFFF',
     fontWeight: 'bold',
+  },
+  welcomeText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333333',
+    marginTop: 12,
+    marginBottom: 4,
   },
   roleText: {
     fontSize: 14,
@@ -238,18 +314,47 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   logoutButton: {
-    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
     borderWidth: 2,
     borderColor: '#E53935',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  logoutButtonText: {
+  logoutIcon: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  logoutContent: {
+    flex: 1,
+  },
+  logoutTitle: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#E53935',
+    marginBottom: 2,
+  },
+  logoutSubtitle: {
+    fontSize: 13,
+    color: '#999999',
+  },
+  logoutArrow: {
+    fontSize: 32,
+    color: '#E53935',
+    fontWeight: '300',
   },
   infoSection: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 20,
+    marginBottom: 20,
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -281,6 +386,83 @@ const styles = StyleSheet.create({
     color: '#666666',
     textAlign: 'center',
     marginTop: 40,
+  },
+  claimedSection: {
+    marginTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333333',
+    marginBottom: 16,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+    padding: 20,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#999999',
+    textAlign: 'center',
+    padding: 30,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+  },
+  claimedItemCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  itemImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 12,
+  },
+  itemDetails: {
+    flex: 1,
+  },
+  itemCategory: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4A90E2',
+    marginBottom: 4,
+  },
+  itemDescription: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 4,
+  },
+  claimedDate: {
+    fontSize: 12,
+    color: '#999999',
+    marginBottom: 8,
+  },
+  founderInfo: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE',
+  },
+  founderTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333333',
+    marginBottom: 4,
+  },
+  founderText: {
+    fontSize: 12,
+    color: '#666666',
+    marginBottom: 2,
   },
 });
 

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import * as itemService from '../services/itemService';
 import * as verificationService from '../services/verificationService';
 import * as geminiService from '../services/geminiService';
+import { User } from '../models/User';
 
 /**
  * Create a found item
@@ -70,12 +71,24 @@ export const listFoundItems = async (
 
     const filters: itemService.FoundItemFilters = {};
     if (category) filters.category = category as string;
-    if (status) filters.status = status as any;
+    
+    // If status is explicitly provided, use it
+    // Otherwise, exclude claimed items by default (only show available and pending_verification)
+    if (status) {
+      filters.status = status as any;
+    } else {
+      // Don't set a status filter - we'll filter in the query below
+    }
 
     const items = await itemService.listFoundItems(filters);
 
+    // Filter out claimed items unless explicitly requested
+    const filteredItems = status 
+      ? items 
+      : items.filter(item => item.status !== 'claimed');
+
     // For owner view, remove founderAnswers from all items
-    const itemsForOwner = items.map((item) => {
+    const itemsForOwner = filteredItems.map((item) => {
       const itemObj = item.toObject();
       const { founderAnswers, ...ownerView } = itemObj;
       return ownerView;
@@ -200,17 +213,48 @@ export const createVerification = async (
       return;
     }
 
-    const { foundItemId, ownerAnswers } = req.body;
+    // Parse form data - expect 'data' field with JSON
+    const dataField = req.body.data;
+    
+    if (!dataField) {
+      res.status(400).json({ message: 'Missing data field in request' });
+      return;
+    }
+
+    let parsedData;
+    try {
+      parsedData = typeof dataField === 'string' ? JSON.parse(dataField) : dataField;
+    } catch (error) {
+      res.status(400).json({ message: 'Invalid JSON in data field' });
+      return;
+    }
+
+    const { foundItemId, ownerAnswers } = parsedData;
 
     if (!foundItemId || !ownerAnswers) {
       res.status(400).json({ message: 'foundItemId and ownerAnswers are required' });
       return;
     }
 
+    // Extract video files from request
+    const files = req.files as Express.Multer.File[];
+    const videoFiles = new Map<string, any>();
+
+    if (files && files.length > 0) {
+      for (const file of files) {
+        videoFiles.set(file.fieldname, {
+          buffer: file.buffer,
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+        });
+      }
+    }
+
     const verification = await verificationService.createVerification({
       foundItemId,
       ownerId: req.user.id,
       ownerAnswers,
+      videoFiles,
     });
 
     res.status(201).json(verification);
@@ -298,6 +342,57 @@ export const generateQuestions = async (
     });
 
     res.status(200).json({ questions });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get multiple found items by IDs (batch)
+ * POST /api/items/found/batch
+ */
+export const getFoundItemsByIds = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { itemIds } = req.body;
+
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      res.status(400).json({ message: 'itemIds array is required' });
+      return;
+    }
+
+    // Limit batch size to prevent abuse
+    if (itemIds.length > 50) {
+      res.status(400).json({ message: 'Maximum 50 items can be fetched at once' });
+      return;
+    }
+
+    const items = await itemService.getFoundItemsByIds(itemIds);
+
+    res.status(200).json(items);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get all users (public endpoint for suggestion system)
+ * GET /api/items/users
+ */
+export const getAllUsersPublic = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    // Only return basic user info, exclude sensitive data
+    const users = await User.find()
+      .select('name email role createdAt firebaseUid')
+      .sort({ createdAt: -1 });
+    res.status(200).json(users);
   } catch (error) {
     next(error);
   }

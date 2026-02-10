@@ -1,4 +1,6 @@
 import axios from 'axios';
+import FormData from 'form-data';
+import { Readable } from 'stream';
 
 // Python backend URL
 const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:5000';
@@ -17,44 +19,65 @@ export interface PythonVerificationRequest {
   answers: PythonVerificationAnswer[];
 }
 
+export interface VideoFile {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+}
+
 export interface PythonVerificationResult {
   question_id: number;
-  local_nlp_score: string;
+  local_score: string;
   gemini_score: string | null;
   final_similarity: string;
   status: 'match' | 'partial_match' | 'mismatch';
-  local_explanation: string;
+  owner_transcript: string;
+  founder_answer: string;
   gemini_analysis: string | null;
 }
 
 export interface PythonVerificationResponse {
   owner_id: string;
   category: string;
-  average_local_score: string;
-  average_gemini_score: string | null;
   final_confidence: string;
   is_absolute_owner: boolean;
-  gemini_overall_score: string | null;
   gemini_recommendation: string;
   gemini_reasoning: string;
   results: PythonVerificationResult[];
 }
 
 /**
- * Call Python backend to verify ownership
+ * Call Python backend to verify ownership with video files
  */
 export const verifyOwnershipWithPython = async (
-  data: PythonVerificationRequest
+  data: PythonVerificationRequest,
+  videoFiles: Map<string, VideoFile>
 ): Promise<PythonVerificationResponse> => {
   try {
+    const formData = new FormData();
+
+    // Add JSON data as a string in the 'data' field
+    formData.append('data', JSON.stringify(data));
+
+    // Add video files with their corresponding keys
+    for (const [videoKey, file] of videoFiles.entries()) {
+      const stream = Readable.from(file.buffer);
+      formData.append(videoKey, stream, {
+        filename: file.originalname,
+        contentType: file.mimetype,
+      });
+    }
+
     const response = await axios.post<PythonVerificationResponse>(
       `${PYTHON_BACKEND_URL}/verify-owner`,
-      [data], // Python backend expects an array
+      formData,
       {
         headers: {
-          'Content-Type': 'application/json',
+          ...formData.getHeaders(),
         },
-        timeout: 60000, // 60 seconds timeout for AI processing
+        timeout: 120000, // 120 seconds timeout for video processing and AI analysis
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
       }
     );
 

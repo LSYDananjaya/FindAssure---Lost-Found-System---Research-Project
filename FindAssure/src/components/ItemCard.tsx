@@ -8,6 +8,16 @@ interface ItemCardProps {
 }
 
 export const ItemCard: React.FC<ItemCardProps> = ({ item, onPress }) => {
+  // Format location display - show first location
+  const formatLocation = () => {
+    if (!item.found_location || item.found_location.length === 0) return 'Location not specified';
+    const loc = item.found_location[0];
+    let locationStr = loc.location;
+    if (loc.floor_id) locationStr += ` - Floor: ${loc.floor_id}`;
+    if (loc.hall_name) locationStr += ` - ${loc.hall_name}`;
+    return locationStr;
+  };
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <Image 
@@ -26,7 +36,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onPress }) => {
           {item.description}
         </Text>
         <View style={styles.footer}>
-          <Text style={styles.location}>📍 {item.location}</Text>
+          <Text style={styles.location}>📍 {formatLocation()}</Text>
           <Text style={styles.date}>
             {new Date(item.createdAt).toLocaleDateString()}
           </Text>

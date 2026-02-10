@@ -26,7 +26,7 @@ const ReportFoundDetailsScreen = () => {
   const route = useRoute<ReportFoundDetailsRouteProp>();
   const { imageUri } = route.params;
 
-  const [category, setCategory] = useState(ITEM_CATEGORIES[0]);
+ const [category, setCategory] = useState<string>(ITEM_CATEGORIES[0]);
   const [description, setDescription] = useState('');
 
   const handleConfirm = () => {
@@ -72,7 +72,7 @@ const ReportFoundDetailsScreen = () => {
                 textAlignVertical="top"
               />
               <Text style={styles.helperText}>
-                Include color, brand, distinguishing features, etc.
+                Please add more specific item details
               </Text>
             </View>
 

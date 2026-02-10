@@ -74,7 +74,6 @@ export const RootNavigator = () => {
         headerTitleStyle: {
           fontWeight: '600',
         },
-        headerBackTitleVisible: false,
         headerBackTitle: '',
       }}
     >
@@ -89,7 +88,13 @@ export const RootNavigator = () => {
       <Stack.Screen 
         name="Home" 
         component={HomeScreen} 
-        options={{ title: 'Find Assure' }}
+        options={({ navigation }) => ({
+          title: 'Find Assure',
+          headerRight: () => {
+            // This will be handled by HomeScreen's useLayoutEffect
+            return null;
+          },
+        })}
       />
       
       {/* Auth Screens */}

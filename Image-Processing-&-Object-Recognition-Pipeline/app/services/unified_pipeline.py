@@ -2,13 +2,22 @@ from typing import Any, Dict, List, Optional
 from PIL import Image
 import os
 import uuid
+import logging
 import numpy as np
 
 from app.services.yolo_service import YoloService
 from app.services.florence_service import FlorenceService
-from app.services.gemini_reasoner import GeminiReasoner
+from app.services.gemini_reasoner import (
+    GeminiReasoner,
+    GeminiFatalError,
+    GeminiTransientError,
+    REASONING_FAILED_MESSAGE,
+    RETRYABLE_UNAVAILABLE_MESSAGE,
+)
 from app.services.dino_embedder import DINOEmbedder
 # from app.domain.category_specs import ALLOWED_LABELS # Removed restriction
+
+logger = logging.getLogger(__name__)
 
 class UnifiedPipeline:
     def __init__(self):
@@ -116,7 +125,62 @@ class UnifiedPipeline:
             }
 
             # 5. Reason (Gemini)
-            gemini_result = self.gemini.run_phase1(evidence, crop_image=crop)
+            gemini_error_meta = None
+            try:
+                gemini_result = self.gemini.run_phase1(evidence, crop_image=crop)
+            except GeminiTransientError as exc:
+                logger.warning(
+                    "PP1_GEMINI_TRANSIENT_FALLBACK status_code=%s provider_status=%s",
+                    exc.status_code,
+                    exc.provider_status,
+                )
+                gemini_error_meta = exc.to_dict()
+                gemini_result = {
+                    "status": "rejected",
+                    "message": RETRYABLE_UNAVAILABLE_MESSAGE,
+                    "label": detection.label,
+                    "color": None,
+                    "category_details": {"features": [], "defects": [], "attachments": []},
+                    "key_count": None,
+                    "final_description": None,
+                    "tags": [],
+                }
+            except GeminiFatalError as exc:
+                logger.warning(
+                    "PP1_GEMINI_FATAL_FALLBACK status_code=%s provider_status=%s",
+                    exc.status_code,
+                    exc.provider_status,
+                )
+                gemini_error_meta = exc.to_dict()
+                gemini_result = {
+                    "status": "rejected",
+                    "message": REASONING_FAILED_MESSAGE,
+                    "label": detection.label,
+                    "color": None,
+                    "category_details": {"features": [], "defects": [], "attachments": []},
+                    "key_count": None,
+                    "final_description": None,
+                    "tags": [],
+                }
+            except Exception as exc:
+                logger.exception("PP1_GEMINI_UNKNOWN_ERROR")
+                gemini_error_meta = {
+                    "type": "gemini_unknown_error",
+                    "status_code": None,
+                    "retryable": False,
+                    "provider_status": None,
+                    "message": str(exc),
+                }
+                gemini_result = {
+                    "status": "rejected",
+                    "message": REASONING_FAILED_MESSAGE,
+                    "label": detection.label,
+                    "color": None,
+                    "category_details": {"features": [], "defects": [], "attachments": []},
+                    "key_count": None,
+                    "final_description": None,
+                    "tags": [],
+                }
             
             # 6. Embeddings (DINOv2)
             # We embed the CROP to get object-centric embeddings
@@ -129,12 +193,24 @@ class UnifiedPipeline:
                 vec_768_list = vec_768.tolist()
                 vec_128_list = vec_128.tolist()
             except Exception as e:
-                print(f"Embedding failed: {e}")
+                logger.warning("Embedding failed: %s", e)
                 # Keep empty lists
 
             # 7. Construct Final Response
             status = gemini_result.get("status", "rejected")
             
+            raw_payload = {
+                "yolo": {
+                    "label": detection.label,
+                    "confidence": detection.confidence,
+                    "bbox": detection.bbox
+                },
+                "florence": analysis,
+                "gemini": gemini_result
+            }
+            if gemini_error_meta is not None:
+                raw_payload["gemini_error"] = gemini_error_meta
+
             response = {
                 "status": status,
                 "message": gemini_result.get("message", "Success" if status == "accepted" else "Rejected by Gemini"),
@@ -158,15 +234,7 @@ class UnifiedPipeline:
                     "vector_128d": vec_128_list,
                     "vector_dinov2": vec_768_list
                 },
-                "raw": {
-                    "yolo": {
-                        "label": detection.label,
-                        "confidence": detection.confidence,
-                        "bbox": detection.bbox
-                    },
-                    "florence": analysis,
-                    "gemini": gemini_result
-                }
+                "raw": raw_payload
             }
             results.append(response)
         

@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     FAISS_INDEX_PATH: str = "./data/faiss.index"
     FAISS_MAPPING_PATH: str = "./data/faiss_mapping.json"
     PP2_SIM_THRESHOLD: float = 0.85
+    GOOGLE_API_KEY: str | None = None
+    GEMINI_API_KEY: str | None = None
 
     class Config:
         env_file = ".env"

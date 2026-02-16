@@ -191,7 +191,8 @@ graph TD
    - **Key Count VQA** — Conditional: only for `Key` category, asks "How many keys?"
    - **Phrase Grounding** — Uses `CATEGORY_SPECS` to physically locate features, defects, and attachments with bounding boxes. Phrases are chunked to avoid prompt overflow.
    - **Attachment VQA Validation** — Verifies detected attachments via yes/no VQA.
-5. **Reasoning (Gemini 3 Flash)** — Receives the crop image + full evidence JSON. An **evidence-locked prompt** instructs Gemini to strictly synthesize (not hallucinate) structured JSON: `label`, `color`, `features`, `defects`, `attachments`, `key_count`, `description`.
+5. **Reasoning (Gemini 3 Flash)** — Receives the crop image + full evidence JSON. An **evidence-locked prompt** instructs Gemini to strictly synthesize (not hallucinate) structured JSON: `label`, `color`, `features`, `defects`, `attachments`, `key_count`, `description`.  
+   - **Resilience behavior:** transient provider outages (for example `503 UNAVAILABLE`) are retried once, then degraded to a standard PP1 rejected payload with message: `"Reasoning service temporarily unavailable. Please retry."` so `/pp1/analyze` remains available.
 6. **Embedding (DINOv2)** — The crop is embedded via the DINOv2 CLS token (768d), then projected to 128d via a deterministic random Gaussian matrix. Both vectors are returned.
 
 ---

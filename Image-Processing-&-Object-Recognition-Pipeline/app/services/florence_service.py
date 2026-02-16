@@ -19,6 +19,8 @@ Notes:
 - Loads model from local path: app/models/florence2-base-ft/
 - Fails fast if model path is missing.
 - Uses CATEGORY_SPECS for grounding candidates.
+- For PP2, list-style grounded fields are normalized in the pipeline into
+  a strict dict-based `grounded_features` contract.
 """
 
 from __future__ import annotations

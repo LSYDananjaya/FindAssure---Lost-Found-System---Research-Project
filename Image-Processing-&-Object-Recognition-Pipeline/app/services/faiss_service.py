@@ -163,6 +163,10 @@ class FaissService:
         
         return float(scores[0][0])
 
+    def compute_similarity(self, vec_a: np.ndarray, vec_b: np.ndarray) -> float:
+        """Backward-compatible alias for legacy callers."""
+        return self.pair_similarity(vec_a, vec_b)
+
     def save(self) -> None:
         """Save index and mapping to disk."""
         with self.lock:

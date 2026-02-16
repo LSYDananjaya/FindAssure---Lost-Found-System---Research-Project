@@ -4,12 +4,14 @@ from typing import List
 import shutil
 import os
 import uuid
+import logging
 
 from app.core.lifespan import lifespan
 from app.services.unified_pipeline import UnifiedPipeline
 from app.routers import pp2_router
 
 app = FastAPI(title="Vision Core Backend", lifespan=lifespan)
+logger = logging.getLogger(__name__)
 
 app.include_router(pp2_router.router, prefix="/pp2", tags=["Phase 2"])
 
@@ -52,7 +54,13 @@ async def analyze_pp1(files: List[UploadFile] = File(...)):
             shutil.copyfileobj(file.file, buffer)
             
         # Call the new pipeline
-        result = pipeline.process_pp1(temp_path)
+        try:
+            result = pipeline.process_pp1(temp_path)
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("PP1 processing failed unexpectedly.")
+            raise HTTPException(status_code=500, detail="PP1 processing failed")
         return result
         
     finally:

@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import io
 from PIL import Image
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import UploadFile
 
 from app.schemas.pp2_schemas import (
@@ -40,6 +40,84 @@ class MultiViewPipeline:
         self.verifier = verifier
         self.fusion = fusion
         self.faiss = faiss
+
+    @staticmethod
+    def _normalize_string_list(value: Any) -> List[str]:
+        """Coerce mixed list payloads into clean string lists."""
+        if not isinstance(value, list):
+            return []
+
+        out: List[str] = []
+        for item in value:
+            if item is None:
+                continue
+            text = item if isinstance(item, str) else str(item)
+            text = text.strip()
+            if text:
+                out.append(text)
+        return out
+
+    def _normalize_extraction_payload(self, extraction_data: Any) -> Dict[str, Any]:
+        """
+        Normalize extractor output into the PP2 extraction contract.
+        Ensures grounded_features is always a dict and OCR uses ocr_text first.
+        """
+        data = extraction_data if isinstance(extraction_data, dict) else {}
+
+        caption_raw = data.get("caption", "")
+        caption = caption_raw if isinstance(caption_raw, str) else str(caption_raw or "")
+
+        if "ocr_text" in data:
+            ocr_raw = data.get("ocr_text", "")
+        else:
+            ocr_raw = data.get("ocr", "")
+
+        if isinstance(ocr_raw, list):
+            ocr_text = " ".join(self._normalize_string_list(ocr_raw))
+        elif ocr_raw is None:
+            ocr_text = ""
+        else:
+            ocr_text = ocr_raw if isinstance(ocr_raw, str) else str(ocr_raw)
+
+        grounded_raw = data.get("grounded_features", {})
+        if isinstance(grounded_raw, dict):
+            grounded_features: Dict[str, Any] = dict(grounded_raw)
+        elif isinstance(grounded_raw, list):
+            grounded_features = {"features": self._normalize_string_list(grounded_raw)}
+        else:
+            grounded_features = {}
+
+        defects = self._normalize_string_list(data.get("grounded_defects"))
+        if defects:
+            existing = grounded_features.get("defects")
+            if isinstance(existing, list):
+                grounded_features["defects"] = self._normalize_string_list(existing) + defects
+            elif "defects" not in grounded_features:
+                grounded_features["defects"] = defects
+
+        attachments = self._normalize_string_list(data.get("grounded_attachments"))
+        if attachments:
+            existing = grounded_features.get("attachments")
+            if isinstance(existing, list):
+                grounded_features["attachments"] = self._normalize_string_list(existing) + attachments
+            elif "attachments" not in grounded_features:
+                grounded_features["attachments"] = attachments
+
+        color_vqa = data.get("color_vqa")
+        if isinstance(color_vqa, str):
+            color_vqa = color_vqa.strip()
+            if color_vqa and "color" not in grounded_features:
+                grounded_features["color"] = color_vqa
+
+        key_count = data.get("key_count")
+        if isinstance(key_count, int) and not isinstance(key_count, bool) and "key_count" not in grounded_features:
+            grounded_features["key_count"] = key_count
+
+        return {
+            "caption": caption,
+            "ocr_text": ocr_text,
+            "grounded_features": grounded_features,
+        }
 
     def _load_image(self, file: UploadFile) -> Image.Image:
         """Loads UploadFile bytes into a PIL Image."""
@@ -107,15 +185,11 @@ class MultiViewPipeline:
             # Using analyze_crop which handles caption, ocr, grounding
             # We pass cls_name to help grounding if needed, or leave generic
             extraction_data = self.florence.analyze_crop(crop, canonical_label=cls_name)
-            
-            # Parse extraction data
-            caption = extraction_data.get("caption", "")
-            ocr_text = extraction_data.get("ocr", "")
-            # Assuming analyze_crop returns flat OCR string or we join list
-            if isinstance(ocr_text, list):
-                ocr_text = " ".join(ocr_text)
-                
-            grounded = extraction_data.get("grounded_features", {})
+
+            normalized = self._normalize_extraction_payload(extraction_data)
+            caption = normalized["caption"]
+            ocr_text = normalized["ocr_text"]
+            grounded = normalized["grounded_features"]
             
             # D. Embedding (DINO)
             # Used for verification

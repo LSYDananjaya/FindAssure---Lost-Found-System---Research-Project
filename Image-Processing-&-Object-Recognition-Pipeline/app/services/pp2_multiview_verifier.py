@@ -2,7 +2,6 @@ from typing import List, Dict, Any
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from app.schemas.pp2_schemas import PP2PerViewResult, PP2VerificationResult
-from app.services.pp2_services import FaissService
 from app.services.pp2_geometric_verifier import GeometricVerifier
 from app.config.settings import settings
 
@@ -22,7 +21,24 @@ class MultiViewVerifier:
         sims = cosine_similarity(matrix)
         return sims.tolist()
 
-    def compute_faiss_matrix(self, vectors: List[np.ndarray], faiss_service: FaissService) -> List[List[float]]:
+    def _pair_sim(self, faiss_service: Any, vec_a: np.ndarray, vec_b: np.ndarray) -> float:
+        """
+        Resolve pairwise similarity from either modern or legacy FAISS service contracts.
+        """
+        pair_similarity = getattr(faiss_service, "pair_similarity", None)
+        if callable(pair_similarity):
+            return float(pair_similarity(vec_a, vec_b))
+
+        compute_similarity = getattr(faiss_service, "compute_similarity", None)
+        if callable(compute_similarity):
+            return float(compute_similarity(vec_a, vec_b))
+
+        raise ValueError(
+            "FAISS service must implement 'pair_similarity(vec_a, vec_b)' "
+            "or legacy 'compute_similarity(vec_a, vec_b)'."
+        )
+
+    def compute_faiss_matrix(self, vectors: List[np.ndarray], faiss_service: Any) -> List[List[float]]:
         """Computes 3x3 similarity matrix using FaissService logic."""
         n = len(vectors)
         matrix = [[0.0] * n for _ in range(n)]
@@ -32,7 +48,7 @@ class MultiViewVerifier:
                 if i == j:
                     matrix[i][j] = 1.0
                 else:
-                    matrix[i][j] = faiss_service.compute_similarity(vectors[i], vectors[j])
+                    matrix[i][j] = self._pair_sim(faiss_service, vectors[i], vectors[j])
         return matrix
 
     def semantic_consistency_checks(self, per_view: List[PP2PerViewResult]) -> List[str]:
@@ -63,7 +79,7 @@ class MultiViewVerifier:
         per_view_results: List[PP2PerViewResult], 
         vectors: List[np.ndarray], 
         crops,  # List of PIL Images
-        faiss_service: FaissService
+        faiss_service: Any
     ) -> PP2VerificationResult:
         
         # 1. Similarity Matrices

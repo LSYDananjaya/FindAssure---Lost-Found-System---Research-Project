@@ -23,6 +23,8 @@ Key design goals:
 - Attachments semantics: attachment must be a separate physical add-on attached to the main object.
   Built-in parts (holes/slots/handles that are part of the object) are NOT attachments.
 - Optional attachment verification pass: yes/no VQA per attachment to reduce hallucinations.
+- For PP2, list-style grounded fields are normalized in the pipeline into
+  a strict dict-based `grounded_features` contract.
 """
 
 from __future__ import annotations

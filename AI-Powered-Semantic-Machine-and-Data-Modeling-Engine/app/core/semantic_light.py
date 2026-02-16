@@ -23,7 +23,7 @@ class LightweightSemanticEngine:
         return cls._instance
 
     def _initialize(self):
-        print("🤖 Loading Lightweight Semantic Engine...")
+        print("Loading Lightweight Semantic Engine...")
         print("   Using TF-IDF for semantic matching (No GPU/PyTorch required)")
         
         # TF-IDF vectorizer with optimized parameters
@@ -42,7 +42,7 @@ class LightweightSemanticEngine:
         self.item_vectors = None
         self.fitted = False
         
-        print("✅ Engine initialized")
+        print("Engine initialized")
 
     def _preprocess_text(self, text: str) -> str:
         """Clean and normalize text"""
@@ -74,9 +74,9 @@ class LightweightSemanticEngine:
                     "created_at": datetime.utcnow()
                 }
                 await db.found_items.insert_one(document)
-                print(f"💾 Saved to MongoDB: {item_data['id']}")
+                print(f"Saved to MongoDB: {item_data['id']}")
         except Exception as e:
-            print(f"⚠️ MongoDB save failed: {e}")
+            print(f"MongoDB save failed: {e}")
         
         return item_data['id']
 
@@ -85,17 +85,17 @@ class LightweightSemanticEngine:
         try:
             db = get_database()
             if db is None:
-                print("⚠️ MongoDB connection is None")
+                print("MongoDB connection is None")
                 return
             
             cursor = db.found_items.find().sort("created_at", 1)
             items = await cursor.to_list(length=None)
             
             if not items:
-                print("📭 No items found in MongoDB")
+                print("No items found in MongoDB")
                 return
             
-            print(f"📥 Loading {len(items)} items from MongoDB...")
+            print(f"Loading {len(items)} items from MongoDB...")
             
             # Clear and rebuild
             self.items_metadata = []
@@ -109,12 +109,12 @@ class LightweightSemanticEngine:
             # Refit vectorizer
             self._fit_vectorizer()
             
-            print(f"✅ Loaded {len(items)} items from MongoDB")
+            print(f"Loaded {len(items)} items from MongoDB")
             
         except Exception as e:
             import traceback
-            print(f"⚠️ Could not load from MongoDB: {str(e)}")
-            print(f"📋 Full error: {traceback.format_exc()}")
+            print(f"Could not load from MongoDB: {str(e)}")
+            print(f"Full error: {traceback.format_exc()}")
 
     def _fit_vectorizer(self):
         """Fit TF-IDF vectorizer on all item descriptions"""
@@ -124,7 +124,7 @@ class LightweightSemanticEngine:
         descriptions = [item['description'] for item in self.items_metadata]
         self.item_vectors = self.vectorizer.fit_transform(descriptions)
         self.fitted = True
-        print(f"   📊 Vectorizer fitted on {len(descriptions)} descriptions")
+        print(f"   Vectorizer fitted on {len(descriptions)} descriptions")
 
     def search(self, query_text: str, limit: int = 10, category_filter: str = None):
         """Search for matching items"""

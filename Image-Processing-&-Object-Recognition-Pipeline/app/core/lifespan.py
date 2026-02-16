@@ -1,0 +1,116 @@
+import os
+import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from app.config.settings import settings
+
+# Core
+from app.core.redis_client import get_redis_client
+from app.core.db import engine, Base
+
+# Services
+from app.services.yolo_service import YoloService
+from app.services.florence_service import FlorenceService
+from app.services.dino_embedder import DINOEmbedder
+from app.services.faiss_service import FaissService
+from app.services.pp2_geometric_verifier import GeometricVerifier
+from app.services.pp2_multiview_verifier import MultiViewVerifier
+from app.services.pp2_fusion_service import MultiViewFusionService
+from app.services.pp2_multiview_pipeline import MultiViewPipeline
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Constants
+FAISS_DIM = 128 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup ---
+    logger.info("Starting up application lifecycle...")
+
+    # 1. Check/Create data directory
+    os.makedirs("data", exist_ok=True)
+
+    # 2. Initialize Redis
+    redis = get_redis_client()
+    if redis:
+        try:
+            if redis.ping():
+                logger.info("Redis connection established successfully.")
+            else:
+                logger.warning("Redis ping returned False.")
+        except Exception as e:
+            logger.error(f"Redis initialization/ping failed: {e}")
+    else:
+        logger.warning("Redis client is None.")
+
+    # 3. Database Connection Check
+    try:
+        logger.info("Database engine configured.")
+    except Exception as e:
+        logger.error(f"Database configuration warning: {e}")
+
+    # 4. Initialize Services
+    try:
+        logger.info("Initializing ML Services and Vectors...")
+
+        # Initialize FaissService
+        faiss_service = FaissService(
+            dim=FAISS_DIM,
+            index_path=settings.FAISS_INDEX_PATH,
+            mapping_path=settings.FAISS_MAPPING_PATH
+        )
+        faiss_service.load_or_create()
+
+        # Initialize Model Services
+        yolo_service = YoloService()
+        florence_service = FlorenceService()
+        dino_embedder = DINOEmbedder()
+
+        # Initialize Logic Services
+        geometric_verifier = GeometricVerifier()
+        multiview_verifier = MultiViewVerifier(geometric_service=geometric_verifier)
+        fusion_service = MultiViewFusionService()
+
+        # Initialize Pipeline
+        pipeline = MultiViewPipeline(
+            yolo=yolo_service,
+            florence=florence_service,
+            dino=dino_embedder,
+            verifier=multiview_verifier,
+            fusion=fusion_service,
+            faiss=faiss_service
+        )
+
+        # 5. Store in App State
+        app.state.multiview_pipeline = pipeline
+        logger.info("MultiViewPipeline initialized and stored in app.state.")
+
+    except Exception as e:
+        logger.critical(f"Critical failure during service initialization: {e}")
+        raise e
+
+    yield
+
+    # --- Shutdown ---
+    logger.info("Shutting down application...")
+
+    # 1. Save FAISS Index
+    if hasattr(app.state, "multiview_pipeline") and app.state.multiview_pipeline:
+        try:
+            if app.state.multiview_pipeline.faiss:
+                app.state.multiview_pipeline.faiss.save()
+        except Exception as e:
+            logger.error(f"Error saving FAISS index during shutdown: {e}")
+
+    # 2. Clear State
+    app.state.multiview_pipeline = None
+
+    # 3. Close Redis
+    if redis:
+        try:
+            redis.close()
+            logger.info("Redis connection closed.")
+        except Exception as e:
+            logger.error(f"Error closing Redis connection: {e}")

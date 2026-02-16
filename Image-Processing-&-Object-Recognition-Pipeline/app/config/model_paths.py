@@ -26,3 +26,11 @@ FLORENCE2_MODEL_PATH = os.path.join(BASE_MODELS_DIR, "florence2-base-ft")
 
 # --- YOLO Configuration ---
 FINAL_MASTER_MODEL_PATH = os.path.join(BASE_MODELS_DIR, "final_master_model.pt")
+
+# --- FAISS Configuration ---
+# Ensure the data directory exists
+from app.config.settings import settings
+DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../data"))
+FAISS_INDEX_PATH = settings.FAISS_INDEX_PATH
+FAISS_MAPPING_PATH = settings.FAISS_MAPPING_PATH
+

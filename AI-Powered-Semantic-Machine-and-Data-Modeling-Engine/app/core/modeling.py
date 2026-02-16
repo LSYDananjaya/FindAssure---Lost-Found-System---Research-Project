@@ -17,9 +17,9 @@ class DataModelingEngine:
         if os.path.exists(settings.GRAPH_PATH):
             with open(settings.GRAPH_PATH, 'rb') as f:
                 self.graph = pickle.load(f)
-            print("✅ Knowledge Graph Loaded.")
+            print("Knowledge Graph Loaded.")
         else:
-            print("⚠️ Graph not found. Initializing empty graph.")
+            print("Graph not found. Initializing empty graph.")
             self.graph = nx.Graph()
 
     def get_context(self, category: str):

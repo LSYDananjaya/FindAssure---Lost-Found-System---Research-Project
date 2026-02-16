@@ -1,4 +1,5 @@
 {
+<<<<<<< Updated upstream
     "python-envs.pythonProjects": [
         {
             "path": "",
@@ -6,4 +7,9 @@
             "packageManager": "ms-python.python:conda"
         }
     ]
+=======
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python-envs.pythonProjects": []
+>>>>>>> Stashed changes
 }

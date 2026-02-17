@@ -16,11 +16,77 @@ This module stores the "ready-to-paste" prompt templates requested.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import json
+import logging
 import re
+import time
 
 from app.domain.category_specs import ALLOWED_LABELS, CATEGORY_SPECS, canonicalize_label
+
+logger = logging.getLogger(__name__)
+
+TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
+TRANSIENT_PROVIDER_STATUSES = {
+    "UNAVAILABLE",
+    "RESOURCE_EXHAUSTED",
+    "DEADLINE_EXCEEDED",
+    "INTERNAL",
+    "ABORTED",
+    "UNKNOWN",
+}
+FATAL_PROVIDER_STATUSES = {"UNAUTHENTICATED", "PERMISSION_DENIED", "INVALID_ARGUMENT"}
+
+RETRYABLE_UNAVAILABLE_MESSAGE = "Reasoning service temporarily unavailable. Please retry."
+REASONING_FAILED_MESSAGE = "Reasoning failed."
+
+
+class GeminiServiceError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: Optional[int] = None,
+        provider_status: Optional[str] = None,
+        retryable: bool = False,
+        error_type: str = "gemini_error",
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.provider_status = provider_status
+        self.retryable = retryable
+        self.error_type = error_type
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "type": self.error_type,
+            "status_code": self.status_code,
+            "retryable": self.retryable,
+            "provider_status": self.provider_status,
+            "message": str(self),
+        }
+
+
+class GeminiTransientError(GeminiServiceError):
+    def __init__(self, message: str, *, status_code: Optional[int] = None, provider_status: Optional[str] = None) -> None:
+        super().__init__(
+            message,
+            status_code=status_code,
+            provider_status=provider_status,
+            retryable=True,
+            error_type="gemini_transient_error",
+        )
+
+
+class GeminiFatalError(GeminiServiceError):
+    def __init__(self, message: str, *, status_code: Optional[int] = None, provider_status: Optional[str] = None) -> None:
+        super().__init__(
+            message,
+            status_code=status_code,
+            provider_status=provider_status,
+            retryable=False,
+            error_type="gemini_fatal_error",
+        )
 
 
 # ----------------------------
@@ -196,6 +262,7 @@ class GeminiReasoner:
     def __init__(self, model_name: str = "gemini-3-flash-preview") -> None:
         self.model_name = model_name
         self._client = None
+        self._retry_delay_seconds = 0.5
 
     def _load_client(self) -> None:
         if self._client is not None:
@@ -217,7 +284,35 @@ class GeminiReasoner:
             
         self._client = genai.Client(api_key=api_key)
 
-    def _generate_text(self, prompt: str, images: Optional[List[Any]] = None) -> str:
+    @staticmethod
+    def _extract_provider_status(exc: Exception) -> Optional[str]:
+        response_json = getattr(exc, "response_json", None)
+        if isinstance(response_json, dict):
+            error = response_json.get("error")
+            if isinstance(error, dict):
+                status = error.get("status")
+                if isinstance(status, str):
+                    return status
+        return None
+
+    def _classify_gemini_exception(self, exc: Exception) -> GeminiServiceError:
+        status_code_raw = getattr(exc, "status_code", None)
+        status_code = int(status_code_raw) if isinstance(status_code_raw, int) else None
+        provider_status = self._extract_provider_status(exc)
+        message = str(exc)
+
+        if status_code in TRANSIENT_STATUS_CODES:
+            return GeminiTransientError(message, status_code=status_code, provider_status=provider_status)
+
+        if provider_status in TRANSIENT_PROVIDER_STATUSES:
+            return GeminiTransientError(message, status_code=status_code, provider_status=provider_status)
+
+        if provider_status in FATAL_PROVIDER_STATUSES or status_code in {400, 401, 403}:
+            return GeminiFatalError(message, status_code=status_code, provider_status=provider_status)
+
+        return GeminiFatalError(message, status_code=status_code, provider_status=provider_status)
+
+    def _generate_text_once(self, prompt: str, images: Optional[List[Any]] = None) -> str:
         self._load_client()
         assert self._client is not None
         
@@ -225,11 +320,17 @@ class GeminiReasoner:
         if images:
             contents.extend(images)
 
-        # google-genai API shape can differ by version; adapt if needed.
-        resp = self._client.models.generate_content(
-            model=self.model_name,
-            contents=contents,
-        )
+        try:
+            # google-genai API shape can differ by version; adapt if needed.
+            resp = self._client.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+            )
+        except GeminiServiceError:
+            raise
+        except Exception as exc:
+            raise self._classify_gemini_exception(exc) from exc
+
         # resp.text is common; otherwise try candidates.
         text = getattr(resp, "text", None)
         if text:
@@ -240,6 +341,29 @@ class GeminiReasoner:
         except Exception:
             return str(resp)
 
+    def _generate_text(self, prompt: str, images: Optional[List[Any]] = None) -> str:
+        attempts = 2
+        for attempt in range(1, attempts + 1):
+            try:
+                output = self._generate_text_once(prompt, images=images)
+                if attempt > 1:
+                    logger.info("Gemini request succeeded after retry.")
+                return output
+            except GeminiTransientError as exc:
+                if attempt < attempts:
+                    logger.warning(
+                        "Gemini transient failure (attempt %s/%s): status_code=%s provider_status=%s",
+                        attempt,
+                        attempts,
+                        exc.status_code,
+                        exc.provider_status,
+                    )
+                    time.sleep(self._retry_delay_seconds)
+                    continue
+                raise
+
+        raise GeminiFatalError("Gemini generation failed unexpectedly.")
+
     def extract_category_details(self, evidence_json: Dict[str, Any], crop_image: Optional[Any] = None) -> Dict[str, Any]:
         """
         Strict extractor function for Phase 1.
@@ -247,8 +371,16 @@ class GeminiReasoner:
         # Extract context
         detection = evidence_json.get("detection", {})
         crop_analysis = evidence_json.get("crop_analysis", {})
+        canonical_label_in = evidence_json.get("canonical_label")
+        label_lock = bool(evidence_json.get("label_lock", False))
+        label_candidates_raw = evidence_json.get("label_candidates", [])
+        label_candidates = [
+            str(label).strip()
+            for label in (label_candidates_raw if isinstance(label_candidates_raw, list) else [])
+            if str(label).strip()
+        ]
         
-        raw_label = detection.get("label", "Unknown")
+        raw_label = canonical_label_in if canonical_label_in else detection.get("label", "Unknown")
         label = canonicalize_label(raw_label) or raw_label
         
         color = crop_analysis.get("color_vqa")
@@ -290,6 +422,14 @@ class GeminiReasoner:
             DEFECT_LIST=json.dumps(defect_list, indent=2),
             ATTACHMENT_LIST=json.dumps(attachment_list, indent=2)
         )
+        if label_lock:
+            prompt += (
+                "\n\nCATEGORY LOCK (MANDATORY):\n"
+                f"- CANONICAL_LABEL: {label}\n"
+                f"- LABEL_CANDIDATES: {json.dumps(label_candidates)}\n"
+                "- DO NOT change category.\n"
+                "- You MUST keep the category as CANONICAL_LABEL and only extract details.\n"
+            )
 
         images = [crop_image] if crop_image else None
         text = self._generate_text(prompt, images=images)

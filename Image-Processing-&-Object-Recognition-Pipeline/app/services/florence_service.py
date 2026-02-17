@@ -19,18 +19,26 @@ Notes:
 - Loads model from local path: app/models/florence2-base-ft/
 - Fails fast if model path is missing.
 - Uses CATEGORY_SPECS for grounding candidates.
+- For PP2, list-style grounded fields are normalized in the pipeline into
+  a strict dict-based `grounded_features` contract.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import os
 import re
+import logging
+import time
 
 from PIL import Image
 
 from app.domain.category_specs import canonicalize_label, CATEGORY_SPECS
+from app.config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -197,6 +205,9 @@ class FlorenceService:
 
         self.torch_dtype = torch_dtype
         self.max_new_tokens = max_new_tokens
+        self.fast_max_new_tokens = settings.FLORENCE_FAST_MAX_NEW_TOKENS
+        self.fast_num_beams = settings.FLORENCE_FAST_NUM_BEAMS
+        self.perf_profile = str(settings.PERF_PROFILE).lower()
 
         self._processor = None
         self._model = None
@@ -266,7 +277,13 @@ class FlorenceService:
             self._model.to(self.device)
         self._model.eval()
 
-    def _run_task(self, image: Image.Image, task: str, text: Optional[str] = None) -> Dict[str, Any]:
+    def _run_task(
+        self,
+        image: Image.Image,
+        task: str,
+        text: Optional[str] = None,
+        profile: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Run a Florence task and return post-processed JSON when possible.
 
@@ -284,11 +301,19 @@ class FlorenceService:
         if self.device:
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
+        profile_key = (profile or self.perf_profile or "balanced").lower()
+        if profile_key == "fast":
+            max_tokens = self.fast_max_new_tokens
+            num_beams = self.fast_num_beams
+        else:
+            max_tokens = self.max_new_tokens
+            num_beams = 3
+
         with torch.no_grad():
             generated_ids = self._model.generate(
                 **inputs,
-                max_new_tokens=self.max_new_tokens,
-                num_beams=3,
+                max_new_tokens=max_tokens,
+                num_beams=num_beams,
                 do_sample=False,
             )
 
@@ -364,13 +389,13 @@ class FlorenceService:
             print(f"Florence detection error: {e}")
             return []
 
-    def caption(self, image: Image.Image, detailed: bool = True) -> str:
+    def caption(self, image: Image.Image, detailed: bool = True, profile: Optional[str] = None) -> str:
         # Try multiple levels of detail if requested
         tasks = ["<MORE_DETAILED_CAPTION>", "<DETAILED_CAPTION>", "<CAPTION>"] if detailed else ["<CAPTION>"]
         
         for task in tasks:
             try:
-                out = self._run_task(image, task)
+                out = self._run_task(image, task, profile=profile)
                 # Check standard keys
                 for k in (task, "caption", "CAPTION", "DETAILED_CAPTION", "MORE_DETAILED_CAPTION"):
                     if k in out and isinstance(out[k], str) and out[k].strip():
@@ -386,12 +411,12 @@ class FlorenceService:
                 
         return ""
 
-    def vqa(self, image: Image.Image, question: str) -> str:
+    def vqa(self, image: Image.Image, question: str, profile: Optional[str] = None) -> str:
         """
         VQA task. Returns a plain short answer string.
         """
         try:
-            out = self._run_task(image, "<VQA>", question)
+            out = self._run_task(image, "<VQA>", question, profile=profile)
             # Different Florence revs return different keys.
             # Try common patterns.
             for k in ("answer", "vqa", "VQA", "<VQA>"):
@@ -412,12 +437,12 @@ class FlorenceService:
         except Exception:
             return ""
 
-    def ocr(self, image: Image.Image) -> str:
+    def ocr(self, image: Image.Image, profile: Optional[str] = None) -> str:
         """
         OCR task. Returns plain concatenated text. If OCR task unsupported, returns "".
         """
         try:
-            out = self._run_task(image, "<OCR>")
+            out = self._run_task(image, "<OCR>", profile=profile)
             # Some variants return {"text": "..."} or a list of lines.
             for k in ("text", "ocr", "<OCR>"):
                 val = out.get(k)
@@ -443,15 +468,92 @@ class FlorenceService:
         except Exception:
             return ""
 
-    def ground_phrases(self, image: Image.Image, text: str) -> Dict[str, Any]:
+    def ground_phrases(self, image: Image.Image, text: str, profile: Optional[str] = None) -> Dict[str, Any]:
         """
         Runs Phrase Grounding task (<CAPTION_TO_PHRASE_GROUNDING>).
         'text' should be a comma-separated list of phrases or a sentence.
         """
         # Florence-2 expects the task token and the text input
-        return self._run_task(image, "<CAPTION_TO_PHRASE_GROUNDING>", text)
+        return self._run_task(image, "<CAPTION_TO_PHRASE_GROUNDING>", text, profile=profile)
 
-    def analyze_crop(self, crop: Image.Image, canonical_label: Optional[str] = None) -> Dict[str, Any]:
+    @staticmethod
+    def _resize_for_lite(image: Image.Image, max_side: int = 512) -> Image.Image:
+        if not isinstance(image, Image.Image):
+            return image
+        w, h = image.size
+        if w <= 0 or h <= 0:
+            return image
+        longest = max(w, h)
+        if longest <= max_side:
+            return image
+
+        scale = float(max_side) / float(longest)
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+        return image.resize((new_w, new_h), Image.BILINEAR)
+
+    @staticmethod
+    def _run_with_timeout(fn, timeout_ms: int, *args, **kwargs):
+        timeout_sec = max(1, int(timeout_ms)) / 1000.0
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(fn, *args, **kwargs)
+            try:
+                return future.result(timeout=timeout_sec)
+            except FuturesTimeoutError as exc:
+                raise TimeoutError(f"Operation exceeded timeout of {timeout_ms} ms") from exc
+
+    def _analyze_crop_lite_core(self, crop: Image.Image, profile_key: str) -> Dict[str, Any]:
+        lite_prompt = (
+            "Return only what you can see about the main object. "
+            "Use one short factual sentence. If unsure, return empty."
+        )
+        guided_caption = self.vqa(crop, lite_prompt, profile=profile_key).strip()
+        sanitized_guided, _ = _sanitize_caption(guided_caption)
+
+        fallback_caption = ""
+        if not sanitized_guided:
+            fallback_caption_raw = self.caption(crop, detailed=False, profile=profile_key)
+            sanitized_fallback, _ = _sanitize_caption(fallback_caption_raw)
+            fallback_caption = sanitized_fallback.strip()
+
+        caption_candidate = sanitized_guided.strip() or fallback_caption
+        if caption_candidate:
+            first_sentence = re.split(r"(?<=[.!?])\s+", caption_candidate.strip())[0].strip()
+            final_caption = first_sentence
+        else:
+            final_caption = ""
+
+        ocr_text = self.ocr(crop, profile=profile_key)
+        color_q = (
+            "What is the primary color of the object? "
+            "Answer with a short phrase or 'unknown'."
+        )
+        color_vqa = self.vqa(crop, color_q, profile=profile_key).strip() or None
+        if color_vqa and color_vqa.lower() == "unknown":
+            color_vqa = None
+
+        return {
+            "caption": final_caption,
+            "ocr_text": ocr_text,
+            "color_vqa": color_vqa,
+            "grounded_features": [],
+            "grounded_defects": [],
+            "grounded_attachments": [],
+            "key_count": None,
+            "raw": {
+                "caption_source": "lite_caption",
+                "guided_caption": guided_caption,
+                "lite_prompt": lite_prompt,
+            },
+        }
+
+    def analyze_crop(
+        self,
+        crop: Image.Image,
+        canonical_label: Optional[str] = None,
+        profile: Optional[str] = None,
+        mode: str = "full",
+    ) -> Dict[str, Any]:
         """
         Evidence extraction on a crop.
 
@@ -463,11 +565,74 @@ class FlorenceService:
         5. Phrase Grounding (Features, Defects, Attachments) - Split calls.
         6. Defects VQA (Extra evidence).
         """
+        profile_key = (profile or self.perf_profile or "balanced").lower()
+        mode_key = str(mode or "full").lower().strip()
+
+        if mode_key == "lite":
+            lite_start = time.perf_counter()
+            timeout_ms = int(getattr(settings, "FLORENCE_LITE_TIMEOUT_MS", 3000))
+            try:
+                resized_crop = self._resize_for_lite(crop, max_side=512)
+                lite_out = self._run_with_timeout(
+                    self._analyze_crop_lite_core,
+                    timeout_ms,
+                    resized_crop,
+                    profile_key,
+                )
+                if not isinstance(lite_out, dict):
+                    raise RuntimeError("Lite output must be a dict")
+
+                raw = lite_out.get("raw", {})
+                if not isinstance(raw, dict):
+                    raw = {}
+                timings = raw.get("timings", {})
+                if not isinstance(timings, dict):
+                    timings = {}
+                timings["lite_ms"] = round((time.perf_counter() - lite_start) * 1000.0, 2)
+                raw["timings"] = timings
+                raw.setdefault("caption_source", "lite_caption")
+                lite_out["raw"] = raw
+                return lite_out
+            except TimeoutError as exc:
+                return {
+                    "caption": "",
+                    "ocr_text": "",
+                    "color_vqa": None,
+                    "grounded_features": [],
+                    "grounded_defects": [],
+                    "grounded_attachments": [],
+                    "key_count": None,
+                    "raw": {
+                        "caption_source": "lite_caption",
+                        "error": {"type": "timeout", "message": str(exc)},
+                        "timings": {
+                            "lite_ms": round((time.perf_counter() - lite_start) * 1000.0, 2),
+                        },
+                    },
+                }
+            except Exception as exc:
+                return {
+                    "caption": "",
+                    "ocr_text": "",
+                    "color_vqa": None,
+                    "grounded_features": [],
+                    "grounded_defects": [],
+                    "grounded_attachments": [],
+                    "key_count": None,
+                    "raw": {
+                        "caption_source": "lite_caption",
+                        "error": {"type": "error", "message": str(exc)},
+                        "timings": {
+                            "lite_ms": round((time.perf_counter() - lite_start) * 1000.0, 2),
+                        },
+                    },
+                }
+
         # 1. Captioning Strategy
         # Always run both detailed caption and guided VQA to get best object description
         
         # A) Detailed Caption
-        raw_caption = self.caption(crop, detailed=True)
+        raw_caption = self.caption(crop, detailed=(profile_key != "fast"), profile=profile_key)
         sanitized_caption, _ = _sanitize_caption(raw_caption)
         
         # B) Guided VQA (Object-only)
@@ -478,7 +643,7 @@ class FlorenceService:
             "(scratches, dents, cracks, stains, rust, bends). If something is not visible, say 'not visible'. "
             "Do NOT mention the person, hand, skin, gender, or race. Do NOT guess. Do NOT treat holes/slots/built-in parts as attachments."
         )
-        guided_val = self.vqa(crop, guide_prompt)
+        guided_val = self.vqa(crop, guide_prompt, profile=profile_key) if profile_key != "fast" else ""
         sanitized_guided, _ = _sanitize_caption(guided_val)
         
         # Selection Logic: Prefer guided if it's substantial, else fallback to sanitized caption
@@ -495,7 +660,7 @@ class FlorenceService:
             caption_source = "fallback"
 
         # 2. OCR
-        ocr_text = self.ocr(crop)
+        ocr_text = self.ocr(crop, profile=profile_key)
 
         # 3. Color VQA
         color_q = (
@@ -503,7 +668,7 @@ class FlorenceService:
             "Answer with a short phrase including shade/tone if visible (e.g., 'dark gray', 'navy blue', 'matte black'). "
             "If unsure, answer 'unknown'."
         )
-        color_vqa = self.vqa(crop, color_q).strip() or None
+        color_vqa = self.vqa(crop, color_q, profile=profile_key).strip() or None
         if color_vqa and color_vqa.lower() == "unknown":
             color_vqa = None
 
@@ -511,7 +676,7 @@ class FlorenceService:
         key_count: Optional[int] = None
         if canonical_label == "Key":
             kc_q = "How many separate keys are visible in this image? Answer with a single integer."
-            kc_ans = self.vqa(crop, kc_q)
+            kc_ans = self.vqa(crop, kc_q, profile=profile_key)
             m = re.search(r"\\b(\\d+)\\b", kc_ans)
             if m:
                 try:
@@ -521,6 +686,56 @@ class FlorenceService:
             else:
                 key_count = 1
 
+        spec_key = canonicalize_label(canonical_label) if canonical_label else None
+
+        # Fast profile: keep only core extraction fields and feature grounding.
+        if profile_key == "fast":
+            grounded_features: List[str] = []
+            raw_grounding_labels: List[str] = []
+
+            if spec_key and spec_key in CATEGORY_SPECS:
+                specs = CATEGORY_SPECS[spec_key]
+                normalized = _normalize_grounding_candidates(specs.get("features", []))
+                if normalized:
+                    chunks = _chunk_list(normalized, chunk_size=25)
+                    found_items = set()
+                    for chunk in chunks:
+                        prompt_text = ", ".join(chunk)
+                        g_out = self.ground_phrases(crop, prompt_text, profile=profile_key)
+                        g_data = g_out.get("<CAPTION_TO_PHRASE_GROUNDING>") or g_out.get("result", {}).get("<CAPTION_TO_PHRASE_GROUNDING>")
+                        if g_data and "labels" in g_data:
+                            detected_labels = [l.strip().lower() for l in g_data["labels"]]
+                            raw_grounding_labels.extend(g_data["labels"])
+                            for cand in chunk:
+                                if cand.lower() in detected_labels:
+                                    found_items.add(cand)
+                    grounded_features = list(found_items)
+
+            raw_fast: Dict[str, Any] = {
+                "caption": final_caption,
+                "caption_primary": raw_caption,
+                "caption_guided": guided_val,
+                "caption_source": caption_source,
+                "ocr": ocr_text,
+                "color_vqa": color_vqa,
+                "defects_vqa": "None",
+                "grounding_raw": {
+                    "labels": raw_grounding_labels
+                },
+                "attachment_vqa_checks": [],
+            }
+
+            return {
+                "caption": final_caption,
+                "ocr_text": ocr_text,
+                "color_vqa": color_vqa,
+                "grounded_features": grounded_features,
+                "grounded_defects": [],
+                "grounded_attachments": [],
+                "key_count": key_count,
+                "raw": raw_fast,
+            }
+
         # 5. Grounding (Features, Defects, Attachments)
         grounded_features = []
         grounded_defects = []
@@ -528,9 +743,6 @@ class FlorenceService:
         
         raw_grounding_labels = []
         attachment_vqa_checks = []
-
-        # Try to find a matching spec
-        spec_key = canonicalize_label(canonical_label) if canonical_label else None
 
         if spec_key and spec_key in CATEGORY_SPECS:
             specs = CATEGORY_SPECS[spec_key]
@@ -548,7 +760,7 @@ class FlorenceService:
                 for chunk in chunks:
                     # Use comma separation for list of phrases
                     prompt_text = ", ".join(chunk)
-                    g_out = self.ground_phrases(crop, prompt_text)
+                    g_out = self.ground_phrases(crop, prompt_text, profile=profile_key)
                     
                     # Parse result
                     g_data = g_out.get("<CAPTION_TO_PHRASE_GROUNDING>") or g_out.get("result", {}).get("<CAPTION_TO_PHRASE_GROUNDING>")
@@ -575,7 +787,7 @@ class FlorenceService:
             # Validate attachments with VQA
             for att in raw_grounded_attachments:
                 q = f"Is there a separate {att} physically attached to the main object? Answer yes or no."
-                ans = self.vqa(crop, q).strip().lower()
+                ans = self.vqa(crop, q, profile=profile_key).strip().lower()
                 is_valid = ans.startswith("yes")
                 
                 attachment_vqa_checks.append({
@@ -589,7 +801,7 @@ class FlorenceService:
 
         # 6. Defects VQA (Extra Evidence)
         defects_vqa_q = "List any visible wear or damage on the object using short phrases (e.g., scratches, dents, rust, cracks, stains, bent). If none, answer 'none'."
-        defects_vqa_ans = self.vqa(crop, defects_vqa_q)
+        defects_vqa_ans = self.vqa(crop, defects_vqa_q, profile=profile_key)
         if defects_vqa_ans.lower() in ["none", "no", "n/a"]:
             defects_vqa_ans = "None"
 

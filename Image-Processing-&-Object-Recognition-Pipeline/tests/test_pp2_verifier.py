@@ -94,6 +94,37 @@ class TestMultiViewVerifier(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertTrue(len(result.failure_reasons) > 0)
 
+    def test_verify_logic_with_pair_similarity_only(self):
+        self.mock_geo_service.verify_pair.return_value = {"inlier_ratio": 0.2, "passed": True}
+
+        class PairOnlyFaiss:
+            def pair_similarity(self, vec_a, vec_b):
+                return 0.95
+
+        dummy_result = PP2PerViewResult(
+            view_index=0,
+            filename="test.jpg",
+            detection=PP2PerViewDetection(bbox=(0, 0, 10, 10), cls_name="shoe", confidence=0.9),
+            extraction=PP2PerViewExtraction(caption="a shoe", ocr_text="", grounded_features={}),
+            embedding=PP2PerViewEmbedding(dim=2, vector_preview=[1.0, 0.0], vector_id="v1"),
+            quality_score=0.9
+        )
+
+        per_view_results = [dummy_result, dummy_result, dummy_result]
+        vectors = [np.array([1, 0]) for _ in range(3)]
+        crops = ["crop1", "crop2", "crop3"]
+
+        result = self.verifier.verify(per_view_results, vectors, crops, PairOnlyFaiss())
+        self.assertTrue(result.passed)
+
+    def test_compute_faiss_matrix_raises_when_service_methods_missing(self):
+        vectors = [np.array([1, 0]), np.array([0, 1])]
+        with self.assertRaises(ValueError) as cm:
+            self.verifier.compute_faiss_matrix(vectors, object())
+
+        self.assertIn("pair_similarity", str(cm.exception))
+        self.assertIn("compute_similarity", str(cm.exception))
+
 
 class TestFaissService(unittest.TestCase):
     def test_pair_similarity(self):
@@ -124,3 +155,24 @@ class TestFaissService(unittest.TestCase):
             
             self.assertEqual(mock_service.pair_similarity(vec_a, vec_c), 1.0)
             print("Faiss not installed, using mock for pair_similarity test.")
+
+    def test_compute_similarity_alias(self):
+        try:
+            import faiss
+            service = FaissService(dim=2, index_path="dummy.index", mapping_path="dummy.json")
+
+            vec_a = np.array([1.0, 0.0])
+            vec_b = np.array([1.0, 0.0])
+
+            score_legacy = service.compute_similarity(vec_a, vec_b)
+            score_modern = service.pair_similarity(vec_a, vec_b)
+
+            self.assertAlmostEqual(score_legacy, score_modern, delta=1e-6)
+        except ImportError:
+            mock_service = MagicMock()
+            mock_service.pair_similarity.side_effect = lambda a, b: float(np.dot(a, b))
+            mock_service.compute_similarity.side_effect = lambda a, b: mock_service.pair_similarity(a, b)
+
+            vec_a = np.array([1, 0])
+            vec_b = np.array([1, 0])
+            self.assertEqual(mock_service.compute_similarity(vec_a, vec_b), 1.0)

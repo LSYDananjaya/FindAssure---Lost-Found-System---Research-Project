@@ -25,12 +25,17 @@ Notes:
 
 from __future__ import annotations
 
+import atexit
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+import io
+import multiprocessing as mp
 import os
+import queue
 import re
 import logging
+import threading
 import time
 
 from PIL import Image
@@ -39,6 +44,44 @@ from app.domain.category_specs import canonicalize_label, CATEGORY_SPECS
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _lite_worker_main(req_q: Any, resp_q: Any, service_cfg: Dict[str, Any]) -> None:
+    """
+    Dedicated worker process for Florence-lite inference.
+    This allows hard timeouts by terminating the worker process.
+    """
+    svc = FlorenceService(
+        model_path=str(service_cfg.get("model_path", "app/models/florence2-base-ft/")),
+        device=str(service_cfg.get("device", "cuda")),
+        torch_dtype=str(service_cfg.get("torch_dtype", "auto")),
+        max_new_tokens=int(service_cfg.get("max_new_tokens", 512)),
+    )
+    svc.perf_profile = str(service_cfg.get("perf_profile", "balanced")).lower()
+
+    while True:
+        msg = req_q.get()
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("cmd") == "stop":
+            break
+
+        req_id = msg.get("req_id")
+        try:
+            image_bytes = msg.get("image_bytes", b"")
+            profile_key = str(msg.get("profile_key", "balanced")).lower()
+            crop = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+            result = svc._analyze_crop_lite_core(crop, profile_key)
+            resp_q.put({"req_id": req_id, "ok": True, "result": result})
+        except Exception as exc:
+            resp_q.put(
+                {
+                    "req_id": req_id,
+                    "ok": False,
+                    "error": str(exc),
+                    "error_type": "exception",
+                }
+            )
 
 
 @dataclass
@@ -211,6 +254,89 @@ class FlorenceService:
 
         self._processor = None
         self._model = None
+
+        self._lite_worker_ctx = mp.get_context("spawn")
+        self._lite_worker_proc = None
+        self._lite_req_q = None
+        self._lite_resp_q = None
+        self._lite_req_counter = 0
+        self._lite_worker_lock = threading.Lock()
+        atexit.register(self._shutdown_lite_worker)
+
+    def _shutdown_lite_worker(self) -> None:
+        with self._lite_worker_lock:
+            self._stop_lite_worker_locked()
+
+    def _start_lite_worker_locked(self) -> None:
+        proc = self._lite_worker_proc
+        if proc is not None and proc.is_alive():
+            return
+
+        req_q = self._lite_worker_ctx.Queue(maxsize=2)
+        resp_q = self._lite_worker_ctx.Queue(maxsize=2)
+        service_cfg = {
+            "model_path": self.model_path,
+            "device": self.device,
+            "torch_dtype": self.torch_dtype,
+            "max_new_tokens": self.max_new_tokens,
+            "perf_profile": self.perf_profile,
+        }
+        proc = self._lite_worker_ctx.Process(
+            target=_lite_worker_main,
+            args=(req_q, resp_q, service_cfg),
+            daemon=True,
+            name="florence-lite-worker",
+        )
+        proc.start()
+        self._lite_req_q = req_q
+        self._lite_resp_q = resp_q
+        self._lite_worker_proc = proc
+
+    def _stop_lite_worker_locked(self) -> None:
+        proc = self._lite_worker_proc
+        req_q = self._lite_req_q
+        resp_q = self._lite_resp_q
+
+        if proc is None and req_q is None and resp_q is None:
+            return
+
+        try:
+            if req_q is not None:
+                req_q.put_nowait({"cmd": "stop"})
+        except Exception:
+            pass
+
+        try:
+            if proc is not None and proc.is_alive():
+                proc.join(timeout=0.2)
+                if proc.is_alive():
+                    proc.terminate()
+                    proc.join(timeout=1.0)
+                if proc.is_alive() and hasattr(proc, "kill"):
+                    proc.kill()
+                    proc.join(timeout=1.0)
+        except Exception:
+            pass
+
+        for q in (req_q, resp_q):
+            if q is None:
+                continue
+            try:
+                q.close()
+            except Exception:
+                pass
+            try:
+                q.cancel_join_thread()
+            except Exception:
+                pass
+
+        self._lite_worker_proc = None
+        self._lite_req_q = None
+        self._lite_resp_q = None
+
+    def _next_lite_req_id_locked(self) -> int:
+        self._lite_req_counter += 1
+        return int(self._lite_req_counter)
 
     # ----------------------------
     # Model loading / core runner
@@ -502,6 +628,86 @@ class FlorenceService:
             except FuturesTimeoutError as exc:
                 raise TimeoutError(f"Operation exceeded timeout of {timeout_ms} ms") from exc
 
+    @staticmethod
+    def _encode_lite_image(image: Image.Image, jpeg_quality: int) -> bytes:
+        safe_quality = max(35, min(95, int(jpeg_quality)))
+        buf = io.BytesIO()
+        image.convert("RGB").save(buf, format="JPEG", quality=safe_quality, optimize=True)
+        return buf.getvalue()
+
+    def _run_lite_via_worker_with_timeout(
+        self,
+        crop: Image.Image,
+        profile_key: str,
+        timeout_ms: int,
+        jpeg_quality: int,
+    ) -> Dict[str, Any]:
+        if not hasattr(self, "_lite_worker_lock"):
+            return self._run_with_timeout(
+                self._analyze_crop_lite_core,
+                timeout_ms,
+                crop,
+                profile_key,
+            )
+
+        timeout_sec = max(1, int(timeout_ms)) / 1000.0
+        payload = self._encode_lite_image(crop, jpeg_quality=jpeg_quality)
+
+        with self._lite_worker_lock:
+            self._start_lite_worker_locked()
+            req_q = self._lite_req_q
+            resp_q = self._lite_resp_q
+            if req_q is None or resp_q is None:
+                raise RuntimeError("Florence-lite worker queues are unavailable.")
+
+            req_id = self._next_lite_req_id_locked()
+            message = {
+                "cmd": "infer",
+                "req_id": req_id,
+                "profile_key": profile_key,
+                "image_bytes": payload,
+            }
+            req_q.put(message, timeout=0.5)
+
+            try:
+                response = resp_q.get(timeout=timeout_sec)
+            except queue.Empty as exc:
+                self._stop_lite_worker_locked()
+                raise TimeoutError(
+                    f"Florence-lite hard timeout after {timeout_ms} ms."
+                ) from exc
+            except Exception as exc:
+                self._stop_lite_worker_locked()
+                raise RuntimeError("Failed while waiting for Florence-lite worker response.") from exc
+
+            if not isinstance(response, dict) or int(response.get("req_id", -1)) != req_id:
+                self._stop_lite_worker_locked()
+                raise RuntimeError("Received mismatched Florence-lite worker response.")
+
+            if not bool(response.get("ok", False)):
+                raise RuntimeError(str(response.get("error", "Lite worker error")))
+
+            result = response.get("result", {})
+            if not isinstance(result, dict):
+                raise RuntimeError("Florence-lite worker returned invalid payload.")
+            return result
+
+    @staticmethod
+    def _is_lite_nonempty(caption_text: str, ocr_text: str) -> bool:
+        return bool(str(caption_text or "").strip()) or bool(str(ocr_text or "").strip())
+
+    @staticmethod
+    def _lite_reason(caption_text: str, ocr_text: str) -> str:
+        has_caption = bool(str(caption_text or "").strip())
+        has_ocr = bool(str(ocr_text or "").strip())
+        if has_caption and has_ocr:
+            return "ok_nonempty"
+        if not has_caption and not has_ocr:
+            return "ok_empty_both"
+        if not has_caption:
+            return "ok_empty_caption"
+        return "ok_empty_ocr"
+
     def _analyze_crop_lite_core(self, crop: Image.Image, profile_key: str) -> Dict[str, Any]:
         lite_prompt = (
             "Return only what you can see about the main object. "
@@ -532,6 +738,11 @@ class FlorenceService:
         if color_vqa and color_vqa.lower() == "unknown":
             color_vqa = None
 
+        reason = self._lite_reason(final_caption, ocr_text)
+        lite_nonempty = self._is_lite_nonempty(final_caption, ocr_text)
+        caption_len = len(str(final_caption or "").strip())
+        ocr_len = len(str(ocr_text or "").strip())
+
         return {
             "caption": final_caption,
             "ocr_text": ocr_text,
@@ -544,6 +755,13 @@ class FlorenceService:
                 "caption_source": "lite_caption",
                 "guided_caption": guided_caption,
                 "lite_prompt": lite_prompt,
+                "lite": {
+                    "status": "success",
+                    "reason": reason,
+                    "lite_nonempty": bool(lite_nonempty),
+                    "caption_len": caption_len,
+                    "ocr_len": ocr_len,
+                },
             },
         }
 
@@ -570,14 +788,22 @@ class FlorenceService:
 
         if mode_key == "lite":
             lite_start = time.perf_counter()
-            timeout_ms = int(getattr(settings, "FLORENCE_LITE_TIMEOUT_MS", 3000))
+            timeout_ms = int(getattr(settings, "FLORENCE_LITE_TIMEOUT_MS", 15000))
+            max_side = int(getattr(settings, "FLORENCE_LITE_MAX_SIDE", 512))
+            jpeg_quality = int(getattr(settings, "FLORENCE_LITE_JPEG_QUALITY", 70))
+            input_wh = (int(crop.width), int(crop.height)) if isinstance(crop, Image.Image) else None
+            resized_crop = self._resize_for_lite(crop, max_side=max_side)
+            resized_wh = (
+                (int(resized_crop.width), int(resized_crop.height))
+                if isinstance(resized_crop, Image.Image)
+                else input_wh
+            )
             try:
-                resized_crop = self._resize_for_lite(crop, max_side=512)
-                lite_out = self._run_with_timeout(
-                    self._analyze_crop_lite_core,
-                    timeout_ms,
+                lite_out = self._run_lite_via_worker_with_timeout(
                     resized_crop,
-                    profile_key,
+                    profile_key=profile_key,
+                    timeout_ms=timeout_ms,
+                    jpeg_quality=jpeg_quality,
                 )
                 if not isinstance(lite_out, dict):
                     raise RuntimeError("Lite output must be a dict")
@@ -591,6 +817,21 @@ class FlorenceService:
                 timings["lite_ms"] = round((time.perf_counter() - lite_start) * 1000.0, 2)
                 raw["timings"] = timings
                 raw.setdefault("caption_source", "lite_caption")
+                lite_meta = raw.get("lite", {})
+                if not isinstance(lite_meta, dict):
+                    lite_meta = {}
+                caption_val = str(lite_out.get("caption", ""))
+                ocr_val = str(lite_out.get("ocr_text", ""))
+                lite_nonempty = self._is_lite_nonempty(caption_val, ocr_val)
+                lite_meta["status"] = str(lite_meta.get("status", "success"))
+                lite_meta["reason"] = str(lite_meta.get("reason", self._lite_reason(caption_val, ocr_val)))
+                lite_meta["lite_nonempty"] = bool(lite_nonempty)
+                lite_meta["input_wh"] = input_wh
+                lite_meta["resized_wh"] = resized_wh
+                lite_meta["timeout_ms_used"] = int(timeout_ms)
+                lite_meta["caption_len"] = int(len(caption_val.strip()))
+                lite_meta["ocr_len"] = int(len(ocr_val.strip()))
+                raw["lite"] = lite_meta
                 lite_out["raw"] = raw
                 return lite_out
             except TimeoutError as exc:
@@ -605,6 +846,16 @@ class FlorenceService:
                     "raw": {
                         "caption_source": "lite_caption",
                         "error": {"type": "timeout", "message": str(exc)},
+                        "lite": {
+                            "status": "timeout",
+                            "reason": "timeout_hard_kill",
+                            "lite_nonempty": False,
+                            "input_wh": input_wh,
+                            "resized_wh": resized_wh,
+                            "timeout_ms_used": int(timeout_ms),
+                            "caption_len": 0,
+                            "ocr_len": 0,
+                        },
                         "timings": {
                             "lite_ms": round((time.perf_counter() - lite_start) * 1000.0, 2),
                         },
@@ -622,6 +873,16 @@ class FlorenceService:
                     "raw": {
                         "caption_source": "lite_caption",
                         "error": {"type": "error", "message": str(exc)},
+                        "lite": {
+                            "status": "error",
+                            "reason": "exception",
+                            "lite_nonempty": False,
+                            "input_wh": input_wh,
+                            "resized_wh": resized_wh,
+                            "timeout_ms_used": int(timeout_ms),
+                            "caption_len": 0,
+                            "ocr_len": 0,
+                        },
                         "timings": {
                             "lite_ms": round((time.perf_counter() - lite_start) * 1000.0, 2),
                         },

@@ -38,9 +38,10 @@ class StorageService:
 
             # Create ViewEvidence records
             for i, view_data in enumerate(per_view_results):
+                resolved_view_index = view_data.get("view_index", i)
                 evidence = ViewEvidence(
                     item_id=item_id_uuid,
-                    view_index=i,
+                    view_index=resolved_view_index,
                     filename=view_data.get("filename", ""),
                     caption=view_data.get("caption", ""),
                     ocr_text=view_data.get("ocr_text", ""),

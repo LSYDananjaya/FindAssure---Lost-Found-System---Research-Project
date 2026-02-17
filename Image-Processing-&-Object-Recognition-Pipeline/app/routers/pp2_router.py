@@ -1,8 +1,11 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Depends
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import io
 import os
+import time
+import uuid
+import logging
 from PIL import Image
 
 # Internal
@@ -11,6 +14,7 @@ from app.services.storage_service import StorageService
 from app.core.db import get_db
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.post("/verify_pair", response_model=PP2VerifyPairResponse)
 async def verify_pair(
@@ -94,18 +98,23 @@ async def verify_pair(
 @router.post("/analyze_multiview", response_model=PP2Response)
 async def analyze_multiview(
     request: Request,
-    files: List[UploadFile] = File(...),
+    files: Optional[List[UploadFile]] = File(None),
     db: Session = Depends(get_db)
 ):
     """
     Phase 2: Multi-View Analysis Endpoint.
-    Requires exactly 3 images.
+    Requires 2 or 3 images.
     """
-    if len(files) != 3:
+    normalized_files = files or []
+    file_count = len(normalized_files)
+    if file_count < 2 or file_count > 3:
         raise HTTPException(
             status_code=400, 
-            detail=f"Exactly 3 images are required for multi-view analysis. Got {len(files)}."
+            detail=f"PP2 multi-view analysis requires 2 or 3 images. Got {file_count}."
         )
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    req_start = time.perf_counter()
+    logger.info("PP2_REQ_START request_id=%s file_count=%d", request_id, file_count)
 
     try:
         # Retrieve Pipeline from App State
@@ -117,11 +126,29 @@ async def analyze_multiview(
         storage = StorageService(db)
 
         # Call pipeline (files are passed directly)
-        result = await pipeline.analyze(files, storage=storage)
+        result = await pipeline.analyze(normalized_files, storage=storage, request_id=request_id)
+        logger.info(
+            "PP2_REQ_END request_id=%s item_id=%s stored=%s total_ms=%.2f",
+            request_id,
+            getattr(result, "item_id", None),
+            bool(getattr(result, "stored", False)),
+            (time.perf_counter() - req_start) * 1000.0,
+        )
         return result
 
     except ValueError as ve:
+        logger.warning(
+            "PP2_REQ_END request_id=%s status=400 error=%s total_ms=%.2f",
+            request_id,
+            str(ve),
+            (time.perf_counter() - req_start) * 1000.0,
+        )
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         # Log error in production
+        logger.exception(
+            "PP2_REQ_END request_id=%s status=500 total_ms=%.2f",
+            request_id,
+            (time.perf_counter() - req_start) * 1000.0,
+        )
         raise HTTPException(status_code=500, detail=str(e))

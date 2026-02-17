@@ -94,7 +94,7 @@ class GeometricVerifier:
 
     def verify_triplet(self, crops: List[Union[np.ndarray, Image.Image]]) -> Dict[str, Dict]:
         """
-        Runs geometric verification for all pairwise combinations of 3 images.
+        Runs geometric verification for all pairwise combinations of up to 3 images.
         """
         results = {}
         pairs = [(0, 1), (0, 2), (1, 2)]

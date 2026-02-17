@@ -371,8 +371,16 @@ class GeminiReasoner:
         # Extract context
         detection = evidence_json.get("detection", {})
         crop_analysis = evidence_json.get("crop_analysis", {})
+        canonical_label_in = evidence_json.get("canonical_label")
+        label_lock = bool(evidence_json.get("label_lock", False))
+        label_candidates_raw = evidence_json.get("label_candidates", [])
+        label_candidates = [
+            str(label).strip()
+            for label in (label_candidates_raw if isinstance(label_candidates_raw, list) else [])
+            if str(label).strip()
+        ]
         
-        raw_label = detection.get("label", "Unknown")
+        raw_label = canonical_label_in if canonical_label_in else detection.get("label", "Unknown")
         label = canonicalize_label(raw_label) or raw_label
         
         color = crop_analysis.get("color_vqa")
@@ -414,6 +422,14 @@ class GeminiReasoner:
             DEFECT_LIST=json.dumps(defect_list, indent=2),
             ATTACHMENT_LIST=json.dumps(attachment_list, indent=2)
         )
+        if label_lock:
+            prompt += (
+                "\n\nCATEGORY LOCK (MANDATORY):\n"
+                f"- CANONICAL_LABEL: {label}\n"
+                f"- LABEL_CANDIDATES: {json.dumps(label_candidates)}\n"
+                "- DO NOT change category.\n"
+                "- You MUST keep the category as CANONICAL_LABEL and only extract details.\n"
+            )
 
         images = [crop_image] if crop_image else None
         text = self._generate_text(prompt, images=images)

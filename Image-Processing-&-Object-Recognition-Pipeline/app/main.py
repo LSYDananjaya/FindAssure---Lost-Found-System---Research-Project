@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import shutil
@@ -7,7 +7,6 @@ import uuid
 import logging
 
 from app.core.lifespan import lifespan
-from app.services.unified_pipeline import UnifiedPipeline
 from app.routers import pp2_router
 
 app = FastAPI(title="Vision Core Backend", lifespan=lifespan)
@@ -24,9 +23,6 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-# Initialize the pipeline
-pipeline = UnifiedPipeline()
-
 UPLOAD_DIR = "temp_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -35,7 +31,10 @@ def read_root():
     return {"message": "Vision Core Backend is running."}
 
 @app.post("/pp1/analyze")
-async def analyze_pp1(files: List[UploadFile] = File(...)):
+async def analyze_pp1(
+    request: Request,
+    files: List[UploadFile] = File(...),
+):
     """
     Phase 1 Analysis: Single Image -> YOLO -> Florence -> Gemini
     """
@@ -53,8 +52,11 @@ async def analyze_pp1(files: List[UploadFile] = File(...)):
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # Call the new pipeline
+        # Call the pipeline from app state (shared service instances)
         try:
+            pipeline = getattr(request.app.state, "unified_pipeline", None)
+            if pipeline is None:
+                raise HTTPException(status_code=500, detail="UnifiedPipeline not initialized.")
             result = pipeline.process_pp1(temp_path)
         except HTTPException:
             raise

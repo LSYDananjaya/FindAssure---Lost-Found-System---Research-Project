@@ -12,6 +12,8 @@ from app.core.db import engine, Base
 from app.services.yolo_service import YoloService
 from app.services.florence_service import FlorenceService
 from app.services.dino_embedder import DINOEmbedder
+from app.services.gemini_reasoner import GeminiReasoner
+from app.services.unified_pipeline import UnifiedPipeline
 from app.services.faiss_service import FaissService
 from app.services.pp2_geometric_verifier import GeometricVerifier
 from app.services.pp2_multiview_verifier import MultiViewVerifier
@@ -67,14 +69,15 @@ async def lifespan(app: FastAPI):
         yolo_service = YoloService()
         florence_service = FlorenceService()
         dino_embedder = DINOEmbedder()
+        gemini_reasoner = GeminiReasoner()
 
         # Initialize Logic Services
         geometric_verifier = GeometricVerifier()
         multiview_verifier = MultiViewVerifier(geometric_service=geometric_verifier)
         fusion_service = MultiViewFusionService()
 
-        # Initialize Pipeline
-        pipeline = MultiViewPipeline(
+        # Initialize PP2 Pipeline
+        multiview_pipeline = MultiViewPipeline(
             yolo=yolo_service,
             florence=florence_service,
             dino=dino_embedder,
@@ -83,9 +86,18 @@ async def lifespan(app: FastAPI):
             faiss=faiss_service
         )
 
+        # Initialize PP1 Pipeline with shared services
+        unified_pipeline = UnifiedPipeline(
+            yolo=yolo_service,
+            florence=florence_service,
+            gemini=gemini_reasoner,
+            dino=dino_embedder,
+        )
+
         # 5. Store in App State
-        app.state.multiview_pipeline = pipeline
-        logger.info("MultiViewPipeline initialized and stored in app.state.")
+        app.state.unified_pipeline = unified_pipeline
+        app.state.multiview_pipeline = multiview_pipeline
+        logger.info("UnifiedPipeline and MultiViewPipeline initialized and stored in app.state.")
 
     except Exception as e:
         logger.critical(f"Critical failure during service initialization: {e}")
@@ -105,6 +117,7 @@ async def lifespan(app: FastAPI):
             logger.error(f"Error saving FAISS index during shutdown: {e}")
 
     # 2. Clear State
+    app.state.unified_pipeline = None
     app.state.multiview_pipeline = None
 
     # 3. Close Redis

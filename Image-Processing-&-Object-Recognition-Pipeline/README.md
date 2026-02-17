@@ -201,7 +201,7 @@ graph TD
 
 **Endpoint:** `POST /pp2/analyze_multiview` · **Input:** 3 images · **Orchestrator:** `app/services/pp2_multiview_pipeline.py`
 
-The PP2 pipeline improves re-identification accuracy by processing three different views of the same item. It independently analyzes each view, verifies they depict the same object, fuses the results into a single canonical profile, and persists everything to the database and vector index.
+The PP2 pipeline improves re-identification accuracy by processing three different views of the same item. It now runs a fast per-view path with **Florence-lite evidence** (caption/OCR/color) before consensus, rescues label drift via cross-view hints, verifies using eligible (non-outlier) views, then runs full Florence extraction only for pass paths before fusion and persistence.
 
 ```mermaid
 graph TD
@@ -212,10 +212,11 @@ graph TD
     subgraph LOOP["Per-View Processing (×3)"]
         direction TB
         L1["Load Image"] --> L2["🔍 YOLOv8 Detect"]
-        L2 --> L3["✂️ Crop Best Detection"]
-        L3 --> L4["🔬 Florence-2 Extract<br/>(caption, OCR, grounding)"]
-        L4 --> L5["🧬 DINOv2 Embed (128d)"]
-        L5 --> L6["📊 Quality Score<br/>(Laplacian variance)"]
+        L2 --> L3["🎯 Top-K Detection +<br/>Provisional Crop"]
+        L3 --> L4["⚡ Florence-lite<br/>(caption + OCR + optional color)"]
+        L4 --> L5["🗳 Hint-First Consensus +<br/>Per-View Reselection"]
+        L5 --> L6["🧬 DINOv2 Embed (128d)"]
+        L6 --> L7["📊 Quality Score<br/>(Laplacian variance)"]
     end
     
     LOOP --> VER
@@ -224,23 +225,26 @@ graph TD
         direction TB
         V1["📐 3×3 Cosine Similarity Matrix<br/>(scikit-learn)"]
         V2["📐 3×3 FAISS Similarity Matrix<br/>(IndexFlatIP)"]
-        V3["🔷 Pairwise Geometric Verification<br/>(ORB + RANSAC, 3 pairs)"]
-        V4["🔤 Semantic Consistency Check<br/>(color contradictions)"]
+        V3["🔷 Geometric Verification<br/>(ORB + RANSAC, eligible pairs)"]
+        V4["🔤 Semantic Consistency Check<br/>(normalized/bucketed color checks)"]
         V1 & V2 & V3 & V4 --> DEC{"Decision Logic"}
     end
     
-    DEC -->|"All pairs ≥ 0.85<br/>on cosine & FAISS"| PASS["✅ PASSED"]
-    DEC -->|"Failed but ≥2 strong<br/>geometric pairs"| SALVAGE["✅ SALVAGED"]
-    DEC -->|"Failed"| FAIL["❌ FAILED<br/>(no fusion/storage)"]
+    DEC -->|"eligible views < 2"| FAIL["❌ FAILED<br/>(no fusion/storage)"]
+    DEC -->|"2 eligible views:<br/>single pair passes"| PASS["✅ PASSED"]
+    DEC -->|"3 eligible views:<br/>embedding_failures = 0"| PASS
+    DEC -->|"3 eligible views:<br/>embedding_failures = 1 AND geometric_passed_pairs ≥ 2"| SALVAGE["✅ SALVAGED"]
+    DEC -->|"Otherwise"| FAIL
     
-    PASS & SALVAGE --> FUS
+    PASS & SALVAGE --> EXTR["🔬 Deferred Florence-2 Extraction<br/>(verified triplets only)"]
+    EXTR --> FUS
 
     subgraph FUS["Fusion Stage"]
         direction TB
         F1["🗳 Majority Vote<br/>(category, brand, color)"]
-        F2["🔤 OCR Token Union<br/>(≥3 chars, UPPER, deduped)"]
+        F2["🔤 Clean + Consensus OCR Merge<br/>(URL/junk filtered)"]
         F3["📋 Attribute Merge<br/>(with conflict tracking)"]
-        F4["⚠️ Defects Union"]
+        F4["⚠️ Category-Aligned Merge<br/>(exclude outlier/mismatch views)"]
         F5["⭐ Best View Selection<br/>(quality + confidence)"]
         F6["🧬 Fused Embedding<br/>(L2-norm → avg → renorm)"]
     end
@@ -273,36 +277,80 @@ For each of the 3 uploaded images:
 | Step | Service | Details |
 |------|---------|---------|
 | **Load** | PIL | Convert `UploadFile` bytes → RGB `Image` |
-| **Detect** | YOLOv8 | Find objects, select highest-confidence detection |
-| **Crop** | PIL | Extract ROI with bounds clamping (fallback: full image) |
-| **Extract** | Florence-2 | `analyze_crop()` → caption, OCR, grounded features |
+| **Detect** | YOLOv8 | Collect top-K detections per view (`K=5`) via `detect_objects(..., max_detections=5)` |
+| **Florence-lite** | Florence-2 | Run `analyze_crop(..., mode="lite")` on provisional crop (top-1 bbox), collect short caption + OCR (+ optional color), timeout-safe |
+| **Hint + Reselect** | Pipeline | Infer canonical hint from lite caption/OCR, compute cross-view hint-first consensus, reselect best top-K detection matching consensus (fallback top-1 marks `label_outlier=true`) |
 | **Embed** | DINOv2 | `embed_128()` → 128d normalized vector (for verification) |
 | **Quality** | OpenCV | Laplacian variance of grayscale crop (higher = sharper) |
+| **Extraction (lite)** | Pipeline | `per_view[].extraction` stores lite extraction with `extraction_confidence=0.4`; upgraded to full extraction only when verification passes |
+
+Cross-view detection selection is done in deterministic stages:
+1. **Hint-first consensus**:
+   - Build per-view `canonical_hint` from Florence-lite caption/OCR using category keywords.
+   - If any hint receives `>=2` votes, use it (`hint_majority` strategy).
+2. **YOLO fallback consensus** (when hint majority is absent):
+   - Strict majority over top-1 labels.
+   - Else coverage/confidence fallback ranking over top-K labels.
+3. **Per-view final detection reselection**:
+   - Pick highest-confidence top-K detection whose canonicalized label matches the consensus label.
+   - If missing in that view, fallback to top-1 and mark that view as `label_outlier`.
 
 #### Stage 2 — Verification
 
 The `MultiViewVerifier` determines whether all 3 views depict the same physical object:
 
-1. **Cosine Similarity Matrix** (3×3) — via `sklearn.metrics.pairwise.cosine_similarity` on the 128d vectors.
-2. **FAISS Similarity Matrix** (3×3) — via `FaissService.pair_similarity()` using temporary `IndexFlatIP` with L2-normalized inner product.
-3. **Geometric Verification** (3 pairs) — ORB + RANSAC (see [Geometric Verification](#-geometric-verification) below).
-4. **Semantic Consistency** — Flags if all 3 views report completely different colors.
+1. **Cosine Similarity Matrix** (3×3) — via `sklearn.metrics.pairwise.cosine_similarity` on the 128d vectors (all views).
+2. **FAISS Similarity Matrix** (3×3) — via `FaissService.pair_similarity()` using temporary `IndexFlatIP` with L2-normalized inner product (all views).
+3. **Eligible decision pairs** — verification decisions are computed only on `eligible_indices` (non-outlier views):
+   - 3 eligible views → 3 decision pairs.
+   - 2 eligible views → 1 decision pair.
+   - <2 eligible views → immediate failure.
+4. **Geometric Verification** (eligible pairs) — ORB + RANSAC (see [Geometric Verification](#-geometric-verification) below); ineligible pairs are marked skipped in `geometric_scores`.
+5. **Semantic Consistency** — Colors are normalized (`grey`→`gray`, spacing/hyphen cleanup), conservatively bucketed (`black`/`dark gray`/`charcoal`→`dark`), and flagged only when all 3 bucketed colors are distinct.
 
 **Decision Logic:**
 
 | Condition | Result |
 |-----------|--------|
-| All 3 pairs have cosine ≥ `0.85` **AND** FAISS ≥ `0.85` | **PASS** |
-| Embedding check failed, but ≥ 2 geometric pairs have `inlier_ratio ≥ 0.15` | **SALVAGE** (pass with note) |
-| Neither condition met | **FAIL** (no fusion or storage) |
+| Eligible views `< 2` | **FAIL** (insufficient eligible views) |
+| 2 eligible views and the single pair passes embedding thresholds | **PASS** |
+| 3 eligible views and `embedding_failures == 0` | **PASS** |
+| 3 eligible views and `embedding_failures == 1` **AND** `geometric_passed_pairs >= 2` | **SALVAGED PASS** |
+| Otherwise | **FAIL** (no fusion or storage) |
 
-#### Stage 3 — Fusion (if passed)
+Notes:
+- "Strong geometry" is counted only from geometric verifier `passed=true` pair results, not raw `inlier_ratio` alone.
+- Reason strings are boolean-consistent: salvage wording appears only on actual salvage; failed runs include `Not salvaged: ...` with pair-level details.
+- Florence full extraction is deferred until after verification. Failed PP2 verification returns schema-valid **lite extraction** (or empty-safe values on lite timeout/error), avoiding expensive grounding workflows.
+
+#### Stage 3 — Deferred Florence + Fusion (if passed)
+
+For passed/salvaged triplets, full Florence extraction is executed only for eligible (non-outlier) views, replacing their lite extraction with normalized full extraction payloads before fusion. Outlier views keep lite extraction.
 
 See [Multi-View Fusion](#-multi-view-fusion).
 
 #### Stage 4 — Storage (if passed)
 
 See [Storage & Caching](#-storage--caching).
+
+#### Service Interface Notes
+
+- `YoloService.detect_objects(image_path_or_array, conf_threshold=0.25, max_detections: Optional[int] = None)`
+  - Returns detections sorted by confidence descending.
+  - Applies top-K truncation only when `max_detections > 0`.
+- `FlorenceService.analyze_crop(crop, canonical_label=None, profile=None, mode="full")`
+  - `mode="lite"`: short caption/OCR/color extraction with strict timeout (`FLORENCE_LITE_TIMEOUT_MS`) and safe fallback output.
+  - `mode="full"`: full extraction with grounding/features/defects.
+- `MultiViewVerifier.verify(..., eligible_indices: Optional[List[int]] = None)`
+  - When provided, decisions use only eligible non-outlier views.
+  - Similarity matrices remain 3×3 for schema compatibility.
+- `MultiViewFusionService.fuse(per_view, vectors, item_id: str, view_meta_by_index: Optional[Dict[int, Dict[str, Any]]] = None)`
+  - `item_id` is required to produce deterministic fused embedding IDs.
+  - `view_meta_by_index` is optional.
+  - When provided, metadata enables outlier-aware category-specific field filtering.
+- `MultiViewFusionService.compute_fused_vector(vectors)`
+  - Canonical fused vector math: per-vector L2 norm → average → renormalize.
+- `PP2PerViewResult`, `PP2FusedProfile`, and `PP2Response` schemas are unchanged.
 
 ---
 
@@ -344,7 +392,8 @@ graph LR
 | `MIN_INLIER_RATIO` | 0.15 | Inliers / good matches |
 | RANSAC reprojection | 5.0 px | Homography error tolerance |
 
-The `verify_triplet()` method runs all 3 pairwise combinations `(0-1, 0-2, 1-2)` and returns results for each pair.
+The `verify_triplet()` helper can run all 3 pairwise combinations `(0-1, 0-2, 1-2)` and returns results for each pair.
+In PP2 verification, geometric checks are executed for eligible decision pairs; ineligible pairs are recorded as skipped for observability.
 
 ---
 
@@ -359,22 +408,27 @@ Merges the 3 per-view results into a single canonical item profile:
 | **Category** | Majority vote (>50%); fallback to best view |
 | **Brand** | Majority vote; fallback to best view |
 | **Color** | Majority vote; fallback to best view |
-| **Caption** | Best view caption (all captions stored in attributes) |
-| **OCR Tokens** | Union across all views; tokens ≥ 3 chars, uppercased, deduplicated, sorted |
-| **Attributes** | Merge all `grounded_features` keys; single value if unanimous, list if conflicting; conflicts tracked in `attributes.conflicts` |
-| **Defects** | Union of all defect strings across views, sorted |
+| **Caption** | Conservative structured caption from fused fields (category/color + optional OCR token + optional features); avoids inheriting free-text per-view hallucinations |
+| **OCR Tokens** | Clean + consensus merge: drop URL/domain-like chunks, reject noisy tokens, keep tokens seen in ≥2 views (or brand-like singleton from best view), deduped + sorted |
+| **Attributes** | Merge `grounded_features`; conflicts tracked in `attributes.conflicts`; always include `attributes.captions` and `attributes.ocr_rejected` |
+| **Defects** | Consensus only from eligible views where `final_label == fused_category` and `label_outlier == false`; defect must appear in ≥2 eligible views |
+| **Features / Attachments** | Merged only from the same eligible view set used for defects |
 | **Best View** | Highest `quality_score`; tie-break by detection `confidence` |
 | **Fused Embedding** | L2-normalize each 128d vector → elementwise average → renormalize |
 
-Conflicts are recorded transparently:
+Outlier/mismatch exclusions are auditable:
 
 ```json
 {
   "conflicts": {
-    "color": "No majority. Candidates: {'black': 1, 'brown': 1, 'dark brown': 1}. Picked best view: black"
+    "category_specific_exclusions": "Excluded category-specific fields from views [2] due to outlier/label mismatch (2:outlier/label_mismatch)."
   }
 }
 ```
+
+`attributes.captions` still retains captions from all views, including excluded outlier views.
+
+When only one eligible view remains, defects are conservatively suppressed and `attributes.conflicts.defects` is set to `"Consensus-based; single-view defects suppressed"` when suppression occurred.
 
 ---
 
@@ -588,6 +642,7 @@ graph LR
 ## 📋 PP2 Response Schema
 
 The full `PP2Response` returned by `/pp2/analyze_multiview`:
+The response schema is unchanged (`PP2PerViewResult`, `PP2FusedProfile`, `PP2Response`).
 
 ```json
 {
@@ -625,15 +680,25 @@ The full `PP2Response` returned by `/pp2/analyze_multiview`:
       "1-2": { "...": "..." }
     },
     "passed": true,
-    "failure_reasons": []
+    "failure_reasons": [
+      "Embedding consistency failures: 1/3 pairs (failed: 0-2).",
+      "Salvaged: failed_embedding_pairs=[0-2]; geometric_passed_pairs=[0-1, 1-2]."
+    ]
   },
   "fused": {
     "category": "Wallet",
     "brand": "Tommy Hilfiger",
     "color": "Brown",
-    "caption": "A brown leather wallet with visible brand logo",
+    "caption": "A brown wallet. Text: HILFIGER. Visible: logo, strap.",
     "merged_ocr_tokens": ["HILFIGER", "TOMMY"],
-    "attributes": { "logo": "brand logo", "conflicts": {}, "captions": {"view_0": "...", "view_1": "...", "view_2": "..."} },
+    "attributes": {
+      "logo": "brand logo",
+      "conflicts": {
+        "category_specific_exclusions": "Excluded category-specific fields from views [2] due to outlier/label mismatch (2:outlier/label_mismatch)."
+      },
+      "captions": {"view_0": "...", "view_1": "...", "view_2": "..."},
+      "ocr_rejected": ["HTTPS://EXAMPLE.COM", "WWW.MAINEMEMORY.NET"]
+    },
     "defects": ["scratch"],
     "best_view_index": 0,
     "fused_embedding_id": "uuid_fused"
@@ -642,6 +707,11 @@ The full `PP2Response` returned by `/pp2/analyze_multiview`:
   "cache_key": "item:uuid-string"
 }
 ```
+
+Failure reason string style is deterministic:
+- Salvaged pass example: `Salvaged: failed_embedding_pairs=[0-2]; geometric_passed_pairs=[0-1, 1-2].`
+- Non-salvaged fail example: `Not salvaged: failed_embedding_pairs=[0-1, 1-2]; geometric_passed_pairs=[0-2].`
+- Failed verification responses keep schema shape and return Stage-1 lite extraction fields (`extraction_confidence=0.4`), or empty-safe lite values when the lite call times out/errors.
 
 ---
 
@@ -737,7 +807,10 @@ graph TD
 ├── tests/
 │   ├── test_pp2_api.py                  # Integration test (mocked services)
 │   ├── test_pp2_geometric.py            # Geometric verifier unit tests
-│   └── test_pp2_verifier.py             # Multi-view verifier + FAISS unit tests
+│   ├── test_pp2_verifier.py             # Multi-view verifier logic + reason consistency + semantic checks
+│   ├── test_pp2_multiview_pipeline.py   # Cross-view label consensus, outlier fallback, fusion metadata wiring
+│   ├── test_pp2_fusion_service.py       # OCR cleaning/consensus + outlier-aware category-specific merging
+│   └── test_yolo_service.py             # Detection ordering + max_detections behavior
 ├── temp_uploads/                        # Temporary file storage (auto-cleanup)
 ├── weights/                             # Additional weight files
 ├── siamese_network.py                   # Siamese Network architecture (ResNet-18, not integrated)
@@ -821,6 +894,12 @@ graph TD
 | `FAISS_MAPPING_PATH` | No | `./data/faiss_mapping.json` | Path to persist FAISS metadata mapping |
 | `PP2_SIM_THRESHOLD` | No | `0.85` | Cosine/FAISS similarity threshold for PP2 verification |
 | `VERIFY_THRESHOLD` | No | `0.85` | Similarity threshold for `/pp2/verify_pair` |
+| `PERF_PROFILE` | No | `fast` | Inference profile: `fast`, `balanced`, or `quality` |
+| `PP1_MAX_DETECTIONS` | No | `1` | Max detections processed in PP1 |
+| `PP1_GEMINI_INCLUDE_IMAGE` | No | `false` | If true, PP1 sends crop image to Gemini (higher latency, potentially higher quality) |
+| `FLORENCE_FAST_MAX_NEW_TOKENS` | No | `96` | Max generated tokens for Florence tasks in fast profile |
+| `FLORENCE_FAST_NUM_BEAMS` | No | `1` | Beam count for Florence generation in fast profile |
+| `FLORENCE_LITE_TIMEOUT_MS` | No | `3000` | Timeout for Florence lite mode (`analyze_crop(..., mode="lite")`) |
 | `BASE_MODELS_DIR` | No | `app/models/` | Root directory for model weights |
 | `QWEN_VL_MODEL_PATH` | No | `{BASE_MODELS_DIR}/Qwen2.5-VL-3B-Instruct` | Qwen-VL model path (if using experimental service) |
 
@@ -834,7 +913,10 @@ The test suite covers the PP2 pipeline components:
 |-----------|------|----------|
 | `tests/test_pp2_api.py` | Integration | Mocks all ML services, tests `POST /pp2/analyze_multiview` with 3 fake images, verifies 200 response and correct `item_id` |
 | `tests/test_pp2_geometric.py` | Unit | Tests `GeometricVerifier.verify_pair()` with identical images (should pass) and noise images (should fail) |
-| `tests/test_pp2_verifier.py` | Unit | Tests cosine matrix computation, verification pass/fail logic with mocked geometric service, `FaissService.pair_similarity` for identical and orthogonal vectors |
+| `tests/test_pp2_verifier.py` | Unit | Tests `0/1/2+` embedding-failure branches, eligible-index decision scope (2-view pass / <2-view fail), truthful salvage/non-salvage reasons, geometric gating, and color normalization/bucketing |
+| `tests/test_pp2_multiview_pipeline.py` | Unit | Tests top-K usage, hint-first consensus rescue (`hint_majority`) with fallback strategies, lite-stage extraction behavior, eligible-index verifier calls, and fusion/index metadata pass-through |
+| `tests/test_pp2_fusion_service.py` | Unit | Tests OCR URL/junk rejection, conservative fused caption generation, outlier/mismatch category-specific field exclusion, and consensus-gated defects |
+| `tests/test_yolo_service.py` | Unit | Tests detection confidence sorting, optional top-K truncation via `max_detections`, and uncapped default behavior |
 
 ### Running Tests
 

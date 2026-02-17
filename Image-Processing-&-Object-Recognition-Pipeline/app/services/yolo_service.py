@@ -44,13 +44,19 @@ class YoloService:
             logger.error(error_msg)
             raise RuntimeError(error_msg) from e
 
-    def detect_objects(self, image_path_or_array: Any, conf_threshold: float = 0.25) -> List[YoloDetection]:
+    def detect_objects(
+        self,
+        image_path_or_array: Any,
+        conf_threshold: float = 0.25,
+        max_detections: Optional[int] = None,
+    ) -> List[YoloDetection]:
         """
         Run object detection on the provided image.
         
         Args:
             image_path_or_array: Path to image or numpy array/PIL Image.
             conf_threshold: Confidence threshold for detections.
+            max_detections: Optional top-K truncation. If None, return all detections.
 
         Returns:
             List of YoloDetection objects with raw labels.
@@ -84,5 +90,9 @@ class YoloService:
                     confidence=conf,
                     bbox=(x1, y1, x2, y2)
                 ))
+
+        detections.sort(key=lambda x: x.confidence, reverse=True)
+        if isinstance(max_detections, int) and max_detections > 0:
+            detections = detections[:max_detections]
 
         return detections

@@ -83,11 +83,19 @@ class DINOEmbedder:
             vec = outputs.last_hidden_state[:, 0, :].detach().cpu().numpy()[0]
         return vec.astype(np.float32)
 
+    def project_128(self, vec_768: np.ndarray) -> np.ndarray:
+        proj = self._projection(vec_768.shape[0])
+        v128 = vec_768 @ proj
+        return v128.astype(np.float32)
+
+    def embed_both(self, image: Image.Image) -> Tuple[np.ndarray, np.ndarray]:
+        vec_768 = self.embed_768(image)
+        vec_128 = self.project_128(vec_768)
+        return vec_768, vec_128
+
     def embed_128(self, image: Image.Image) -> np.ndarray:
         v = self.embed_768(image)
-        proj = self._projection(v.shape[0])
-        v128 = v @ proj
-        return v128.astype(np.float32)
+        return self.project_128(v)
 
     @staticmethod
     def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:

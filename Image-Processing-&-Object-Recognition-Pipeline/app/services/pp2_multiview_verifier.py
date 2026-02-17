@@ -1,5 +1,6 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import numpy as np
+import re
 from sklearn.metrics.pairwise import cosine_similarity
 from app.schemas.pp2_schemas import PP2PerViewResult, PP2VerificationResult
 from app.services.pp2_geometric_verifier import GeometricVerifier
@@ -9,7 +10,6 @@ class MultiViewVerifier:
     # Thresholds
     COSINE_PASS = settings.PP2_SIM_THRESHOLD
     FAISS_PASS = settings.PP2_SIM_THRESHOLD
-    GEOMETRIC_INLIER_THRESHOLD = 0.15
 
     def __init__(self, geometric_service: GeometricVerifier):
         self.geometric_service = geometric_service
@@ -51,6 +51,26 @@ class MultiViewVerifier:
                     matrix[i][j] = self._pair_sim(faiss_service, vectors[i], vectors[j])
         return matrix
 
+    @staticmethod
+    def _normalize_color(s: str) -> str:
+        if not isinstance(s, str):
+            return ""
+        normalized = s.lower().strip()
+        normalized = normalized.replace("-", " ").replace("_", " ")
+        normalized = normalized.replace("grey", "gray")
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        if normalized in {"", "unknown", "n/a", "none"}:
+            return ""
+        return normalized
+
+    @staticmethod
+    def _bucket_color(normalized: str) -> str:
+        if not normalized:
+            return ""
+        if normalized in {"black", "dark gray", "charcoal"}:
+            return "dark"
+        return normalized
+
     def semantic_consistency_checks(self, per_view: List[PP2PerViewResult]) -> List[str]:
         """
         Checks for obvious contradictions in OCR or colors.
@@ -62,11 +82,16 @@ class MultiViewVerifier:
         for res in per_view:
             c = res.extraction.grounded_features.get("color")
             if c:
-                colors.append(c.lower())
+                normalized = self._normalize_color(c)
+                if normalized:
+                    bucketed = self._bucket_color(normalized)
+                    if bucketed:
+                        colors.append(bucketed)
         
         # If we have 3 distinct colors detected, that's suspicious
         if len(set(colors)) == 3:
-            issues.append(f"Inconsistent colors detected: {set(colors)}")
+            unique_colors = sorted(set(colors))
+            issues.append(f"Inconsistent colors detected: {unique_colors}")
 
         # 2. OCR Consistency (Basic)
         # Check if one view has a brand validation that contradicts another? 
@@ -79,63 +104,114 @@ class MultiViewVerifier:
         per_view_results: List[PP2PerViewResult], 
         vectors: List[np.ndarray], 
         crops,  # List of PIL Images
-        faiss_service: Any
+        faiss_service: Any,
+        eligible_indices: Optional[List[int]] = None,
     ) -> PP2VerificationResult:
         
         # 1. Similarity Matrices
         cosine_mat = self.compute_cosine_matrix(vectors)
         faiss_mat = self.compute_faiss_matrix(vectors, faiss_service)
-        
-        # 2. Geometric Verification
-        # Pairwise: 0-1, 0-2, 1-2
-        pairs = [(0, 1), (0, 2), (1, 2)]
+
+        n = len(vectors)
+        all_pairs = [(i, j) for i in range(n) for j in range(i + 1, n)]
+
+        if eligible_indices is None:
+            decision_indices = list(range(n))
+        else:
+            decision_indices = sorted(
+                {
+                    int(idx)
+                    for idx in eligible_indices
+                    if isinstance(idx, int) and 0 <= int(idx) < n
+                }
+            )
+
+        decision_pairs = [
+            (decision_indices[i], decision_indices[j])
+            for i in range(len(decision_indices))
+            for j in range(i + 1, len(decision_indices))
+        ]
+        decision_pair_set = set(decision_pairs)
+
+        # 2. Geometric Verification on decision pairs only.
         geo_scores = {}
-        strong_geometric_pairs = 0
+        geometric_passed_pairs: List[str] = []
+        geometric_failed_pairs: List[str] = []
         
-        for i, j in pairs:
-            # Call geometric service
-            result = self.geometric_service.verify_pair(crops[i], crops[j])
+        for i, j in all_pairs:
             key = f"{i}-{j}"
+            if (i, j) not in decision_pair_set:
+                geo_scores[key] = {
+                    "skipped": True,
+                    "reason": "ineligible_view_pair",
+                }
+                continue
+
+            if i >= len(crops) or j >= len(crops):
+                result = {
+                    "skipped": True,
+                    "reason": "missing_crop",
+                    "passed": False,
+                }
+                geo_scores[key] = result
+                geometric_failed_pairs.append(key)
+                continue
+
+            result = self.geometric_service.verify_pair(crops[i], crops[j])
             geo_scores[key] = result
-            
-            if result.get("inlier_ratio", 0) >= self.GEOMETRIC_INLIER_THRESHOLD:
-                strong_geometric_pairs += 1
+
+            if bool(result.get("passed", False)):
+                geometric_passed_pairs.append(key)
+            else:
+                geometric_failed_pairs.append(key)
 
         # 3. Decision Logic
-        passed = True
         reasons = []
+        embedding_failed_pairs: List[str] = []
+        embedding_failures = 0
 
-        # Check Embeddings pairwise
-        for i, j in pairs:
+        for i, j in decision_pairs:
             c_score = cosine_mat[i][j]
             f_score = faiss_mat[i][j]
-            
-            # Condition: Both Pass OR (One is borderline 0.8+ AND Geometric is valid)
-            # Implemented simplified rule from prompt:
-            # "accept if (cosine >= 0.85 and faiss >= 0.85) for all pairs"
-            
-            emb_ok = (c_score >= self.COSINE_PASS) and (f_score >= self.FAISS_PASS)
-            
-            if not emb_ok:
-                # Check weak geometric fallback?
-                # Prompt: "AND geometric inlier_ratio >= 0.15 for at least 2 pairs" 
-                # Interpreting prompt: Strict embedding pass usually required, unless handled by "allow one borderline".
-                # Let's strictly follow: "require all three pairwise similarities >= threshold OR allow one borderline if geometric is strong."
-                
-                # If embedding fails, mark as potential failure reason
-                reasons.append(f"Weak embedding similarity for view {i}-{j} (Cos: {c_score:.2f}, Faiss: {f_score:.2f})")
-                passed = False
 
-        # Apply Override: If we failed embedding checks, but we have strong geometric support?
-        if not passed:
-            # Prompt: "allow one borderline if geometric is strong"
-            # If we have at least 2 strong geometric pairs, maybe we salvage?
-            if strong_geometric_pairs >= 2:
-                # Re-evaluate logic: If reasons count is low (e.g. only 1 pair failed), pass it.
-                 passed = True # Simplified salvage logic per prompt instructions
-                 reasons.append("Salvaged by strong geometric verification.")
+            emb_ok = (c_score >= self.COSINE_PASS) and (f_score >= self.FAISS_PASS)
+            if not emb_ok:
+                reasons.append(f"Weak embedding similarity for view {i}-{j} (Cos: {c_score:.2f}, Faiss: {f_score:.2f})")
+                embedding_failures += 1
+                embedding_failed_pairs.append(f"{i}-{j}")
+
+        total_decision_pairs = len(decision_pairs)
+        if total_decision_pairs == 0:
+            passed = False
+            reasons.append(
+                "Insufficient eligible views for verification "
+                f"(need at least 2, got {len(decision_indices)})."
+            )
+        elif embedding_failures == 0:
+            passed = True
+        else:
+            failed_pairs_text = ", ".join(embedding_failed_pairs)
+            reasons.append(
+                f"Embedding consistency failures: {embedding_failures}/{total_decision_pairs} pairs (failed: {failed_pairs_text})."
+            )
+
+            if total_decision_pairs == 3 and embedding_failures == 1 and len(geometric_passed_pairs) >= 2:
+                passed = True
+                reasons.append(
+                    "Salvaged: failed_embedding_pairs="
+                    f"[{', '.join(embedding_failed_pairs)}]; geometric_passed_pairs=[{', '.join(geometric_passed_pairs)}]."
+                )
             else:
                 passed = False
+                if total_decision_pairs == 1:
+                    reasons.append(
+                        "Not salvaged: two-view mode requires the eligible pair to pass embedding thresholds."
+                    )
+                else:
+                    reasons.append(
+                        "Not salvaged: failed_embedding_pairs="
+                        f"[{', '.join(embedding_failed_pairs)}]; geometric_passed_pairs=[{', '.join(geometric_passed_pairs)}]."
+                    )
 
         # Semantic Checks
         semantic_issues = self.semantic_consistency_checks(per_view_results)

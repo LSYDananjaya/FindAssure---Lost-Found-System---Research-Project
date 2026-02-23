@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import ASCENDING, DESCENDING
+from pymongo import ASCENDING, DESCENDING, TEXT
 from app.config import settings
 import logging
 import asyncio
@@ -15,14 +15,14 @@ mongodb = MongoDB()
 
 async def connect_to_mongo(max_retries: int = 3, retry_delay: int = 2) -> bool:
     """Connect to MongoDB on startup with retry logic
-    
+
     Returns:
         bool: True if connection successful, False otherwise
     """
     for attempt in range(1, max_retries + 1):
         try:
             logger.info(f"Attempting MongoDB connection (attempt {attempt}/{max_retries})...")
-            
+
             # Create client with timeout
             mongodb.client = AsyncIOMotorClient(
                 settings.MONGODB_URL,
@@ -30,24 +30,79 @@ async def connect_to_mongo(max_retries: int = 3, retry_delay: int = 2) -> bool:
                 connectTimeoutMS=5000
             )
             mongodb.db = mongodb.client[settings.DATABASE_NAME]
-            
+
             # Test connection with ping - THIS IS CRITICAL
             await mongodb.client.admin.command('ping')
             logger.info("MongoDB ping successful")
-            
-            # Create indexes for better performance
+
+            # ----------------------------------------------------------------
+            # Core collection indexes (original)
+            # ----------------------------------------------------------------
             await mongodb.db.found_items.create_index([("item_id", ASCENDING)], unique=True)
             await mongodb.db.found_items.create_index([("category", ASCENDING)])
             await mongodb.db.found_items.create_index([("created_at", DESCENDING)])
-            logger.info("Database indexes created")
-            
+
+            # Full-text index on found_items for BM25-style keyword search
+            # Covers description + searchable_tokens (added by batch extractor)
+            try:
+                await mongodb.db.found_items.create_index(
+                    [("description", TEXT), ("searchable_tokens", TEXT)],
+                    name="found_items_text_search"
+                )
+            except Exception:
+                pass  # index may already exist
+
+            # ----------------------------------------------------------------
+            # Gemini result cache collection
+            # ----------------------------------------------------------------
+            await mongodb.db.gemini_cache.create_index(
+                [("cache_key", ASCENDING)], unique=True
+            )
+            # TTL index: documents auto-expire after gemini_cache_ttl_seconds
+            await mongodb.db.gemini_cache.create_index(
+                [("expires_at", ASCENDING)],
+                expireAfterSeconds=0  # expire AT the expires_at date
+            )
+
+            # ----------------------------------------------------------------
+            # Lost query log
+            # ----------------------------------------------------------------
+            await mongodb.db.lost_item_queries.create_index([("query_id", ASCENDING)], unique=True)
+            await mongodb.db.lost_item_queries.create_index([("cache_key", ASCENDING)])
+            await mongodb.db.lost_item_queries.create_index([("created_at", DESCENDING)])
+
+            # ----------------------------------------------------------------
+            # Match Impressions — critical for negative sampling
+            # ----------------------------------------------------------------
+            await mongodb.db.match_impressions.create_index(
+                [("impression_id", ASCENDING)], unique=True
+            )
+            await mongodb.db.match_impressions.create_index([("query_id", ASCENDING)])
+            await mongodb.db.match_impressions.create_index([("timestamp", DESCENDING)])
+
+            # ----------------------------------------------------------------
+            # Match Selections
+            # ----------------------------------------------------------------
+            await mongodb.db.match_selections.create_index([("impression_id", ASCENDING)])
+            await mongodb.db.match_selections.create_index([("selected_found_id", ASCENDING)])
+            await mongodb.db.match_selections.create_index([("query_id", ASCENDING)])
+
+            # ----------------------------------------------------------------
+            # Handover Verifications (may already exist)
+            # ----------------------------------------------------------------
+            await mongodb.db.handover_verifications.create_index([("lost_id", ASCENDING)])
+            await mongodb.db.handover_verifications.create_index([("found_id", ASCENDING)])
+            await mongodb.db.handover_verifications.create_index([("verified_at", DESCENDING)])
+
+            logger.info("All database indexes created/verified")
+
             mongodb._connected = True
             logger.info(f"Connected to MongoDB: {settings.DATABASE_NAME}")
             return True
-            
+
         except Exception as e:
             logger.error(f"MongoDB connection attempt {attempt} failed: {e}")
-            
+
             if attempt < max_retries:
                 logger.info(f"Retrying in {retry_delay} seconds...")
                 await asyncio.sleep(retry_delay)
@@ -56,7 +111,7 @@ async def connect_to_mongo(max_retries: int = 3, retry_delay: int = 2) -> bool:
                 logger.info("System will run in standalone mode with disk cache")
                 mongodb._connected = False
                 return False
-    
+
     return False
 
 def is_mongodb_connected() -> bool:
@@ -71,7 +126,7 @@ async def close_mongo_connection():
 
 def get_database():
     """Get database instance
-    
+
     Returns:
         Database instance if connected, None otherwise
     """

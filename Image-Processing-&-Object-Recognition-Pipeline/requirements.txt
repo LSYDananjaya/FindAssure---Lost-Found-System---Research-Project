@@ -28,3 +28,11 @@ faiss-cpu>=1.7.4
 
 # Image Enhancement (SwinIR)
 basicsr>=1.4.2
+
+# Database & Cache
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+redis>=5.0.0
+
+# Configuration
+pydantic-settings

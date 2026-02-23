@@ -179,7 +179,7 @@ function App() {
             {searchResults.length > 0 && (
               <div className="results-container">
                 <h3>🎯 Matching Found Items (AI Semantic Similarity):</h3>
-                <p className="results-info">The System has analyzed {searchResults.length} potentially matching items</p>
+                <p className="results-info">The AI has analyzed {searchResults.length} potentially matching items</p>
                 {searchResults.map((result, index) => (
                   <div key={index} className="result-card">
                     <div className="result-header">

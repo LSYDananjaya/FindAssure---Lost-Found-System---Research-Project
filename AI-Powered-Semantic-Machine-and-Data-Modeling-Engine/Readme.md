@@ -73,6 +73,3 @@ Run & dev notes
 Monitoring & rollout
 - Start with rule-based scorer and log impressions. Collect verified positives (~1k) then train re-ranker offline and run in shadow mode. A/B or gradual rollout when metrics (P@1, P@5, verification rate) improve.
 
-If you want, I can:
-- add a short `CONTRIBUTING.md` with developer run steps, or
-- open patches to create `app/core/reranker.py`, `app/core/normalizer.py`, and a sample `scripts/train_reranker.py` implementation.

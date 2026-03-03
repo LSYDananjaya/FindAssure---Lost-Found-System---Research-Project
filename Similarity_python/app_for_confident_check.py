@@ -263,6 +263,12 @@ def verify_owner():
             face_confidence_result.get("final_decision")
             if isinstance(face_confidence_result, dict) else None
         )
+        has_missing_face_video = False
+        if isinstance(face_confidence_result, dict):
+            has_missing_face_video = any(
+                isinstance(v, dict) and v.get("label") == "face_not_detected"
+                for v in face_confidence_result.get("videos", [])
+            )
 
         # Final confidence combines semantic verification and face confidence.
         # If face score is unavailable, keep semantic score only.
@@ -283,7 +289,12 @@ def verify_owner():
                 "critical question."
             )
         else:
-            if face_decision == "possible_thief":
+            if has_missing_face_video:
+                is_owner = False
+                rejection_reason = (
+                    "Critical failure: Face not detected in at least one required answer video."
+                )
+            elif face_decision == "possible_thief":
                 is_owner = False
                 rejection_reason = (
                     "Critical failure: Face analysis marked this session as possible_thief."
@@ -345,6 +356,7 @@ def verify_owner():
             "flags": {
                 "semantic_inconsistency": semantic_avg_final < 0.7,
                 "critical_zero_match": has_zero_match,
+                "missing_face_video": has_missing_face_video,
                 "suspicious_face_pattern": face_decision == "possible_thief",
                 "low_face_confidence": (face_score is not None and face_score < 0.55),
                 "face_not_evaluated": face_check_status != "completed"

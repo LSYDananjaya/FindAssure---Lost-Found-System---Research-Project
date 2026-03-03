@@ -1,0 +1,65 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Secrets and environment files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# JavaScript / TypeScript
+node_modules/
+dist/
+dist-ssr/
+build/
+coverage/
+.vite/
+.npm/
+.pnpm-store/
+.yarn/
+*.tsbuildinfo
+
+# Expo / React Native
+.expo/
+.expo-shared/
+.metro-health-check*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.coverage
+htmlcov/
+
+# Keys and certificates
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.mobileprovision

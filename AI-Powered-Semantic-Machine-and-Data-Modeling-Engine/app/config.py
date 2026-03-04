@@ -6,8 +6,8 @@ load_dotenv()
 class Settings:
     PROJECT_NAME: str = os.getenv("APP_NAME", "Semantic Engine")
 
-    # MongoDB Configuration
-    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    # MongoDB Configuration (loaded from .env — no hardcoded credentials)
+    MONGODB_URL: str = os.getenv("MONGODB_URL", "")
     DATABASE_NAME: str = os.getenv("DATABASE_NAME", "lost_and_found")
 
     # Paths (Relative to project root)

@@ -1,212 +1,398 @@
 
 # AI-Powered Semantic Machine & Data Modeling Engine
 
-> **Component of [FindAssure](https://github.com/LSYDananjaya/FindAssure---Lost-Found-System---Research-Project)** — a smart Lost & Found system.
+> **Component of [FindAssure](https://github.com/LSYDananjaya/FindAssure---Lost-Found-System---Research-Project)** — an intelligent Lost & Found system that uses deep learning, natural language processing, and reinforcement learning to match lost items with found items through semantic understanding of natural-language descriptions.
 
-This service handles the complete text-matching and ranking pipeline: converting noisy user descriptions into structured attributes, retrieving candidate items via hybrid search, ranking them with a multi-signal scorer, and continuously improving through user feedback.
+---
+
+## What This System Does
+
+When someone loses an item (e.g., "I lost my black Samsung phone near the library"), the system takes that noisy, natural-language description and intelligently matches it against a database of found items — even when the descriptions use completely different words, have typos, or describe the same item from different perspectives.
+
+The engine goes far beyond simple keyword matching. It understands that "spectacles" and "glasses" are the same thing, that a "navy blue hiking bag" is likely the same as a "dark blue North Face backpack", and that a phone found 2 hours ago is more relevant than one found 3 weeks ago. It does this through a multi-stage pipeline combining **transformer-based semantic embeddings**, **cross-encoder re-ranking**, **Gemini-powered text normalization**, **synonym-aware keyword matching**, and a **22-feature scoring system** — all of which continuously improve through a four-level feedback-driven learning loop.
 
 ---
 
 ## Table of Contents
 
-1. [System Architecture](#system-architecture)
-2. [Current Workflow (End-to-End)](#current-workflow-end-to-end)
-3. [API Endpoints](#api-endpoints)
-4. [Core Modules](#core-modules)
-5. [Scoring & Feature Engineering](#scoring--feature-engineering)
-6. [Accuracy Improvement Features](#accuracy-improvement-features)
-7. [Fine-Tuning Procedure](#fine-tuning-procedure)
-8. [Feedback Loop & Training Data](#feedback-loop--training-data)
-9. [MongoDB Collections](#mongodb-collections)
-10. [Setup & Running](#setup--running)
-11. [Configuration](#configuration)
-12. [Scripts (Offline Jobs)](#scripts-offline-jobs)
+1. [Technology Stack](#technology-stack)
+2. [System Architecture](#system-architecture)
+3. [How the Matching Pipeline Works](#how-the-matching-pipeline-works)
+4. [22-Feature Scoring System](#22-feature-scoring-system)
+5. [Accuracy Enhancement Techniques](#accuracy-enhancement-techniques)
+6. [Four-Level Continuous Learning System](#four-level-continuous-learning-system)
+7. [Feedback-Driven Data Flow](#feedback-driven-data-flow)
+8. [API Endpoints](#api-endpoints)
+9. [Core Modules](#core-modules)
+10. [Data Storage Design](#data-storage-design)
+
+---
+
+## Technology Stack
+
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **API Framework** | FastAPI + Uvicorn | Asynchronous REST API with automatic OpenAPI documentation |
+| **Database** | MongoDB Atlas (Motor async driver) | Document storage for items, feedback logs, training data, and caching |
+| **Sentence Embeddings** | `all-mpnet-base-v2` (768-dim, fine-tuned) | Converts item descriptions into dense vector representations for semantic comparison |
+| **Cross-Encoder** | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Jointly reads both lost and found descriptions together for precise re-ranking |
+| **Vector Search** | FAISS (IndexFlatIP) | Fast approximate nearest neighbor search over 768-dimensional embeddings using cosine similarity |
+| **Text Normalization** | Google Gemini (`gemini-2.0-flash`) | Grammar correction, structured attribute extraction, and query expansion |
+| **Re-Ranking Model** | LightGBM (LambdaRank objective) | Learning-to-rank model trained on 22 features from user feedback signals |
+| **Confidence Calibration** | Platt Scaling (scikit-learn LogisticRegression) | Converts raw match scores into genuine probability estimates |
+| **Reinforcement Learning** | Q-Learning Agent (ε-greedy, NumPy) | Real-time weight adjustment from user feedback rewards |
+| **Keyword Search** | BM25 (rank_bm25) + MongoDB $text Index | Sparse retrieval to complement dense vector search |
+| **Fuzzy Matching** | thefuzz + python-Levenshtein | Attribute-level string similarity for brands, colors, materials |
+| **Frontend** | React 19 + Tailwind CSS v4 | User interface for reporting found items, searching, and providing feedback |
 
 ---
 
 ## System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        React Frontend (CRA + Tailwind CSS)          │
-│  ┌──────────────┐  ┌──────────────────┐  ┌───────────────────────┐ │
-│  │ Report Found  │  │ Find My Item     │  │ Statistics Dashboard  │ │
-│  │ (POST /index) │  │ (POST /search)   │  │ (GET /feedback-stats)│ │
-│  └──────┬───────┘  └───────┬──────────┘  └───────────────────────┘ │
-│         │    Live Grammar   │ Feedback (Yes/No)                     │
-│         │    Correction     │ POST /feedback                        │
-│         │    POST /correct- │                                       │
-│         │    grammar        │                                       │
-└─────────┼───────────────────┼───────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                     React Frontend (Tailwind CSS)                     │
+│  ┌──────────────┐  ┌──────────────────┐  ┌────────────────────────┐ │
+│  │ Report Found  │  │ Find My Item     │  │ Statistics Dashboard   │ │
+│  │ (POST /index) │  │ (POST /search)   │  │ (GET /feedback-stats) │ │
+│  └──────┬───────┘  └───────┬──────────┘  └────────────────────────┘ │
+│         │  Live Grammar     │  User Feedback (Yes/No)                │
+│         │  Correction       │  POST /feedback                        │
+└─────────┼───────────────────┼────────────────────────────────────────┘
           │                   │
           ▼                   ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   FastAPI Backend (uvicorn)                          │
-│                                                                     │
-│  ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌────────────────────────┐│
-│  │Normalizer│ │ Retriever │ │  Scorer  │ │ Impression Logger      ││
-│  │(Gemini + │ │(FAISS+BM25│ │(Rule/ML +│ │ (MongoDB logging)     ││
-│  │ Query Exp│ │+ Synonyms)│ │CrossEnc) │ │                        ││
-│  └──────────┘ └───────────┘ └──────────┘ └────────────────────────┘│
-│  ┌──────────┐ ┌───────────┐ ┌──────────┐ ┌────────────────────────┐│
-│  │ Semantic │ │ RL Agent  │ │ Trainer  │ │ Fraud Detection        ││
-│  │ Engine   │ │(Q-Learning│ │(LightGBM+│ │                        ││
-│  │          │ │)          │ │Calibratr)│ │                        ││
-│  └──────────┘ └───────────┘ └──────────┘ └────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                     FastAPI Backend (Uvicorn)                         │
+│                                                                      │
+│  ┌────────────┐  ┌─────────────┐  ┌────────────┐  ┌──────────────┐ │
+│  │ Normalizer │  │  Retriever  │  │   Scorer   │  │  Impression  │ │
+│  │ (Gemini +  │  │ (FAISS +    │  │ (Rule/ML + │  │   Logger     │ │
+│  │  Query     │  │  BM25 +     │  │  CrossEnc +│  │ (MongoDB)    │ │
+│  │  Expansion)│  │  Synonyms)  │  │  Calibratr)│  │              │ │
+│  └────────────┘  └─────────────┘  └────────────┘  └──────────────┘ │
+│  ┌────────────┐  ┌─────────────┐  ┌────────────┐  ┌──────────────┐ │
+│  │  Semantic  │  │  RL Agent   │  │  Trainer   │  │    Fraud     │ │
+│  │  Engine    │  │ (Q-Learning)│  │ (LightGBM +│  │  Detection   │ │
+│  │ (BERT 768) │  │             │  │  Embedding │  │              │ │
+│  │            │  │             │  │  Feedback)  │  │              │ │
+│  └────────────┘  └─────────────┘  └────────────┘  └──────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
           │                                        │
           ▼                                        ▼
-┌────────────────────┐                 ┌──────────────────────┐
-│  MongoDB Atlas     │                 │  FAISS Index (disk)  │
-│  (motor async)     │                 │  data/indices/       │
-└────────────────────┘                 └──────────────────────┘
+┌─────────────────────┐                ┌───────────────────────┐
+│   MongoDB Atlas      │                │   FAISS Vector Index   │
+│   (6 collections)    │                │   (768-dim, cosine)    │
+└─────────────────────┘                └───────────────────────┘
 ```
 
 ---
 
-## Current Workflow (End-to-End)
+## How the Matching Pipeline Works
 
-### A. Server Startup (`app/main.py`)
+When a user searches for a lost item, the system executes a multi-stage pipeline that progressively narrows and refines candidates. Each stage adds intelligence on top of the previous one.
 
-| Step | Action | Module |
-|------|--------|--------|
-| 1/4 | Connect to MongoDB Atlas (DNS fix for SRV records via `dnspython`) | `database.py` |
-| 2/4 | Load sentence-transformers model (`all-mpnet-base-v2`, 768-dim embeddings) | `semantic.py` |
-| 3/4 | Load existing found-item vectors from MongoDB into FAISS index | `semantic.py` |
-| 4/4 | Initialize Gemini normalizer (`gemini-2.0-flash`) + LightGBM re-ranker (if trained) | `normalizer.py`, `scorer.py` |
+### Stage 1 — Grammar Correction (Gemini)
 
-### B. Report Found Item Flow (`POST /index`)
+The user's raw text goes through two passes of grammar correction using Google Gemini. The first pass happens live in the frontend as the user types (debounced at 1.2 seconds), showing corrections like "blak wallet neer library" → "black wallet near library". The second pass runs on the backend when the form is submitted, catching anything the first pass missed. The Gemini prompt strictly corrects only errors — it does not rephrase or paraphrase, preserving the user's original intent.
+
+### Stage 2 — Structured Attribute Extraction (Gemini)
+
+The corrected text is passed to Gemini for structured extraction. This converts unstructured prose into a machine-readable format:
 
 ```
-User fills form → category + description
+Input:  "I lost my black leather Samsung Galaxy S24 near the science building"
+Output: {
+  item_type: "phone",
+  color: "black",
+  brand: "Samsung",
+  model: "Galaxy S24",
+  material: "leather",
+  identifiers: [],
+  keywords: ["samsung", "galaxy", "s24", "phone", "black", "leather"],
+  missing_fields: ["size"]
+}
+```
+
+Results are cached in MongoDB with a 1-hour TTL to avoid redundant API calls.
+
+### Stage 3 — Query Expansion (Gemini)
+
+Before retrieval, Gemini generates three alternative phrasings of the lost item description, 3–8 additional keywords a finder might use, and attribute variants (e.g., "red" → "crimson", "scarlet"). This bridges the vocabulary gap between how people describe items they lost versus how finders describe what they found. The expanded keywords are merged into the retrieval query to broaden the candidate pool.
+
+### Stage 4 — Hybrid Candidate Retrieval (FAISS + BM25 + Exact Match)
+
+Three independent retrieval paths run in parallel:
+
+| Path | Method | Returns |
+|------|--------|---------|
+| **A** | FAISS vector search (cosine similarity over 768-dim embeddings) | Top 200 semantically similar items |
+| **B** | MongoDB $text index + BM25 keyword scoring | Top 50 keyword-matched items |
+| **C** | Exact identifier lookup (serial numbers, student IDs) | Precise matches if identifiers exist |
+
+Results are merged and deduplicated by item ID, producing a unified candidate pool.
+
+### Stage 5 — 22-Feature Scoring
+
+For every (lost, found) candidate pair, the system computes 22 features spanning semantic similarity, keyword overlap, attribute matching, cross-encoder analysis, temporal relevance, and statistical signals. These features feed into either the LightGBM re-ranker (when trained) or the rule-based scoring formula v2.
+
+### Stage 6 — Ranking & Calibration
+
+The final ranking combines all signals through a weighted formula:
+
+```
+final = 0.77 × base_score
+      + 0.10 × cross_encoder_score
+      + 0.05 × synonym_keyword_boost
+      + 0.05 × category_weight_score
+      + 0.03 × time_decay
+
+calibrated_score = platt_scaling(final)  →  true match probability
+```
+
+The base score itself is a weighted combination: 55% semantic similarity + 20% keyword overlap + 25% attribute matching, adjusted by contradiction penalties and category-specific attribute weights. After scoring, Platt scaling converts raw scores to genuine probability estimates, so a displayed 85% represents an actual 85% confidence that the items match.
+
+### Stage 7 — Logging & Response
+
+The search impression — including the query, all ranked results, features, model version, and session — is logged to MongoDB for future training. Results above 50% confidence are returned to the frontend, where users see match cards with confidence badges and "Yes, it's mine" / "No" feedback buttons.
+
+---
+
+## 22-Feature Scoring System
+
+Each lost-found candidate pair is evaluated across 22 engineered features. These features capture different aspects of similarity — from deep semantic understanding to surface-level keyword matches to temporal signals.
+
+### Semantic & Retrieval Features
+
+| Feature | What It Measures |
+|---------|-----------------|
+| `f_semantic_sim` | Cosine similarity between 768-dimensional sentence embeddings from the fine-tuned transformer model. Captures deep meaning even when words differ completely. |
+| `f_bm25_score_norm` | Normalized BM25 keyword overlap score. A classical information retrieval signal based on term frequency and inverse document frequency. |
+| `f_cross_encoder_score` | A cross-encoder model reads both descriptions jointly as a single input. Unlike bi-encoders that encode texts separately, this captures fine-grained interactions between the two descriptions. Uses `cross-encoder/ms-marco-MiniLM-L-6-v2`. |
+| `f_synonym_keyword_boost` | Keyword overlap after expanding both keyword sets with a 50+ entry domain-specific synonym dictionary (e.g., "phone" ↔ "mobile" ↔ "cellphone", "spectacles" ↔ "glasses"). |
+
+### Attribute Matching Features
+
+| Feature | What It Measures |
+|---------|-----------------|
+| `f_attr_color_match` | Fuzzy match between extracted color attributes using Levenshtein distance. |
+| `f_attr_brand_match` | Brand name similarity (e.g., "Samsung" vs "samsung galaxy" → high match). |
+| `f_attr_model_match` | Model number/name comparison for precision matching. |
+| `f_attr_material_match` | Material attribute similarity (leather, fabric, metal, etc.). |
+| `f_identifier_match_ratio` | Proportion of unique identifiers (serial numbers, student IDs) that match between lost and found descriptions. |
+| `f_identifier_in_found_text` | Binary: whether an extracted identifier appears anywhere in the found item's raw description text. |
+| `f_contradiction_score` | Penalty signal when attributes explicitly contradict (e.g., lost says "black" but found says "red"). Reduces score to prevent false matches. |
+| `f_category_weight_score` | Category-aware attribute importance score. The system maintains 27 category-specific weight profiles — for electronics, brand and model matter most; for wallets, color and material dominate; for documents, identifiers are critical. |
+
+### Temporal & Context Features
+
+| Feature | What It Measures |
+|---------|-----------------|
+| `f_time_decay` | Exponential freshness score with a 72-hour half-life. Recently found items score higher because they are statistically more likely to match a recent loss report. |
+| `f_initial_rank` | The item's position in the initial retrieval stage (lower = retrieved earlier = more likely relevant). |
+| `f_candidate_pool_size` | Total number of candidates in the current search. Provides normalization context for the ranking model. |
+
+### Statistical & Numeric Features
+
+| Feature | What It Measures |
+|---------|-----------------|
+| `f_query_n_tokens` | Token count in the lost item query. Longer descriptions provide more matching signals. |
+| `f_found_n_tokens` | Token count in the found item description. |
+| `f_query_missing_fields` | Number of expected attribute fields missing from the query. Indicates description completeness. |
+| `f_len_ratio` | Ratio of query length to found description length. Very large ratios suggest a mismatch in description granularity. |
+| `f_numeric_match` | Overlap of extracted numeric values (prices, quantities, measurements) between lost and found. |
+| `f_money_amount_match` | Proximity of monetary values. Score of 1.0 for exact match, decaying toward 0 as amounts diverge. |
+| `f_n_must_match_tokens` | Count of must-match tokens in the query (typically identifiers and unique marks that must appear in any valid match). |
+
+---
+
+## Accuracy Enhancement Techniques
+
+### Cross-Encoder Re-Ranking
+
+Standard search systems encode the query and each candidate separately into vectors, then compare those vectors. This "bi-encoder" approach is fast but can miss subtle relationships. The cross-encoder takes a different approach — it reads both the lost and found descriptions together as a single input to a transformer model. This allows the model to attend across both texts simultaneously, picking up on nuanced semantic connections that separate encodings miss. For example, it can understand that "dark blue hiking bag with North Face logo" and "navy blue North Face backpack" describe the same item, even though the wording is substantially different. The cross-encoder contributes 10% of the final score.
+
+### Category-Specific Attribute Weighting
+
+Not all attributes matter equally for all types of items. A laptop is best identified by its brand and model number, while a wallet is best identified by its color and material. The system maintains 27 category-specific attribute weight profiles that automatically adjust scoring priorities based on the item type:
+
+- **Electronics** (laptop, phone, tablet): brand 35%, model 35%, color 15%, material 15%
+- **Wallet / Purse**: color 35%, material 35%, brand 15%, model 15%
+- **Documents** (ID card, passport): identifier 50%, brand 20%, color 15%, material 15%
+- **Jewelry** (ring, necklace): material 40%, color 35%, brand 15%, model 10%
+
+### Synonym-Aware Keyword Matching
+
+A built-in dictionary of 50+ domain-specific synonym groups ensures that different words for the same concept still produce high keyword overlap. Coverage includes electronics ("phone" ↔ "mobile" ↔ "cellphone"), accessories ("spectacles" ↔ "glasses" ↔ "eyewear"), clothing ("jacket" ↔ "coat" ↔ "blazer"), colors ("grey" ↔ "gray" ↔ "silver"), containers ("bag" ↔ "backpack" ↔ "rucksack"), and more.
+
+### Time-Decay (Freshness Boost)
+
+An exponential decay function with a 72-hour half-life gives recently found items a natural advantage. A phone found 2 hours ago is statistically far more likely to match a loss reported today than one found 3 weeks ago. The decay is gentle — it nudges close scores rather than eliminating old items.
+
+### Query Expansion via Gemini
+
+Users describe lost items from their perspective ("my favorite coffee mug"), while finders describe what they see ("white ceramic cup with a chip on the rim"). Gemini generates alternative phrasings, extra keywords, and attribute variants to bridge this vocabulary gap, broadening the retrieval pool to include candidates that would otherwise be missed.
+
+### Confidence Calibration (Platt Scaling)
+
+Raw model scores are not true probabilities. Platt scaling applies a logistic regression calibration layer that maps raw scores to genuine match probabilities. After calibration, a displayed 85% means the system is statistically 85% confident the items match. This makes the >50% display threshold meaningful and gives users trustworthy confidence percentages.
+
+### Hard Negative Mining
+
+The training pipeline mines the hardest-to-classify examples from real system logs — items the model ranked highly but were actually wrong. Three strategies extract verification failures, high-rank user rejects, and cross-category confusions. These hard negatives force the model to learn subtle distinctions (e.g., "black Samsung Galaxy S23" vs "black Samsung Galaxy S24") rather than trivially easy ones.
+
+---
+
+## Four-Level Continuous Learning System
+
+The system implements four distinct levels of learning that progressively improve accuracy as more users interact with it. Each level targets a different component of the matching pipeline.
+
+### Level 1 — Sentence-Transformer Fine-Tuning (Base Embeddings)
+
+**What it trains**: The `all-mpnet-base-v2` sentence-transformer that converts descriptions into 768-dimensional vectors.
+
+**Training data**: 105 manually curated (lost, found) text pairs covering 50+ item categories — from common items like phones and wallets to specialized items like violins, drones, archery guards, and laboratory equipment.
+
+**How it trains**: Uses MultipleNegativesRankingLoss to pull matching pair embeddings closer together in vector space while pushing non-matching pairs apart. Trains for 20 epochs with a learning rate of 2e-5, batch size of 2 (small because descriptions can be very long), and data augmentation through pair reversal.
+
+**Impact**: After training, the embedding model understands domain-specific semantics — it knows that "lost my specs" and "found eyeglasses" should produce similar vectors, even though general-purpose embedding models would not.
+
+```
+python scripts/train_english_only.py
+```
+
+### Level 1b — Embedding Fine-Tuning from User Feedback (Adaptive Learning)
+
+**What it trains**: The same sentence-transformer, incrementally refined using real user-confirmed matches.
+
+**How feedback pairs are collected**: Every time a user searches for a lost item, picks a result from the ranked list, and confirms "Yes, this is mine", the system automatically extracts and stores the (lost_description, found_description) text pair to MongoDB. This happens silently in the background — no manual labeling required.
+
+**How it trains**: When enough pairs are collected (default: 50), the model is fine-tuned using a mix of feedback pairs (weighted 2×) and the original 105 curated pairs (weighted 1×). The curated pairs prevent catastrophic forgetting — the model refines its understanding without losing what it already knows. A lower learning rate (1e-5, half of Level 1) ensures gentle refinement rather than aggressive overwriting.
+
+**Why this matters**: Developer-curated training pairs reflect how developers *think* users describe items. Real feedback pairs capture how users *actually* describe items — their exact words, abbreviations, regional slang, and phrasing patterns. Over time, the model becomes uniquely adapted to the specific user base.
+
+```bash
+# Via API (hot-reloads model into running server)
+curl -X POST http://localhost:8001/retrain-embeddings
+
+# Via CLI
+python scripts/train_from_feedback.py
+```
+
+### Level 2 — LightGBM Re-Ranker (Learning-to-Rank from Feedback)
+
+**What it trains**: A LightGBM model with LambdaRank objective that learns optimal weights for all 22 features.
+
+**How training data is collected**: Three feedback signals feed the training pipeline, each with a different confidence weight:
+
+| Signal | Source | Weight | Description |
+|--------|--------|--------|-------------|
+| Handover Verification | External system confirms item ownership | 3.0 | Strongest signal — actual verification |
+| User Feedback | "Yes, it's mine" / "No" buttons | 1.0 | Direct user confirmation |
+| Implicit Selection | User clicks on a result | 0.5 | Weakest signal — click ≠ match |
+
+Hard negatives (top-ranked but wrong items) are automatically sampled from the same search impression, with priority given to items ranked above the true positive (the hardest negatives). The training pipeline also incorporates mined hard negatives from historical logs.
+
+**How it trains**: Joins `match_impressions`, `match_selections`, and `handover_verifications` from MongoDB to build labeled (query, candidate, label, weight, 22-feature) tuples. LightGBM trains with LambdaRank objective to learn the optimal ranking function. A confidence calibrator (Platt scaling) is automatically trained afterward. Both the model and calibrator are hot-swapped into the running server.
+
+**A/B Testing**: The `AB_ROLLOUT_PCT` parameter controls what percentage of traffic uses the ML re-ranker vs. the rule-based scorer, allowing gradual rollout with safety.
+
+```bash
+# Via API
+curl -X POST http://localhost:8001/retrain
+
+# Via CLI
+python scripts/train_reranker.py
+```
+
+### Level 3 — Reinforcement Learning Agent (Real-Time Adaptation)
+
+**What it trains**: A Q-learning agent with ε-greedy exploration that adjusts ranking weight parameters in real-time.
+
+**How it works**: Every single piece of user feedback triggers an immediate update. The agent models each search context as a state (category match status × semantic score range), chooses actions (increase / keep / decrease ranking emphasis), and receives rewards (+1.0 for correct matches, -1.0 for wrong ones). The Q-table is updated via the Bellman equation and persisted to disk after every interaction.
+
+**Why this level exists**: Levels 1–2 require accumulating data and triggering retraining. Level 3 responds instantly — the very next search after a user gives feedback benefits from the updated weights. This creates a flywheel effect where every interaction makes the system slightly better.
+
+### Learning Architecture Summary
+
+```
+                     Manual Effort              Automatic & Continuous
+                     ──────────────             ──────────────────────
+Level 1:   ██████████████████████████           (curated text pairs)
+           Sentence-Transformer
+           ↓ domain-specific embeddings
+
+Level 1b:  ██                                   ██████████████████████
+           (trigger via API)                     (pairs auto-collected
+           ↓ user-adapted embeddings              on every confirmed match)
+
+Level 2:   ██                                   ██████████████████
+           (set AB_ROLLOUT_PCT)                  (feedback → retrain)
+           ↓ learned ranking function
+
+Level 3:                                        ██████████████████████
+                                                (instant, every feedback)
+           ↓ real-time weight tuning
+```
+
+Each level targets a different timescale: Level 1 is a one-time setup, Level 1b improves every few weeks as feedback accumulates, Level 2 retrains periodically from verified data, and Level 3 adapts after every single user interaction.
+
+---
+
+## Feedback-Driven Data Flow
+
+Every user interaction feeds back into the system's learning pipeline, creating a closed loop where the system continuously improves.
+
+```
+User searches for lost item
          │
          ▼
-┌─ Gemini Grammar Correction ──────────────────────┐
-│ Fix ONLY typos & grammar errors (no paraphrasing) │
-│ "blak wallet neer library" → "black wallet near   │
-│ library"                                           │
-└────────────────────┬──────────────────────────────┘
-                     ▼
-         Store corrected text in MongoDB
-         Generate 768-dim embedding
-         Add to FAISS in-memory index
-                     ▼
-         Response: { item_id, grammar_corrected }
-```
-
-### C. Find My Lost Item Flow (`POST /search`) — 7 Stages
-
-```
-User types lost item description
+System shows ranked results (logged as match_impression)
          │
          ▼
-┌─ Stage 1: Live Grammar Correction (Frontend) ────┐
-│ Debounced (1.2s after typing stops)               │
-│ POST /correct-grammar → fixes typos in-place      │
-│ Shows green ✓ note: "blak → black"                │
-└────────────────────┬──────────────────────────────┘
-                     ▼
-┌─ Stage 2: Grammar Correction (Backend, on submit) ┐
-│ Second pass to catch any remaining errors           │
-│ Uses same Gemini prompt (errors-only, no rewrite)   │
-└────────────────────┬───────────────────────────────┘
-                     ▼
-┌─ Stage 3: Gemini Text Normalization ──────────────┐
-│ Extract structured attributes via Gemini:          │
-│   item_type, color, brand, material, size,         │
-│   identifiers[], unique_marks[],                   │
-│   numeric_values[], keywords[], missing_fields[]   │
-│ Result cached in MongoDB (TTL = 1 hour)            │
-└────────────────────┬──────────────────────────────┘
-                     ▼
-┌─ Stage 4: Hybrid Candidate Retrieval ─────────────┐
-│ Path A: FAISS vector search (cosine, top 200)      │
-│ Path B: MongoDB $text keyword/BM25 search (top 50) │
-│ Path C: Exact identifier lookup (if present)       │
-│ ─→ Merge + deduplicate by item_id                  │
-└────────────────────┬──────────────────────────────┘
-                     ▼
-┌─ Stage 5: Feature Scoring (22 features) ──────────┐
-│ Per (lost, found) pair compute:                    │
-│   f_semantic_sim, f_bm25_score_norm,               │
-│   f_attr_color_match, f_attr_brand_match,          │
-│   f_attr_model_match, f_attr_material_match,       │
-│   f_identifier_match_ratio, f_n_must_match_tokens, │
-│   f_identifier_in_found_text,                      │
-│   f_contradiction_score, f_initial_rank,           │
-│   f_candidate_pool_size, f_query_n_tokens,         │
-│   f_found_n_tokens, f_query_missing_fields,        │
-│   f_len_ratio, f_numeric_match,                    │
-│   f_money_amount_match,                            │
-│ ★ NEW accuracy signals:                            │
-│   f_cross_encoder_score, f_time_decay,             │
-│   f_synonym_keyword_boost, f_category_weight_score │
-└────────────────────┬──────────────────────────────┘
-                     ▼
-┌─ Stage 5½: Query Expansion (Gemini) ──────────────┐
-│ Generate 3 alternative phrasings + extra keywords   │
-│ + attribute variants via Gemini                     │
-│ Merged into retrieval to broaden candidate pool     │
-└────────────────────┬──────────────────────────────┘
-                     ▼
-┌─ Stage 6: Ranking ────────────────────────────────┐
-│ IF LightGBM model exists → ML re-ranker            │
-│ ELSE → Rule-based v2 weighted formula:              │
-│   score = penalty × category_weights × (            │
-│     0.55×semantic + 0.20×keyword + 0.25×attribute)  │
-│   + 0.10×cross_encoder + 0.05×synonym_boost         │
-│   + 0.05×category_weight + 0.03×time_decay          │
-│ identifier_exact match → forced to top (0.99+)     │
-│ Scores calibrated to true match probability         │
-│ A/B split via AB_ROLLOUT_PCT env variable          │
-└────────────────────┬──────────────────────────────┘
-                     ▼
-┌─ Stage 7: Response + Logging ─────────────────────┐
-│ Log impression to MongoDB (query_id, impression_id,│
-│   ranked results, model_version, session_id)       │
-│ Return ranked matches + grammar_corrected flag     │
-│ Frontend filters: only display score > 50%         │
-└────────────────────┬──────────────────────────────┘
-                     ▼
-         Results rendered as cards with score badges
-         User sees "Yes, it's mine" / "No" buttons
-```
-
-### D. Feedback Loop
-
-```
-User clicks "Yes, it's mine" or "No"
+User clicks a result (logged as match_selection)
          │
          ▼
-    POST /feedback
+User confirms "Yes, this is mine" or "No"
          │
-    ┌────┴────────────────────────────────┐
-    │ Store in handover_verifications      │
-    │ RL Agent gets reward (+1 or -1)     │
-    │ Q-table updated via Q-learning      │
-    └────┬────────────────────────────────┘
-         │
-         ▼  (when ≥50 verified positive pairs collected)
-    POST /retrain
-         │
-    ┌────┴────────────────────────────────┐
-    │ Build labeled dataset from logs     │
-    │ Train LightGBM lambdarank model     │
-    │ Hot-swap: new model deployed live   │
-    └─────────────────────────────────────┘
-```
-
-### E. External Verification (from Handover System)
-
-```
-Handover system confirms/rejects claim
+         ├──► embedding_training_pairs     (text pairs for Level 1b)
+         ├──► handover_verifications       (labels for Level 2)
+         ├──► RL Agent Q-table update      (instant reward for Level 3)
          │
          ▼
-    POST /log-verification
-         │
-    Stores STRONGEST training signal:
-      verified=true  → weight=3.0 (strong positive)
-      verified=false → pair excluded from training
+┌─────────────────────┐    ┌──────────────────────────┐
+│ build_training_      │    │ fine_tune_from_           │
+│ dataset()            │    │ feedback()                │
+│                      │    │                           │
+│ Joins impressions +  │    │ Merges feedback pairs     │
+│ selections +         │    │ with curated dataset      │
+│ verifications →      │    │ → fine-tunes sentence-    │
+│ labeled feature      │    │ transformer embeddings    │
+│ vectors              │    │                           │
+└──────────┬───────────┘    └────────────┬──────────────┘
+           │                             │
+           ▼                             ▼
+┌──────────────────┐         ┌────────────────────────┐
+│ LightGBM Model   │         │ Updated Embedding      │
+│ + Calibrator     │         │ Model                  │
+│ (hot-swapped)    │         │ (hot-swapped)          │
+└──────────────────┘         └────────────────────────┘
+```
+
+The `/feedback-stats` endpoint provides real-time visibility into data collection progress:
+
+```json
+{
+  "impressions": 142,
+  "selections": 38,
+  "verifications": { "total": 25, "positive": 18, "negative": 7 },
+  "training_ready": false,
+  "min_required": 50,
+  "embedding_fine_tuning": {
+    "collected_pairs": 37,
+    "ready": false,
+    "message": "Need 13 more confirmed matches for embedding fine-tuning."
+  }
+}
 ```
 
 ---
@@ -215,464 +401,60 @@ Handover system confirms/rejects claim
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/` | Health check (status, gemini enabled, A/B rollout %) |
-| `POST` | `/index` | Add a FOUND item (auto grammar-corrected, vectorized, indexed) |
-| `POST` | `/correct-grammar` | Live grammar correction — frontend calls this as user types |
-| `POST` | `/search` | Search for LOST item (full 7-stage pipeline) |
-| `POST` | `/log-selection` | Log which result the user clicked (ties to impression_id) |
-| `POST` | `/feedback` | User yes/no feedback on match quality |
-| `POST` | `/log-verification` | External handover system reports claim verification |
-| `POST` | `/fraud-check` | Check user metadata for suspicious behavior |
-| `POST` | `/retrain` | Trigger LightGBM re-ranker retraining |
-| `GET` | `/feedback-stats` | Dashboard: impressions, selections, verifications, training readiness |
+| `GET` | `/` | Health check — reports system status, Gemini availability, A/B rollout percentage |
+| `POST` | `/index` | Add a found item — auto-corrects grammar, extracts attributes, generates embedding, adds to FAISS index |
+| `POST` | `/correct-grammar` | Live grammar correction — called by frontend as user types (debounced) |
+| `POST` | `/search` | Full 7-stage matching pipeline — returns ranked results with confidence scores |
+| `POST` | `/log-selection` | Log which result the user clicked (implicit feedback signal) |
+| `POST` | `/feedback` | User yes/no feedback — feeds Level 1b, Level 2, and Level 3 learning |
+| `POST` | `/log-verification` | External handover system reports claim verification (strongest training signal) |
+| `POST` | `/fraud-check` | Behavioral fraud scoring on user metadata |
+| `POST` | `/retrain` | Trigger LightGBM re-ranker retraining (Level 2) |
+| `POST` | `/retrain-embeddings` | Trigger sentence-transformer fine-tuning from feedback (Level 1b) |
+| `GET` | `/feedback-stats` | Dashboard — impressions, selections, verifications, embedding training readiness |
 
 ---
 
 ## Core Modules
 
-| Module | File | Responsibility |
-|--------|------|----------------|
-| **LostTextNormalizer** | `app/core/normalizer.py` | Gemini-powered grammar correction, lost-item attribute extraction (cached), found-item attribute extraction (batch), **query expansion** (generates alternative phrasings + extra keywords). Uses strict grammar prompt that only fixes errors. |
-| **SemanticEngine** | `app/core/semantic.py` | Sentence-Transformers (`all-mpnet-base-v2`), FAISS IndexFlatIP, vectorize/search/add_item, load from MongoDB or disk cache |
-| **CandidateRetriever** | `app/core/retriever.py` | Merges FAISS vector search + MongoDB $text BM25 search + exact identifier lookup into deduplicated candidate pool |
-| **ReRanker / FeatureComputer** | `app/core/scorer.py` | Computes 22 pair features (including cross-encoder, time-decay, synonym boost, category weights), applies rule-based v2 scoring or LightGBM re-ranker with confidence calibration. Handles `must_match_tokens` logic and A/B routing |
-| **ImpressionLogger** | `app/core/impression_logger.py` | Async logging of search impressions and user selections to MongoDB |
-| **RLRankingAgent** | `app/core/rl_agent.py` | Q-learning agent (ε-greedy) that adjusts ranking weights from user feedback rewards |
-| **TrainingPipeline** | `app/core/trainer.py` | Builds labeled (lost, found) pair datasets from logs, trains LightGBM lambdarank model, trains confidence calibrator (Platt scaling), supports mined hard negatives |
-| **DataModelingEngine** | `app/core/modeling.py` | Knowledge-graph context suggestions per category |
-| **FraudDetectionEngine** | `app/core/fraud.py` | Behavioral fraud scoring on user metadata |
-| **Database** | `app/core/database.py` | Motor async MongoDB connection with DNS fix (Google/Cloudflare public DNS for SRV resolution), SSL CA bundle via certifi |
+| Module | File | What It Does |
+|--------|------|-------------|
+| **LostTextNormalizer** | `normalizer.py` | Gemini-powered grammar correction, structured attribute extraction with caching, query expansion that generates alternative phrasings and keywords |
+| **SemanticEngine** | `semantic.py` | Manages the fine-tuned `all-mpnet-base-v2` sentence-transformer and FAISS vector index. Handles encoding, search, indexing, and model hot-reloading |
+| **CandidateRetriever** | `retriever.py` | Orchestrates three parallel retrieval paths (FAISS vector + BM25 keyword + exact identifier) and merges them into a deduplicated candidate pool |
+| **ReRanker / FeatureComputer** | `scorer.py` | Computes all 22 features per pair, applies rule-based v2 scoring or LightGBM re-ranking, runs cross-encoder and synonym expansion, applies Platt calibration, manages A/B routing |
+| **EmbeddingTrainer** | `embedding_trainer.py` | Fine-tunes sentence-transformer from user feedback pairs merged with curated data, with 2× feedback weight and lower learning rate to prevent catastrophic forgetting |
+| **TrainingPipeline** | `trainer.py` | Builds labeled datasets from MongoDB feedback logs, trains LightGBM LambdaRank model, trains confidence calibrator, supports hard negatives |
+| **RLRankingAgent** | `rl_agent.py` | Q-learning agent with ε-greedy exploration — updates ranking weights instantly from every feedback event |
+| **ImpressionLogger** | `impression_logger.py` | Async logging of search impressions, user selections, and model versions to MongoDB for training pipeline consumption |
+| **FraudDetectionEngine** | `fraud.py` | Behavioral fraud scoring on user metadata to detect suspicious claiming patterns |
+| **DataModelingEngine** | `modeling.py` | Knowledge-graph-based context suggestions per item category |
+| **Database** | `database.py` | Motor async MongoDB connection with DNS resolution fixes and SSL certificate management |
 
 ---
 
-## Scoring & Feature Engineering
+## Data Storage Design
 
-### 22 Feature Columns (per lost-found pair)
-
-| # | Feature | Description |
-|---|---------|-------------|
-| 1 | `f_semantic_sim` | Cosine similarity between sentence embeddings (0–1) |
-| 2 | `f_bm25_score_norm` | Normalized BM25 keyword overlap score |
-| 3 | `f_attr_color_match` | Color attribute match (fuzzy string match) |
-| 4 | `f_attr_brand_match` | Brand name match |
-| 5 | `f_attr_model_match` | Model number match |
-| 6 | `f_attr_material_match` | Material match |
-| 7 | `f_identifier_match_ratio` | Ratio of matched unique identifiers |
-| 8 | `f_n_must_match_tokens` | Count of must-match tokens in query |
-| 9 | `f_identifier_in_found_text` | Whether identifier appears in found description text |
-| 10 | `f_contradiction_score` | Penalty for contradicting attributes (e.g., "black" vs "red") |
-| 11 | `f_initial_rank` | Original retrieval rank (lower = better) |
-| 12 | `f_candidate_pool_size` | Total candidates in current pool |
-| 13 | `f_query_n_tokens` | Number of tokens in lost query |
-| 14 | `f_found_n_tokens` | Number of tokens in found description |
-| 15 | `f_query_missing_fields` | How many expected fields are missing from query |
-| 16 | `f_len_ratio` | Length ratio between query and found text |
-| 17 | `f_numeric_match` | Overlap ratio of extracted numeric values |
-| 18 | `f_money_amount_match` | Proximity of monetary values (0=far, 1=exact match) |
-| 19 | `f_cross_encoder_score` | **NEW** — Cross-encoder re-ranker score (reads both texts jointly) |
-| 20 | `f_time_decay` | **NEW** — Freshness score (recent found items score higher) |
-| 21 | `f_synonym_keyword_boost` | **NEW** — Keyword overlap after synonym expansion |
-| 22 | `f_category_weight_score` | **NEW** — Category-aware attribute importance score |
-
-### Rule-Based Scoring Formula v2 (default, before ML model is trained)
-
-```
-IF identifier_exact → score = 0.99 + tie_breaker
-ELSE:
-  base = contradiction_penalty × category_specific_weights × (
-      0.55 × semantic_sim
-    + 0.20 × keyword_score
-    + 0.25 × attribute_score
-  )
-
-  final = 0.77 × base
-        + 0.10 × cross_encoder_score
-        + 0.05 × synonym_keyword_boost
-        + 0.05 × category_weight_score
-        + 0.03 × time_decay
-
-  calibrated_score = calibrate(final)   # Platt scaling → true probability
-```
-
-Results are converted to a 0–100% scale. **Only matches >50% are shown to users.**
-
-The calibration step (Platt scaling) converts raw scores into real-world match probabilities, so a displayed "85%" genuinely means the system is 85% confident the items match.
-
----
-
-## Accuracy Improvement Features
-
-The matching engine includes several advanced features designed to improve accuracy beyond basic semantic similarity. Here is what each one does in plain English:
-
-### 1. Cross-Encoder Re-Ranker
-
-**What it does**: Most search systems encode the query and each candidate item separately, then compare them. A cross-encoder is different — it reads both the lost description and a found description *together* as a single piece of text, allowing it to pick up on subtle relationships between the two that get missed when they are encoded separately.
-
-**How it helps**: Suppose someone lost a "navy blue North Face backpack" and there is a found item described as "dark blue hiking bag, North Face logo". A regular encoder might score this lower because the words differ, but the cross-encoder reads both side by side and understands they are describing the same thing.
-
-**Model used**: `cross-encoder/ms-marco-MiniLM-L-6-v2` — a small, fast model that adds minimal latency.
-
-**Weight in final score**: 10%
-
----
-
-### 2. Time-Decay (Freshness Boost)
-
-**What it does**: Items that were reported as found more recently get a slight score boost, while very old found items get penalized. The system uses an exponential decay formula with a 72-hour half-life — this means a found item loses half its freshness bonus every 3 days.
-
-**How it helps**: If you just lost your phone today, a phone found 2 hours ago at the same campus is far more likely to be yours than one found 3 weeks ago. Time-decay captures this common-sense reasoning. It does not eliminate old items — it just nudges recent ones higher when scores are otherwise close.
-
-**Weight in final score**: 3%
-
----
-
-### 3. Synonym-Aware Keyword Matching
-
-**What it does**: Before comparing keywords between the lost and found descriptions, the system expands both keyword sets using a built-in synonym dictionary with 50+ domain-specific word groups. For example, "phone" expands to include "mobile", "cell", "smartphone", "cellphone"; "bag" expands to include "backpack", "rucksack", "sack", "pouch".
-
-**How it helps**: People describe the same item using different words. One person writes "I lost my spectacles" while another reports finding "glasses". Without synonym expansion, the keyword matcher would see zero overlap. With it, the system recognizes these are the same thing.
-
-**Covered domains**: Electronics, accessories, documents, clothing, colors, containers, stationery, and more.
-
-**Weight in final score**: 5%
-
----
-
-### 4. Category-Specific Attribute Weights
-
-**What it does**: Different categories of items have different attributes that matter most. For a laptop, the brand and model are the most important matching signals. For a wallet, the color and material matter more. The system maintains 27 category-specific weight profiles that automatically adjust which attributes carry the most importance when scoring.
-
-**How it helps**: Imagine two wallets — one black leather, one brown fabric. Even if both are "wallets found near the library", the color and material differences are critical. But for electronics, two phones might look identical from outside, so the brand and serial number matter much more. Category weights ensure the system focuses on what actually matters for each type of item.
-
-**Examples**:
-- **Electronics** (laptop, phone, tablet): brand (35%), model (35%), color (15%), material (15%)
-- **Wallet / Purse**: color (35%), material (35%), brand (15%), model (15%)
-- **Documents** (ID card, passport): identifier (50%), brand (20%), color (15%), material (15%)
-- **Jewelry** (ring, necklace): material (40%), color (35%), brand (15%), model (10%)
-
-**Weight in final score**: 5%
-
----
-
-### 5. Query Expansion via Gemini
-
-**What it does**: When a user types a lost item description, the system asks Google Gemini to generate three alternative ways to describe the same item, plus 3–8 additional keywords that someone finding the item might use, plus attribute variants (e.g., if you said "red", it might add "crimson", "scarlet").
-
-**How it helps**: Users tend to describe items from their own perspective ("my favorite coffee mug") while finders describe what they see ("white ceramic cup with a chip on the rim"). Query expansion bridges this gap by generating the kinds of words a finder might use, so the retrieval stage pulls in candidates that would otherwise be missed.
-
-**Fallback**: If Gemini is unavailable, the system continues without expansion — no errors, no delays.
-
----
-
-### 6. Confidence Calibration (Platt Scaling)
-
-**What it does**: Raw match scores from the model are not true probabilities — a raw score of 0.80 does not necessarily mean an 80% chance the items match. Confidence calibration applies a statistical technique called Platt scaling (logistic regression on raw scores vs. actual match outcomes) to convert raw scores into genuine probability estimates.
-
-**How it helps**: Before calibration, the system might show most results clustered between 60–90% with no clear separation. After calibration, scores are spread more meaningfully — true matches tend to score 85%+ while non-matches drop to 30–40%. This makes the >50% display threshold much more reliable and gives users trustworthy confidence percentages.
-
-**Training**: The calibrator is automatically trained at the end of every LightGBM re-ranker training. A sigmoid fallback is used until the first calibrator is trained.
-
----
-
-### 7. Hard Negative Mining
-
-**What it does**: During training, the system needs examples of items that are *not* matches ("negatives") to learn from. Hard negatives are the trickiest kind — found items that *look similar* to the lost item but are actually different. The mining script identifies three types:
-- **Verification failures**: Items the system thought matched but the handover system rejected
-- **High-rank rejects**: Items ranked highly in search results but the user said "No, that's not mine"
-- **Cross-category confusions**: Items from different categories that the system incorrectly scored highly
-
-**How it helps**: Learning from easy negatives (e.g., a phone vs. a jacket) is trivial and teaches the model nothing useful. Hard negatives force the model to learn subtle distinctions — like the difference between a "black Samsung Galaxy S23" and a "black Samsung Galaxy S24". This is where real accuracy gains happen.
-
----
-
-### 8. Expanded Training Data (40 → 105 pairs)
-
-**What it does**: The sentence-transformer fine-tuning dataset was expanded from 40 manually curated text pairs to 105 diverse pairs covering a much wider range of item categories.
-
-**How it helps**: More diverse training data means the embedding model produces better vector representations across all item types — not just the common ones like phones and wallets. The expanded dataset includes: MacBooks, Kindles, iPads, Bluetooth speakers, Nintendo Switches, passports, camera lenses, wedding rings, AirPods, violins, drones, skateboards, baby strollers, lab coats, safety equipment, and 50+ more item types.
-
----
-
-### Feature Integration Summary
-
-| Feature | Where | Weight | Runs When |
-|---------|-------|--------|-----------|
-| Cross-Encoder Re-Ranker | scorer.py | 10% | Every search |
-| Time-Decay | scorer.py | 3% | Every search |
-| Synonym Keyword Boost | scorer.py | 5% | Every search |
-| Category Weights | scorer.py | 5% | Every search |
-| Query Expansion | normalizer.py → scorer.py | N/A (broadens retrieval) | Every search |
-| Confidence Calibration | scorer.py | N/A (post-processing) | Every search |
-| Hard Negative Mining | scripts/mine_hard_negatives.py | N/A (training improvement) | Offline |
-| Expanded Training Data | data/raw/text_pairs_english.json | N/A (embedding improvement) | Offline |
-
----
-
-## Fine-Tuning Procedure
-
-The system uses **three levels of fine-tuning**, each building on user interaction data:
-
-### Level 1 — Sentence-Transformer Embedding Model
-
-**Model**: `all-mpnet-base-v2` (768 dimensions)
-
-**Training data**: `data/raw/text_pairs_english.json` — 105 manually curated pairs of lost/found descriptions with similarity labels.
-
-**Script**: `scripts/train_english_only.py`
-
-```bash
-python scripts/train_english_only.py
-```
-
-**What it does**:
-1. Loads the base `all-mpnet-base-v2` model
-2. Trains on domain-specific (lost, found) text pairs
-3. Uses CosineSimilarityLoss to bring matching pairs closer in embedding space
-4. Saves fine-tuned model to `data/models/fine_tuned_bert/`
-5. Runs evaluation on held-out pairs, saves results to `data/models/fine_tuned_bert/eval/`
-
-**When to retrain**: When you have new manual text pairs or want to improve the base embedding quality for this domain.
-
-### Level 2 — LightGBM Re-Ranker (Automated from Feedback)
-
-**Model**: LightGBM with lambdarank objective
-
-**Training data**: Automatically built from MongoDB logs — no manual labeling needed.
-
-**How training data is collected** (3 feedback signals, strongest to weakest):
-
-| Signal | Source | Label | Weight | Description |
-|--------|--------|-------|--------|-------------|
-| Handover Verification | `POST /log-verification` | 1 (true) / skip (false) | 3.0 | External system confirms ownership — **strongest signal** |
-| User Feedback | `POST /feedback` | 1 (yes) / 0 (no) | 1.0 | User clicks "Yes, it's mine" or "No" in the UI |
-| Implicit Selection | `POST /log-selection` | 1 (selected) / 0 (not selected) | 0.5 | User clicks on a result — **weakest signal** |
-
-**Trigger retraining** (requires ≥50 verified positive pairs by default):
-
-```bash
-# Via API
-curl -X POST http://localhost:8001/retrain -H "Content-Type: application/json" -d '{"force": false}'
-
-# Via script
-python scripts/train_reranker.py
-```
-
-**What it does**:
-1. `build_training_dataset()` joins `match_impressions` + `match_selections` + `handover_verifications`
-2. For each verified positive pair: label=1. Hard negatives sampled from same impression (top-ranked but wrong items): label=0
-3. Target ratio: 1 positive : 5–10 negatives
-4. Features are the 18 columns from the scorer
-5. LightGBM trains with lambdarank objective (22 features including new accuracy signals)
-6. Confidence calibrator trained automatically (Platt scaling on raw scores vs labels)
-7. Model saved to `data/models/reranker/` with version timestamp
-8. `current_model_ptr.txt` updated to point to new model
-9. Model + calibrator hot-swapped into the running server (no restart needed)
-
-**A/B Testing**: Set `AB_ROLLOUT_PCT` in `.env` to gradually shift traffic from rule-based to ML re-ranker (0.0 = all rule-based, 1.0 = all ML).
-
-### Level 3 — RL Agent (Real-Time Weight Adjustment)
-
-**Model**: Q-learning with ε-greedy exploration
-
-**How it works**:
-1. State = (category_matched, semantic_score_range)
-2. Actions = decrease / keep / increase ranking weight
-3. Reward = +1.0 for positive feedback, -1.0 for negative
-4. Q-table updated after every user feedback via Bellman equation
-5. Q-table persisted to `data/models/rl_q_table.pkl`
-
-**This runs automatically** — every `POST /feedback` call updates the RL agent. No manual intervention needed.
-
-### Fine-Tuning Summary
-
-```
-                    Manual Effort              Automatic
-                    ──────────────             ──────────
-Level 1:  ██████████████████████████           (curated text pairs)
-          train_english_only.py
-          ↓ improves base embeddings
-
-Level 2:  ██                                   ██████████████████
-          (set AB_ROLLOUT_PCT)                  (feedback → retrain)
-          ↓ improves re-ranking
-
-Level 3:                                       ██████████████████████
-                                               (every feedback auto-updates)
-          ↓ fine-tunes ranking weights in real-time
-```
-
----
-
-## Feedback Loop & Training Data
-
-### Data Flow
-
-```
-User searches → sees ranked results → gives feedback
-                                          │
-                     ┌────────────────────┼────────────────────┐
-                     ▼                    ▼                    ▼
-              match_impressions    match_selections    handover_verifications
-              (what was shown)    (what was clicked)   (was claim correct?)
-                     │                    │                    │
-                     └────────────────────┼────────────────────┘
-                                          ▼
-                              build_training_dataset()
-                                          │
-                                          ▼
-                              ┌──────────────────────┐
-                              │ Labeled pairs:        │
-                              │  (lost, found, label, │
-                              │   weight, 18 features)│
-                              └──────────┬───────────┘
-                                          ▼
-                              train_reranker_model()
-                                          │
-                                          ▼
-                              LightGBM model deployed
-                              (hot-swapped, no restart)
-```
-
-### Training Readiness
-
-The `/feedback-stats` endpoint returns current collection status:
-
-```json
-{
-  "status": "ok",
-  "impressions": 142,
-  "selections": 38,
-  "verifications": { "total": 25, "positive": 18, "negative": 7 },
-  "training_ready": false,
-  "min_required": 50,
-  "message": "Need 32 more verified pairs before training."
-}
-```
-
-The frontend **Statistics** tab shows this as a progress bar.
-
----
-
-## MongoDB Collections
+### MongoDB Collections
 
 | Collection | Purpose | Key Fields |
 |------------|---------|------------|
-| `found_items` | Stored found item documents | `item_id`, `description`, `category`, `vector[]`, `extracted_attributes`, `keywords` |
-| `text_normalizations` | Gemini extraction cache (TTL 1hr) | `cache_key` (sha256), `result`, `created_at` |
-| `match_impressions` | Search result logs | `query_id`, `impression_id`, `shown_results[]`, `model_version`, `session_id` |
-| `match_selections` | User click logs | `impression_id`, `query_id`, `selected_found_id`, `selected_rank` |
-| `handover_verifications` | Feedback + verification records | `lost_id`, `found_id`, `verified`, `verification_method`, `source` |
+| `found_items` | All reported found items with descriptions, embeddings, and extracted attributes | `item_id`, `description`, `category`, `vector[]`, `extracted_attributes`, `keywords` |
+| `text_normalizations` | Gemini extraction cache (1-hour TTL) to avoid redundant API calls | `cache_key` (SHA-256), `result`, `created_at` |
+| `match_impressions` | Full log of every search — what was queried, what was shown, in what order | `query_id`, `impression_id`, `shown_results[]`, `model_version`, `session_id` |
+| `match_selections` | Records of which result the user clicked from the ranked list | `impression_id`, `query_id`, `selected_found_id`, `selected_rank` |
+| `handover_verifications` | User feedback and external verification records (strongest training signal) | `lost_id`, `found_id`, `verified`, `verification_method`, `source` |
+| `embedding_training_pairs` | Confirmed (lost, found) text pairs automatically collected for embedding fine-tuning | `pair_id`, `anchor`, `positive`, `category`, `source`, `created_at` |
 
----
+### On-Disk Models & Indices
 
-## Setup & Running
-
-### Prerequisites
-
-- Python 3.12+
-- MongoDB Atlas cluster (or local MongoDB)
-- Google Gemini API key
-
-### Installation
-
-```bash
-cd AI-Powered-Semantic-Machine-and-Data-Modeling-Engine
-
-# Create virtual environment
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # Linux/macOS
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Configuration
-
-Copy `.env.example` to `.env` and fill in your credentials:
-
-```bash
-cp .env.example .env
-```
-
-```dotenv
-# .env
-MONGODB_URL=mongodb+srv://<user>:<pass>@<cluster>.mongodb.net/?appName=<app>
-DATABASE_NAME=lost_and_found
-GEMINI_API_KEY=<your-gemini-api-key>
-GEMINI_MODEL=gemini-2.0-flash
-AB_ROLLOUT_PCT=0.0
-MIN_TRAIN_POSITIVES=50
-```
-
-> **Important**: Never hardcode credentials in `config.py`. All secrets are loaded from `.env` via `python-dotenv`.
-
-### Running the Server
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8001
-```
-
-Startup logs will show 4 initialization steps completing.
-
-### Running the Frontend
-
-```bash
-cd ../frontend-semantic
-npm install
-npx craco start    # development mode on localhost:3000
-npx craco build    # production build to build/
-```
-
----
-
-## Configuration
-
-All configuration is in `app/config.py`, loaded from `.env`:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MONGODB_URL` | (empty) | MongoDB Atlas connection string |
-| `DATABASE_NAME` | `lost_and_found` | Database name |
-| `GEMINI_API_KEY` | (empty) | Google Gemini API key |
-| `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model name |
-| `GEMINI_CACHE_TTL_SECONDS` | `3600` | Normalization cache TTL |
-| `AB_ROLLOUT_PCT` | `0.0` | ML model traffic percentage (0.0–1.0) |
-| `MIN_TRAIN_POSITIVES` | `50` | Minimum verified pairs before allowing retrain |
-
----
-
-## Scripts (Offline Jobs)
-
-| Script | Purpose | When to Run |
-|--------|---------|-------------|
-| `scripts/train_english_only.py` | Fine-tune sentence-transformer on domain pairs | When you have new curated text pairs |
-| `scripts/train_reranker.py` | Train LightGBM re-ranker from MongoDB feedback logs | When ≥50 verified pairs collected (or use `POST /retrain`) |
-| `scripts/train_semantic.py` | Train semantic model (alternative trainer) | Domain-specific embedding improvement |
-| `scripts/batch_extract_found_attributes.py` | Run Gemini attribute extraction on all existing found items | After bulk-importing found items |
-| `scripts/rebuild_index.py` | Rebuild FAISS index from MongoDB vectors | After bulk changes to found items |
-| `scripts/build_graph.py` | Build knowledge graph for context suggestions | When updating item ontology |
-| `scripts/test_accuracy.py` | Evaluate retrieval accuracy metrics | After retraining any model |
-| `scripts/mine_hard_negatives.py` | **NEW** — Mine hard negatives from MongoDB logs for training | Periodically, to improve re-ranker training data |
-| `scripts/expand_training_data.py` | **NEW** — Expand text_pairs_english.json with diverse pairs | One-time (already expanded 40 → 105 pairs) |
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| API Framework | FastAPI + uvicorn |
-| Database | MongoDB Atlas (motor async driver) |
-| Embeddings | sentence-transformers (`all-mpnet-base-v2`, 768-dim) |
-| Cross-Encoder | `cross-encoder/ms-marco-MiniLM-L-6-v2` (joint re-ranking) |
-| Vector Search | FAISS (IndexFlatIP, cosine similarity) |
-| Text Normalization | Google Gemini (`gemini-2.0-flash`) + query expansion |
-| Re-Ranker | LightGBM (lambdarank) / Rule-based v2 fallback + Platt calibration |
-| RL Agent | Q-learning (NumPy) |
-| Keyword Search | rank_bm25 + MongoDB $text index |
-| Fuzzy Matching | thefuzz + python-Levenshtein |
-| Frontend | React 19 + CRACO + Tailwind CSS v4 |
+| Path | Contents |
+|------|----------|
+| `data/models/fine_tuned_bert/` | Fine-tuned sentence-transformer model (768-dim) |
+| `data/models/reranker/` | Versioned LightGBM models + confidence calibrators |
+| `data/models/rl_q_table.pkl` | Persisted Q-learning agent state |
+| `data/indices/faiss.index` | FAISS vector index for fast nearest-neighbor search |
+| `data/raw/text_pairs_english.json` | 105 curated training pairs for base embedding fine-tuning |
 
 ---
 

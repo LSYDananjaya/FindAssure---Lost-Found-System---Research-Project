@@ -1,14 +1,19 @@
 from fastapi import APIRouter, BackgroundTasks, Depends
 from app.schemas.item import ItemCreate
-from app.schemas.search import SearchQuery, SearchResponse, MatchResult, SelectionLog
+from app.schemas.search import (
+    SearchQuery, SearchResponse, MatchResult, SelectionLog,
+    VerificationLog, FeedbackRequest, RetrainRequest,
+)
 from app.core.semantic import SemanticEngine
 from app.core.modeling import DataModelingEngine
 from app.core.fraud import FraudDetectionEngine
 from app.core.scorer import inference_rerank
 from app.core.impression_logger import ImpressionLogger
+from app.core.normalizer import LostTextNormalizer
 from app.core.database import get_database
 import logging
 import uuid
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -33,14 +38,47 @@ def get_db():
 
 @router.post("/index", summary="Add Found Item to Database")
 async def index_item(item: ItemCreate, engine: SemanticEngine = Depends(get_semantic)):
-    """Add a FOUND item to the database for future matching."""
-    item_id = await engine.add_item(item.dict())
+    """Add a FOUND item to the database for future matching.
+
+    Automatically corrects grammar/spelling in the description via Gemini
+    before saving, so all stored descriptions are clean English.
+    """
+    item_dict = item.dict()
+
+    # --- Grammar correction before saving ---
+    normalizer = LostTextNormalizer()
+    grammar = await normalizer.correct_grammar(item_dict["description"])
+    original_description = item_dict["description"]
+    if grammar.get("was_corrected"):
+        item_dict["description"] = grammar["corrected_text"]
+        logger.info(
+            f"Grammar auto-corrected for /index: "
+            f"'{original_description[:80]}' → '{grammar['corrected_text'][:80]}'"
+        )
+
+    item_id = await engine.add_item(item_dict)
     return {
         "message": "Found item added successfully",
         "item_id": item_id,
         "status": "indexed",
-        "note": "Run scripts/batch_extract_found_attributes.py to pre-extract Gemini attributes for this item.",
+        "grammar_corrected": grammar.get("was_corrected", False),
+        "corrected_description": item_dict["description"] if grammar.get("was_corrected") else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# POST /correct-grammar — Live grammar correction for frontend textarea
+# ---------------------------------------------------------------------------
+
+@router.post("/correct-grammar", summary="Live Grammar Correction")
+async def correct_grammar(payload: dict):
+    """Correct only grammar/spelling errors in user text. Used by the
+    frontend to auto-fix the textarea as the user types."""
+    text = (payload.get("text") or "").strip()
+    if not text or len(text) < 5:
+        return {"corrected_text": text, "was_corrected": False, "corrections": []}
+    normalizer = LostTextNormalizer()
+    return await normalizer.correct_grammar(text)
 
 
 # ---------------------------------------------------------------------------
@@ -66,11 +104,27 @@ async def search_items(
     """
     session_id = query.session_id or str(uuid.uuid4())
 
+    # --- Grammar correction on the search text before matching ---
+    search_text = query.text
+    grammar_corrected = False
+    try:
+        normalizer = LostTextNormalizer()
+        grammar = await normalizer.correct_grammar(search_text)
+        if grammar.get("was_corrected"):
+            search_text = grammar["corrected_text"]
+            grammar_corrected = True
+            logger.info(
+                f"Grammar auto-corrected for /search: "
+                f"'{query.text[:80]}' → '{search_text[:80]}'"
+            )
+    except Exception as gc_err:
+        logger.debug(f"Grammar correction skipped: {gc_err}")
+
     # --- Full pipeline (Gemini normalizer + hybrid retrieval + scoring) ---
     try:
         pipeline_result = await inference_rerank(
             db=db,
-            raw_lost_text=query.text,
+            raw_lost_text=search_text,
             category=query.category or "",
             session_id=session_id,
             top_k=query.limit or 10,
@@ -84,7 +138,7 @@ async def search_items(
         logger.warning("Pipeline returned empty — using legacy SemanticEngine fallback")
         engine = SemanticEngine()
         raw_results = engine.search(
-            query.text,
+            search_text,
             limit=query.limit or 10,
             category_filter=query.category if query.category else None,
         )
@@ -111,6 +165,8 @@ async def search_items(
             matches=formatted_matches,
             total_matches=len(formatted_matches),
             inferred_context=context_suggestions,
+            grammar_corrected=grammar_corrected,
+            corrected_text=search_text if grammar_corrected else None,
         )
 
     # --- Format full pipeline results ---
@@ -148,6 +204,8 @@ async def search_items(
         inferred_context=context_suggestions,
         query_id=pipeline_result.get("query_id"),
         impression_id=pipeline_result.get("impression_id"),
+        grammar_corrected=grammar_corrected,
+        corrected_text=search_text if grammar_corrected else None,
     )
 
 
@@ -188,3 +246,218 @@ async def log_selection(payload: SelectionLog, db=Depends(get_db)):
 def check_fraud(user_metadata: dict, fraud_engine: FraudDetectionEngine = Depends(get_fraud)):
     result = fraud_engine.predict_fraud(user_metadata)
     return result
+
+
+# ---------------------------------------------------------------------------
+# POST /log-verification — External handover system reports yes/no
+# ---------------------------------------------------------------------------
+
+@router.post("/log-verification", summary="Log Handover Verification (Yes/No)")
+async def log_verification(payload: VerificationLog, db=Depends(get_db)):
+    """
+    Called by the external handover/verification system to report whether
+    a matched item was correctly verified (yes) or rejected (no).
+
+    This is the STRONGEST training signal for the re-ranker:
+      - verified=true  → STRONG POSITIVE (weight=3.0)
+      - verified=false → SKIP pair (wrong match, discard from training)
+
+    The other team calls this endpoint; we store and use during retraining.
+    """
+    if db is None:
+        return {"status": "skipped", "reason": "database unavailable"}
+
+    doc = {
+        "verification_id": str(uuid.uuid4()),
+        "lost_id": payload.lost_id,
+        "found_id": payload.found_id,
+        "verified": payload.verified,
+        "verification_method": payload.verification_method or "unknown",
+        "verified_at": datetime.utcnow(),
+    }
+
+    try:
+        await db.handover_verifications.insert_one(doc)
+        logger.info(
+            f"Verification logged: lost={payload.lost_id}, "
+            f"found={payload.found_id}, verified={payload.verified}"
+        )
+        return {
+            "status": "ok",
+            "verification_id": doc["verification_id"],
+            "verified": payload.verified,
+        }
+    except Exception as e:
+        logger.error(f"Verification log failed: {e}")
+        return {"status": "error", "detail": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# POST /feedback — Lightweight user yes/no feedback on match quality
+# ---------------------------------------------------------------------------
+
+@router.post("/feedback", summary="User Feedback on Match Quality")
+async def submit_feedback(payload: FeedbackRequest, db=Depends(get_db)):
+    """
+    Lightweight feedback endpoint for the frontend.
+    When a user selects an item from the list and says "Yes this is mine"
+    or "No this is not mine", the frontend calls this.
+
+    This creates a handover_verifications record that the training pipeline
+    already knows how to consume:
+      - is_correct=true  → verified=true  (STRONG POSITIVE for retraining)
+      - is_correct=false → verified=false (pair is EXCLUDED from training)
+
+    This is separate from /log-verification because:
+      - /log-verification is for the external handover system (after claim process)
+      - /feedback is for quick user-initiated feedback on match quality
+    """
+    if db is None:
+        return {"status": "skipped", "reason": "database unavailable"}
+
+    doc = {
+        "verification_id": str(uuid.uuid4()),
+        "lost_id": payload.query_id,
+        "found_id": payload.found_id,
+        "verified": payload.is_correct,
+        "verification_method": "user_feedback",
+        "impression_id": payload.impression_id,
+        "verified_at": datetime.utcnow(),
+        "source": "frontend_feedback",
+    }
+
+    try:
+        await db.handover_verifications.insert_one(doc)
+        logger.info(
+            f"User feedback logged: query={payload.query_id}, "
+            f"found={payload.found_id}, correct={payload.is_correct}"
+        )
+
+        # Also update the RL agent with immediate reward signal
+        try:
+            from app.core.rl_agent import RLRankingAgent
+            rl = RLRankingAgent()
+            state = rl.get_state({
+                "category_matched": True,
+                "semantic_score": 60.0,  # average placeholder
+            })
+            reward = 1.0 if payload.is_correct else -1.0
+            rl.update(state, 1, reward, state)
+            rl.save()
+        except Exception as rl_err:
+            logger.debug(f"RL update skipped: {rl_err}")
+
+        return {
+            "status": "ok",
+            "verification_id": doc["verification_id"],
+            "message": "Thank you for your feedback! This helps improve matching accuracy.",
+        }
+    except Exception as e:
+        logger.error(f"Feedback log failed: {e}")
+        return {"status": "error", "detail": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# POST /retrain — Trigger re-ranker model retraining
+# ---------------------------------------------------------------------------
+
+@router.post("/retrain", summary="Trigger Model Retraining")
+async def trigger_retrain(payload: RetrainRequest, db=Depends(get_db)):
+    """
+    Trigger the LightGBM re-ranker retraining pipeline.
+    Only succeeds when enough verified feedback has been collected.
+    """
+    if db is None:
+        return {"status": "error", "detail": "Database unavailable"}
+
+    from app.config import settings
+
+    try:
+        from app.core.trainer import build_training_dataset, train_reranker_model
+        from app.core.scorer import reload_lgbm_model
+
+        min_date = None
+        if payload.days:
+            from datetime import timedelta
+            min_date = datetime.utcnow() - timedelta(days=payload.days)
+
+        # Build dataset
+        df = await build_training_dataset(db, min_date=min_date)
+        if df.empty:
+            return {
+                "status": "error",
+                "detail": "No training data available. Need more user selections + verifications.",
+            }
+
+        n_positives = int((df["label"] == 1).sum())
+        n_negatives = int((df["label"] == 0).sum())
+
+        if n_positives < settings.MIN_TRAIN_POSITIVES and not payload.force:
+            return {
+                "status": "insufficient_data",
+                "detail": (
+                    f"Only {n_positives} positive pairs (need {settings.MIN_TRAIN_POSITIVES}). "
+                    f"Collect more verified feedback or set force=true."
+                ),
+                "stats": {"positives": n_positives, "negatives": n_negatives},
+            }
+
+        # Train
+        model = train_reranker_model(df)
+        reload_lgbm_model()
+
+        return {
+            "status": "ok",
+            "message": "Re-ranker model retrained and deployed successfully!",
+            "stats": {
+                "positives": n_positives,
+                "negatives": n_negatives,
+                "total_rows": len(df),
+            },
+        }
+    except ImportError as e:
+        return {"status": "error", "detail": f"Missing dependency: {e}"}
+    except Exception as e:
+        logger.error(f"Retrain failed: {e}")
+        return {"status": "error", "detail": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# GET /feedback-stats — Dashboard: how much training data collected so far
+# ---------------------------------------------------------------------------
+
+@router.get("/feedback-stats", summary="Feedback Collection Statistics")
+async def feedback_stats(db=Depends(get_db)):
+    """Returns counts of impressions, selections, and verifications to track readiness."""
+    if db is None:
+        return {"status": "unavailable", "reason": "database not connected"}
+
+    try:
+        impressions = await db.match_impressions.count_documents({})
+        selections = await db.match_selections.count_documents({})
+        verifications_total = await db.handover_verifications.count_documents({})
+        verifications_positive = await db.handover_verifications.count_documents({"verified": True})
+        verifications_negative = await db.handover_verifications.count_documents({"verified": False})
+
+        from app.config import settings
+        ready = verifications_positive >= settings.MIN_TRAIN_POSITIVES
+
+        return {
+            "status": "ok",
+            "impressions": impressions,
+            "selections": selections,
+            "verifications": {
+                "total": verifications_total,
+                "positive": verifications_positive,
+                "negative": verifications_negative,
+            },
+            "training_ready": ready,
+            "min_required": settings.MIN_TRAIN_POSITIVES,
+            "message": (
+                f"Ready to retrain! ({verifications_positive} verified pairs)"
+                if ready
+                else f"Need {settings.MIN_TRAIN_POSITIVES - verifications_positive} more verified pairs before training."
+            ),
+        }
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}

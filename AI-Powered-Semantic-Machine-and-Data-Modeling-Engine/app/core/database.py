@@ -3,6 +3,24 @@ from pymongo import ASCENDING, DESCENDING, TEXT
 from app.config import settings
 import logging
 import asyncio
+import os
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Fix DNS resolution for MongoDB Atlas +srv connections
+# dnspython (used by pymongo for SRV lookups) respects this env var
+# to use public DNS servers instead of unreliable local resolvers.
+# ---------------------------------------------------------------------------
+if "MONGOB_SRV_RESOLVER" not in os.environ:
+    try:
+        import dns.resolver
+        # Force Google + Cloudflare public DNS for SRV lookups
+        dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+        dns.resolver.default_resolver.nameservers = ["8.8.8.8", "8.8.4.4", "1.1.1.1"]
+        logger.info("DNS resolver configured to use Google/Cloudflare DNS for MongoDB SRV")
+    except ImportError:
+        logger.warning("dnspython not installed — SRV resolution may fail on some networks")
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +41,21 @@ async def connect_to_mongo(max_retries: int = 3, retry_delay: int = 2) -> bool:
         try:
             logger.info(f"Attempting MongoDB connection (attempt {attempt}/{max_retries})...")
 
+            # Build connection kwargs — use certifi CA bundle for Atlas TLS
+            connect_kwargs = dict(
+                serverSelectionTimeoutMS=10000,
+                connectTimeoutMS=10000,
+            )
+            try:
+                import certifi
+                connect_kwargs["tlsCAFile"] = certifi.where()
+            except ImportError:
+                pass
+
             # Create client with timeout
             mongodb.client = AsyncIOMotorClient(
                 settings.MONGODB_URL,
-                serverSelectionTimeoutMS=5000,  # 5 second timeout
-                connectTimeoutMS=5000
+                **connect_kwargs,
             )
             mongodb.db = mongodb.client[settings.DATABASE_NAME]
 
@@ -101,7 +129,23 @@ async def connect_to_mongo(max_retries: int = 3, retry_delay: int = 2) -> bool:
             return True
 
         except Exception as e:
-            logger.error(f"MongoDB connection attempt {attempt} failed: {e}")
+            error_msg = str(e)
+            logger.error(f"MongoDB connection attempt {attempt} failed: {error_msg}")
+
+            # Provide actionable guidance for common errors
+            if "TLSV1_ALERT_INTERNAL_ERROR" in error_msg:
+                logger.error(
+                    "╔═══════════════════════════════════════════════════╗\n"
+                    "║  MongoDB Atlas IP WHITELIST issue detected.      ║\n"
+                    "║  Your current IP is NOT in the Atlas whitelist.  ║\n"
+                    "║                                                  ║\n"
+                    "║  FIX: Go to MongoDB Atlas → Security →           ║\n"
+                    "║       Network Access → Add Current IP            ║\n"
+                    "║       (or add 0.0.0.0/0 for development)        ║\n"
+                    "╚═══════════════════════════════════════════════════╝"
+                )
+            elif "DNS" in error_msg or "SRV" in error_msg:
+                logger.error("DNS/SRV resolution failed. Check your internet connection.")
 
             if attempt < max_retries:
                 logger.info(f"Retrying in {retry_delay} seconds...")

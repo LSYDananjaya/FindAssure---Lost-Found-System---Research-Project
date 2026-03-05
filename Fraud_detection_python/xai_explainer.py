@@ -12,7 +12,8 @@ def explain_with_shap(features, score):
         "face_missing_ratio": 0.9,
         "avg_video_duration": -0.1
     }
-
+    # Calculate contributions based on weights and feature values
+    
     for k, w in weights.items():
         contributions[k] = round(w * features.get(k, 0), 4)
 

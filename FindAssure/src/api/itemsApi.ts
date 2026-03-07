@@ -81,6 +81,9 @@ export const itemsApi = {
           headers: {
             'Accept': 'application/json',
           },
+          // Important: Set transformRequest to undefined to let axios handle FormData properly
+          transformRequest: (data) => data,
+          timeout: 120000,
         }
       );
 

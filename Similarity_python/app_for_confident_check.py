@@ -270,6 +270,13 @@ def verify_owner():
         failed_count = sum(1 for item in enriched if not item.get("success", True))
         if failed_count:
             print(f"Warning: {failed_count} video(s) failed to process")
+        # A required spoken answer is considered missing when transcript is empty
+        # or when processing failed and placeholder text is set.
+        missing_answer_count = sum(
+            1 for item in enriched
+            if not (item.get("owner_answer") or "").strip()
+            or (item.get("owner_answer") == "[Processing Error]")
+        )
 
         # -----------------------------
         # GEMINI BATCH
@@ -403,7 +410,13 @@ def verify_owner():
         min_score = min(final_scores)
         has_zero_match = min_score <= 0.25
 
-        if has_zero_match:
+        if missing_answer_count > 0:
+            is_owner = False
+            rejection_reason = (
+                f"Critical failure: Missing valid answer transcript in "
+                f"{missing_answer_count}/{len(enriched)} response(s)."
+            )
+        elif has_zero_match:
             is_owner = False
             rejection_reason = (
                 f"Critical failure: Question {final_scores.index(min_score) + 1} has "
@@ -411,17 +424,7 @@ def verify_owner():
                 "critical question."
             )
         else:
-            if face_check_status != "completed":
-                is_owner = False
-                rejection_reason = (
-                    "Critical failure: Face verification did not complete successfully."
-                )
-            elif has_missing_face_video:
-                is_owner = False
-                rejection_reason = (
-                    "Critical failure: Face not detected in at least one required answer video."
-                )
-            elif face_decision == "possible_thief":
+            if face_decision == "possible_thief":
                 is_owner = False
                 rejection_reason = (
                     "Critical failure: Face analysis marked this session as possible_thief."
@@ -499,6 +502,7 @@ def verify_owner():
             "flags": {
                 "semantic_inconsistency": semantic_avg_final < 0.7,
                 "critical_zero_match": has_zero_match,
+                "missing_answer_transcript": missing_answer_count > 0,
                 "missing_face_video": has_missing_face_video,
                 "suspicious_face_pattern": face_decision == "possible_thief",
                 "low_face_confidence": (face_score is not None and face_score < 0.55),

@@ -180,6 +180,13 @@ export const preAnalyzeFoundImages = async (
 ): Promise<void> => {
   const imageFiles = (req.files as Express.Multer.File[]) || [];
 
+  console.log('[PRE-ANALYZE] Received files:', imageFiles.map((f) => ({
+    originalname: f.originalname,
+    mimetype: f.mimetype,
+    size: f.size,
+    path: f.path,
+  })));
+
   try {
     if (imageFiles.length < 1 || imageFiles.length > 3) {
       res.status(400).json({ message: 'You must upload between 1 and 3 images' });
@@ -231,7 +238,7 @@ export const preAnalyzeFoundImages = async (
             req.user?.id
           );
 
-          res.status(200).json({
+          const pp1OkBody = {
             status: 'ok',
             preAnalysisToken,
             analysisMode: analysis.analysisMode,
@@ -240,11 +247,13 @@ export const preAnalyzeFoundImages = async (
             detectedColor: analysis.detectedColor,
             searchable: analysis.searchable,
             message: 'Image analyzed successfully.',
-          });
+          };
+          console.log('[PRE-ANALYZE] Response (PP1 ok):', JSON.stringify(pp1OkBody, null, 2));
+          res.status(200).json(pp1OkBody);
           return;
         }
 
-        res.status(200).json({
+        const pp1FallbackBody = {
           status: 'manual_fallback',
           preAnalysisToken: null,
           analysisMode: 'pp1',
@@ -253,10 +262,12 @@ export const preAnalyzeFoundImages = async (
           detectedColor: null,
           searchable: false,
           message: 'No reliable item detection found. Please enter details manually.',
-        });
+        };
+        console.log('[PRE-ANALYZE] Response (PP1 no detection):', JSON.stringify(pp1FallbackBody, null, 2));
+        res.status(200).json(pp1FallbackBody);
         return;
       } catch (pipelineError: any) {
-        res.status(200).json({
+        const pp1ErrorBody = {
           status: 'manual_fallback',
           preAnalysisToken: null,
           analysisMode: 'pp1',
@@ -266,7 +277,9 @@ export const preAnalyzeFoundImages = async (
           searchable: false,
           message:
             pipelineError?.message || 'Image pipeline unavailable. Please enter details manually.',
-        });
+        };
+        console.log('[PRE-ANALYZE] Response (PP1 pipeline error):', JSON.stringify(pp1ErrorBody, null, 2));
+        res.status(200).json(pp1ErrorBody);
         return;
       }
     }
@@ -294,7 +307,7 @@ export const preAnalyzeFoundImages = async (
           req.user?.id
         );
 
-        res.status(200).json({
+        const pp2OkBody = {
           status: 'ok',
           preAnalysisToken,
           analysisMode: analysis.analysisMode,
@@ -303,11 +316,13 @@ export const preAnalyzeFoundImages = async (
           detectedColor: analysis.detectedColor,
           searchable: analysis.searchable,
           message: 'Images analyzed successfully.',
-        });
+        };
+        console.log('[PRE-ANALYZE] Response (PP2 ok):', JSON.stringify(pp2OkBody, null, 2));
+        res.status(200).json(pp2OkBody);
         return;
       }
 
-      res.status(200).json({
+      const pp2FallbackBody = {
         status: 'manual_fallback',
         preAnalysisToken: null,
         analysisMode: 'pp2',
@@ -316,9 +331,11 @@ export const preAnalyzeFoundImages = async (
         detectedColor: null,
         searchable: false,
         message: 'Multi-view verification failed. Please enter details manually.',
-      });
+      };
+      console.log('[PRE-ANALYZE] Response (PP2 verification failed):', JSON.stringify(pp2FallbackBody, null, 2));
+      res.status(200).json(pp2FallbackBody);
     } catch (pipelineError: any) {
-      res.status(200).json({
+      const pp2ErrorBody = {
         status: 'manual_fallback',
         preAnalysisToken: null,
         analysisMode: 'pp2',
@@ -328,7 +345,9 @@ export const preAnalyzeFoundImages = async (
         searchable: false,
         message:
           pipelineError?.message || 'Image pipeline unavailable. Please enter details manually.',
-      });
+      };
+      console.log('[PRE-ANALYZE] Response (PP2 pipeline error):', JSON.stringify(pp2ErrorBody, null, 2));
+      res.status(200).json(pp2ErrorBody);
     }
   } catch (error) {
     next(error);

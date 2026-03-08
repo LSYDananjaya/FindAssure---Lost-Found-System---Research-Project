@@ -19,6 +19,7 @@ const ReportFoundQuestionsScreen = () => {
   const { images, preAnalysisToken, category, description } = route.params;
 
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [suggestedAnswersByQuestion, setSuggestedAnswersByQuestion] = useState<Record<string, string>>({});
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +34,15 @@ const ReportFoundQuestionsScreen = () => {
       setError(null);
       const response = await itemsApi.generateQuestions({ category, description });
       setSuggestedQuestions(response.questions);
+
+      const answerMap: Record<string, string> = {};
+      response.questions.forEach((question, index) => {
+        const suggested = response.suggestedFounderAnswers?.[index];
+        if (suggested && suggested.trim().length > 0) {
+          answerMap[question] = suggested.trim();
+        }
+      });
+      setSuggestedAnswersByQuestion(answerMap);
     } catch (err: any) {
       setError('Failed to generate questions. Please try again.');
       Alert.alert('Error', `Failed to generate questions: ${err.response?.data?.message || err.message || 'Network error'}`, [
@@ -67,6 +77,7 @@ const ReportFoundQuestionsScreen = () => {
       category,
       description,
       selectedQuestions,
+      suggestedAnswersByQuestion,
     });
   };
 

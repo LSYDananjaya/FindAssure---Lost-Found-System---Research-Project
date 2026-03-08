@@ -23,8 +23,18 @@ type ReportFoundAnswersRouteProp = RouteProp<RootStackParamList, 'ReportFoundAns
 const ReportFoundAnswersScreen = () => {
   const navigation = useNavigation<ReportFoundAnswersNavigationProp>();
   const route = useRoute<ReportFoundAnswersRouteProp>();
-  const { images, preAnalysisToken, category, description, selectedQuestions } = route.params;
-  const [answers, setAnswers] = useState<string[]>(new Array(selectedQuestions.length).fill(''));
+  const {
+    images,
+    preAnalysisToken,
+    category,
+    description,
+    selectedQuestions,
+    suggestedAnswersByQuestion,
+  } = route.params;
+
+  const [answers, setAnswers] = useState<string[]>(
+    selectedQuestions.map((question) => suggestedAnswersByQuestion?.[question] || '')
+  );
 
   const handleAnswerChange = (index: number, text: string) => {
     const next = [...answers];
@@ -50,30 +60,43 @@ const ReportFoundAnswersScreen = () => {
   };
 
   return (
-    <LinearGradient colors={gradients.appBackground} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <GlassCard style={styles.hero}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>Founder answers</Text>
-            </View>
-            <Text style={styles.heroEyebrow}>Founder answers</Text>
-            <Text style={styles.heroTitle}>Store the correct answers privately.</Text>
-            <Text style={styles.heroBody}>Owners answer these later during verification, so be specific and consistent.</Text>
-          </GlassCard>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Answer the Questions</Text>
+            <Text style={styles.subtitle}>
+              AI suggested answers are prefilled. Review and edit each answer before submitting.
+            </Text>
+          </View>
 
-          {selectedQuestions.map((question, index) => (
-            <GlassCard key={index} style={styles.cardGap}>
-              <Text style={styles.questionLabel}>Question {index + 1}</Text>
-              <Text style={styles.questionText}>{question}</Text>
-              <FormInput
-                placeholder="Type your answer here..."
-                value={answers[index]}
-                onChangeText={(text) => handleAnswerChange(index, text)}
-                multiline
-              />
-            </GlassCard>
-          ))}
+          <View style={styles.questionsContainer}>
+            {selectedQuestions.map((question, index) => (
+              <View key={index} style={styles.questionGroup}>
+                <Text style={styles.questionNumber}>Question {index + 1}</Text>
+                <Text style={styles.questionText}>{question}</Text>
+                {suggestedAnswersByQuestion?.[question] ? (
+                  <Text style={styles.suggestionText}>
+                    Suggested: {suggestedAnswersByQuestion[question]}
+                  </Text>
+                ) : null}
+                
+                {/* Text Input Only for Founders */}
+                <TextInput
+                  style={styles.answerInput}
+                  placeholder="Type your answer here..."
+                  value={answers[index]}
+                  onChangeText={(text) => handleAnswerChange(index, text)}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+            ))}
+          </View>
 
           <GlassCard style={styles.cardGap}>
             <Text style={styles.tipTitle}>Answering tips</Text>
@@ -130,9 +153,20 @@ const styles = StyleSheet.create({
   cardGap: {
     marginBottom: spacing.lg,
   },
-  questionLabel: {
-    ...type.label,
-    marginBottom: spacing.xs,
+  suggestionText: {
+    fontSize: 12,
+    color: '#2E7D32',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  answerInput: {
+    borderWidth: 1,
+    borderColor: '#DDDDDD',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    backgroundColor: '#FAFAFA',
+    minHeight: 100,
   },
   questionText: {
     ...type.cardTitle,

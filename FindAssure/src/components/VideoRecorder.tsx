@@ -252,7 +252,7 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
     },
     permissionButtonText: {
       ...theme.type.bodyStrong,
-      color: theme.colors.inverse,
+      color: theme.colors.onTint,
     },
     cancelButton: {
       paddingHorizontal: 32,
@@ -396,7 +396,7 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
     },
     retakeButtonText: {
       ...theme.type.bodyStrong,
-      color: theme.colors.inverse,
+      color: theme.colors.onTint,
     },
     useButton: {
       flex: 1,
@@ -408,6 +408,6 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
     },
     useButtonText: {
       ...theme.type.bodyStrong,
-      color: theme.colors.inverse,
+      color: theme.colors.onTint,
     },
   });

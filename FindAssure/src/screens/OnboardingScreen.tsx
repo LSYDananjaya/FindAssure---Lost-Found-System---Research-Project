@@ -100,7 +100,7 @@ const OnboardingScreen = () => {
       },
       {
         id: '2',
-        eyebrow: 'Founder flow',
+        eyebrow: 'Report item',
         title: 'Capture, describe, and protect the item.',
         description:
           'Add strong photos, let the app prepare details, and choose the five questions that only the real owner should know.',
@@ -109,7 +109,7 @@ const OnboardingScreen = () => {
       },
       {
         id: '3',
-        eyebrow: 'Owner flow',
+        eyebrow: 'Item search',
         title: 'Search with context, not guesswork.',
         description:
           'Combine category, description, location confidence, and optional photos to surface stronger matches immediately.',

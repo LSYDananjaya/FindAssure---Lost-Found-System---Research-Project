@@ -10,6 +10,7 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { StaggeredEntrance } from '../../components/StaggeredEntrance';
 import { itemsApi } from '../../api/itemsApi';
 import { useAppTheme } from '../../context/ThemeContext';
+import { getDisplayImageUri } from '../../utils/cloudinaryImage';
 import { getVisualMatchDisplay } from '../../utils/visualMatch';
 import { getAdminItemStatusTone, getAdminPalette } from './adminTheme';
 
@@ -67,7 +68,7 @@ const AdminItemDetailScreen = () => {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <StaggeredEntrance delay={20}>
           <GlassCard style={styles.mediaCard} contentStyle={styles.mediaCardContent}>
-            <Image source={{ uri: foundItem.imageUrl }} style={styles.image} contentFit="cover" />
+            <Image source={{ uri: getDisplayImageUri(foundItem.imageUrl) }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" transition={120} />
             <View style={styles.heroBody}>
               <View style={styles.badgeRow}>
                 <View style={[styles.adminBadge, { backgroundColor: adminPalette.accentSoft }]}>

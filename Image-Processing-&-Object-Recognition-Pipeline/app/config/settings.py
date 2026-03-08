@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     PP2_ENABLE_GEMINI: bool = False
     PP2_GEMINI_ON_NEAR_MISS: bool = True
     PP2_GEMINI_TIMEOUT_S: int = 12
+    DINO_MODEL_PATH: str | None = None
     DINO_INPUT_SIZE: int = 224
     DINO_ENABLE_AMP: bool = True
     DINO_USE_FP16: bool = True

@@ -114,7 +114,7 @@ export const AnimatedHeroIllustration: React.FC<AnimatedHeroIllustrationProps> =
         <Circle cx={center} cy={center} r={size * 0.18} fill="url(#heroGlow)" />
         <Path
           d={`M ${center - 14} ${center} L ${center - 3} ${center + 11} L ${center + 16} ${center - 10}`}
-          stroke={theme.colors.inverse}
+          stroke={theme.colors.onTint}
           strokeWidth="4"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -139,6 +139,7 @@ const createStyles = (
       height: size,
       alignItems: 'center',
       justifyContent: 'center',
+      position: 'relative',
     },
     orb: {
       position: 'absolute',

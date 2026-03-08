@@ -95,6 +95,11 @@ type Palette = {
   accentSoft: string;
   accentMuted: string;
   accentText: string;
+  onTint: string;
+  onTintMuted: string;
+  onTintSubtle: string;
+  tintSurface: string;
+  tintBorder: string;
   success: string;
   successSoft: string;
   warning: string;
@@ -145,6 +150,11 @@ const lightPalette: Palette = {
   accentSoft: '#EAF3FF',
   accentMuted: '#DCEBFF',
   accentText: '#004799',
+  onTint: '#FFFFFF',
+  onTintMuted: 'rgba(255,255,255,0.84)',
+  onTintSubtle: 'rgba(255,255,255,0.72)',
+  tintSurface: 'rgba(255,255,255,0.14)',
+  tintBorder: 'rgba(255,255,255,0.16)',
   success: '#16A34A',
   successSoft: '#DCFCE7',
   warning: '#D97706',
@@ -195,6 +205,11 @@ const darkPalette: Palette = {
   accentSoft: 'rgba(76, 155, 255, 0.18)',
   accentMuted: 'rgba(76, 155, 255, 0.1)',
   accentText: '#D8EAFF',
+  onTint: '#FFFFFF',
+  onTintMuted: 'rgba(255,255,255,0.84)',
+  onTintSubtle: 'rgba(255,255,255,0.72)',
+  tintSurface: 'rgba(255,255,255,0.14)',
+  tintBorder: 'rgba(255,255,255,0.16)',
   success: '#34D399',
   successSoft: 'rgba(52, 211, 153, 0.18)',
   warning: '#F59E0B',

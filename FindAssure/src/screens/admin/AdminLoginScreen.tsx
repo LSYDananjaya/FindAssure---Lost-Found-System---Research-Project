@@ -32,7 +32,7 @@ const AdminLoginScreen = () => {
   const [awaitingAdminValidation, setAwaitingAdminValidation] = useState(false);
 
   useEffect(() => {
-    if (!awaitingAdminValidation || !user) {
+    if (!user) {
       return;
     }
 
@@ -45,6 +45,10 @@ const AdminLoginScreen = () => {
           routes: [{ name: 'AdminDashboard' }],
         })
       );
+      return;
+    }
+
+    if (!awaitingAdminValidation) {
       return;
     }
 
@@ -70,9 +74,10 @@ const AdminLoginScreen = () => {
 
     try {
       setLoading(true);
-      await signIn({ email, password });
       setAwaitingAdminValidation(true);
+      await signIn({ email, password });
     } catch (error: any) {
+      setAwaitingAdminValidation(false);
       setLoading(false);
       showToast({
         title: 'Login failed',

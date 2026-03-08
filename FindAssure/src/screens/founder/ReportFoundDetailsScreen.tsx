@@ -12,6 +12,7 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { useAppTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { RootStackParamList } from '../../types/models';
+import { resolveItemCategory } from '../../utils/itemCategory';
 
 type ReportFoundDetailsNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundDetails'>;
 type ReportFoundDetailsRouteProp = RouteProp<RootStackParamList, 'ReportFoundDetails'>;
@@ -23,8 +24,9 @@ const ReportFoundDetailsScreen = () => {
   const { showToast } = useToast();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { images, preAnalysisToken, category: prefilledCategory, description: prefilledDescription, analysisMessage } = route.params;
+  const resolvedPrefilledCategory = resolveItemCategory(prefilledCategory);
 
-  const [category, setCategory] = useState<string>(prefilledCategory || ITEM_CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(resolvedPrefilledCategory || ITEM_CATEGORIES[0]);
   const [description, setDescription] = useState(prefilledDescription || '');
 
   const handleConfirm = () => {
@@ -50,7 +52,7 @@ const ReportFoundDetailsScreen = () => {
       <KeyboardAwareFormScreen contentContainerStyle={styles.content}>
         <GlassCard style={styles.hero}>
           <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>Founder flow</Text>
+            <Text style={styles.heroBadgeText}>Report item</Text>
           </View>
           <Text style={styles.heroEyebrow}>Report details</Text>
           <Text style={styles.heroTitle}>Refine the report.</Text>

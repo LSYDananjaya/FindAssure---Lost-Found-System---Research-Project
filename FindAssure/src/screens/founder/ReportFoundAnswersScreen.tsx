@@ -64,9 +64,12 @@ const ReportFoundAnswersScreen = () => {
         <GlassCard style={styles.hero}>
           <Text style={styles.heroEyebrow}>Founder answers</Text>
           <Text style={styles.title}>Answer the Questions</Text>
-          <Text style={styles.subtitle}>
-            AI suggestions are prefilled when available. Review them carefully and replace anything that is too vague.
-          </Text>
+          <GlassCard style={styles.tipsBox}>
+           <Text style={styles.tipText}>Examine the found item carefully before answering.</Text>
+          <Text style={styles.tipText}>Look at visible labels, colors, wear marks, and unique details.</Text>
+          <Text style={styles.tipText}>Be specific and accurate instead of generic.</Text>
+          <Text style={styles.tipText}>These answers are what the real owner will need to match later.</Text>
+        </GlassCard>
         </GlassCard>
 
         <View style={styles.questionsContainer}>
@@ -94,13 +97,7 @@ const ReportFoundAnswersScreen = () => {
           ))}
         </View>
 
-        <GlassCard style={styles.tipsBox}>
-          <Text style={styles.tipsTitle}>Answering tips</Text>
-          <Text style={styles.tipText}>Examine the found item carefully before answering.</Text>
-          <Text style={styles.tipText}>Look at visible labels, colors, wear marks, and unique details.</Text>
-          <Text style={styles.tipText}>Be specific and accurate instead of generic.</Text>
-          <Text style={styles.tipText}>These answers are what the real owner will need to match later.</Text>
-        </GlassCard>
+        
 
         <PrimaryButton title="Next" onPress={handleNext} style={styles.nextButton} />
       </ScrollView>

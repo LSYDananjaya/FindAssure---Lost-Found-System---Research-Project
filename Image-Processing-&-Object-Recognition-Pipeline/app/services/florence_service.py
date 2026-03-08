@@ -515,9 +515,11 @@ class FlorenceService:
         if profile_key == "fast":
             max_tokens = self.fast_max_new_tokens
             num_beams = self.fast_num_beams
+            early_stopping = False
         else:
             max_tokens = self.max_new_tokens
             num_beams = 3
+            early_stopping = True
 
         use_amp_cuda = bool(
             self.device == "cuda"
@@ -535,6 +537,7 @@ class FlorenceService:
                         **inputs,
                         max_new_tokens=max_tokens,
                         num_beams=num_beams,
+                        early_stopping=early_stopping,
                         do_sample=False,
                     )
 

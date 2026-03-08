@@ -115,7 +115,7 @@ const getVariantStyles = (
           backgroundColor: theme.colors.danger,
         },
         text: {
-          color: theme.colors.inverse,
+          color: theme.colors.onTint,
         } as TextStyle,
       };
     default:
@@ -124,7 +124,7 @@ const getVariantStyles = (
           backgroundColor: theme.colors.accent,
         },
         text: {
-          color: theme.colors.inverse,
+          color: theme.colors.onTint,
         } as TextStyle,
       };
   }

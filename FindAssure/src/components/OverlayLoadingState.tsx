@@ -1,68 +1,38 @@
-import React, { useMemo } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { useAppTheme } from '../context/ThemeContext';
+import React from 'react';
+import { FeedbackLoadingShell } from './FeedbackLoadingShell';
 
 interface OverlayLoadingStateProps {
   visible: boolean;
+  badge?: string;
   title?: string;
   message?: string;
+  stageLabel?: string;
+  note?: string;
+  illustrationVariant?: 'auth' | 'pending' | 'success';
 }
 
 export const OverlayLoadingState: React.FC<OverlayLoadingStateProps> = ({
   visible,
+  badge,
   title = 'Working on it',
   message = 'This usually takes a moment.',
+  stageLabel,
+  note,
+  illustrationVariant = 'pending',
 }) => {
-  const { theme } = useAppTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
-
   if (!visible) {
     return null;
   }
 
   return (
-    <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(180)} style={styles.overlay}>
-      <View style={styles.card}>
-        <ActivityIndicator size="large" color={theme.colors.accent} />
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.message}>{message}</Text>
-      </View>
-    </Animated.View>
+    <FeedbackLoadingShell
+      mode="overlay"
+      badge={badge}
+      title={title}
+      message={message}
+      stageLabel={stageLabel}
+      note={note}
+      illustrationVariant={illustrationVariant}
+    />
   );
 };
-
-const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
-  StyleSheet.create({
-    overlay: {
-      ...StyleSheet.absoluteFillObject,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.colors.overlay,
-      paddingHorizontal: theme.spacing.xl,
-      zIndex: 50,
-    },
-    card: {
-      width: '100%',
-      maxWidth: 320,
-      borderRadius: theme.radius.lg,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.card,
-      paddingHorizontal: theme.spacing.xl,
-      paddingVertical: theme.spacing.lg,
-      alignItems: 'center',
-      gap: theme.spacing.sm,
-    },
-    title: {
-      ...theme.type.section,
-      color: theme.colors.textStrong,
-      marginTop: theme.spacing.sm,
-      textAlign: 'center',
-    },
-    message: {
-      ...theme.type.body,
-      color: theme.colors.textMuted,
-      textAlign: 'center',
-    },
-  });

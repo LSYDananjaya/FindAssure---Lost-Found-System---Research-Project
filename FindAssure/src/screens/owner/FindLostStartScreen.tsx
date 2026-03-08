@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import axios from 'axios';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { itemsApi } from '../../api/itemsApi';
 import { AI_BACKEND_URL } from '../../config/api.config';
 import { ITEM_CATEGORIES } from '../../constants/appConstants';
@@ -13,6 +13,7 @@ import { LocationDetail } from '../../constants/locationData';
 import { CategoryPicker } from '../../components/CategoryPicker';
 import { FormInput } from '../../components/FormInput';
 import { GlassCard } from '../../components/GlassCard';
+import { InlineLoadingState } from '../../components/InlineLoadingState';
 import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { LocationPicker } from '../../components/LocationPicker';
 import { OverlayLoadingState } from '../../components/OverlayLoadingState';
@@ -138,7 +139,7 @@ const FindLostStartScreen = () => {
     if (!category || !description.trim() || !location || !location.location) {
       showToast({
         title: 'Missing details',
-        message: 'Please complete the category, description, and location.',
+        message: 'Add the category, description, and likely location before searching.',
         variant: 'warning',
       });
       return;
@@ -161,7 +162,7 @@ const FindLostStartScreen = () => {
     } catch (error: any) {
       showToast({
         title: 'Search failed',
-        message: error.message || 'Could not search for items. Please try again.',
+        message: error.message || 'We could not search the current reports. Try again in a moment.',
         variant: 'error',
       });
     } finally {
@@ -174,7 +175,7 @@ const FindLostStartScreen = () => {
       <KeyboardAwareFormScreen contentContainerStyle={styles.content}>
         <GlassCard style={styles.hero}>
           <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>Owner flow</Text>
+            <Text style={styles.heroBadgeText}>Item search</Text>
           </View>
           <Text style={styles.heroEyebrow}>Search</Text>
           <Text style={styles.heroTitle}>Describe what you lost.</Text>
@@ -196,10 +197,11 @@ const FindLostStartScreen = () => {
             containerStyle={styles.fieldGap}
           />
           {grammarChecking ? (
-            <View style={styles.grammarRow}>
-              <ActivityIndicator size="small" color={theme.colors.accent} />
-              <Text style={styles.grammarText}>Checking grammar…</Text>
-            </View>
+            <InlineLoadingState
+              label="Refining your description"
+              subtitle="Checking clarity before the search runs."
+              style={styles.grammarRow}
+            />
           ) : null}
         </GlassCard>
 
@@ -269,8 +271,11 @@ const FindLostStartScreen = () => {
 
       <OverlayLoadingState
         visible={loading}
-        title="Searching reported items"
-        message="Comparing your details against available reports."
+        badge="Search in progress"
+        title="Scanning reported items"
+        message="Matching your description, location, and optional photo against current reports."
+        stageLabel="Comparing report details"
+        note="This works best when your description includes brand, color, and other distinctive details."
       />
     </View>
   );
@@ -335,14 +340,7 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
       marginTop: theme.spacing.md,
     },
     grammarRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.sm,
       marginTop: theme.spacing.sm,
-    },
-    grammarText: {
-      ...theme.type.caption,
-      color: theme.colors.accent,
     },
     confidenceGrid: {
       flexDirection: 'row',

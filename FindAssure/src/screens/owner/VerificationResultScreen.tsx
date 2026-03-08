@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
 import axiosClient from '../../api/axiosClient';
 import { AnimatedHeroIllustration } from '../../components/AnimatedHeroIllustration';
 import { GlassCard } from '../../components/GlassCard';
@@ -111,9 +112,11 @@ const VerificationResultScreen = () => {
     <LinearGradient colors={theme.gradients.appBackground} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <StaggeredEntrance>
-          <GlassCard style={styles.heroCard}>
-            <View style={styles.heroIllustration}>
-              <AnimatedHeroIllustration size={132} variant={isVerified ? 'success' : 'pending'} />
+          <GlassCard style={styles.heroCard} contentStyle={styles.heroContent}>
+            <View style={styles.heroVisualBlock}>
+              <View style={styles.heroIllustrationFrame}>
+                <AnimatedHeroIllustration size={132} variant={isVerified ? 'success' : 'pending'} />
+              </View>
             </View>
             <Text style={[styles.heroEyebrow, { color: isVerified ? theme.colors.success : theme.colors.warning }]}>
               {isVerified ? 'Verified owner' : 'Verification failed'}
@@ -135,9 +138,35 @@ const VerificationResultScreen = () => {
             <GlassCard style={styles.cardGap}>
               <Text style={styles.sectionEyebrow}>Founder contact</Text>
               <Text style={styles.sectionTitle}>Reach out to retrieve your item</Text>
-              <Text style={styles.sectionBody}>Name: {verification.foundItemId.founderContact.name}</Text>
-              <Text style={styles.sectionBody}>Email: {verification.foundItemId.founderContact.email}</Text>
-              <Text style={styles.sectionBody}>Phone: {verification.foundItemId.founderContact.phone}</Text>
+              <View style={styles.contactList}>
+                {[
+                  {
+                    icon: 'person-outline' as const,
+                    label: 'Name',
+                    value: verification.foundItemId.founderContact.name,
+                  },
+                  {
+                    icon: 'mail-outline' as const,
+                    label: 'Email',
+                    value: verification.foundItemId.founderContact.email,
+                  },
+                  {
+                    icon: 'call-outline' as const,
+                    label: 'Phone',
+                    value: verification.foundItemId.founderContact.phone,
+                  },
+                ].map((item) => (
+                  <View key={item.label} style={styles.contactRow}>
+                    <View style={styles.contactIconWrap}>
+                      <Ionicons name={item.icon} size={16} color={theme.colors.accent} />
+                    </View>
+                    <View style={styles.contactCopy}>
+                      <Text style={styles.contactLabel}>{item.label}</Text>
+                      <Text style={styles.contactValue}>{item.value}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
             </GlassCard>
           </StaggeredEntrance>
         ) : null}
@@ -211,33 +240,49 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
       paddingBottom: theme.spacing.xxl,
     },
     heroCard: {
-      padding: theme.spacing.xl,
-      alignItems: 'center',
       marginBottom: theme.spacing.lg,
     },
-    heroIllustration: {
+    heroContent: {
+      padding: theme.spacing.xl,
+      alignItems: 'center',
+    },
+    heroVisualBlock: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      alignSelf: 'center',
       marginBottom: theme.spacing.md,
+    },
+    heroIllustrationFrame: {
+      width: 148,
+      height: 148,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     heroEyebrow: {
       ...theme.type.label,
-      marginBottom: theme.spacing.sm,
+      marginBottom: theme.spacing.xs,
+      textAlign: 'center',
     },
     heroTitle: {
       ...theme.type.title,
       color: theme.colors.textStrong,
-      marginBottom: theme.spacing.sm,
+      marginBottom: theme.spacing.xs,
       textAlign: 'center',
+      maxWidth: 320,
     },
     heroBody: {
       ...theme.type.body,
       color: theme.colors.textMuted,
       textAlign: 'center',
+      maxWidth: 320,
+      lineHeight: 24,
     },
     failureReason: {
       ...theme.type.caption,
       color: theme.colors.textSubtle,
       marginTop: theme.spacing.md,
       textAlign: 'center',
+      maxWidth: 320,
     },
     errorText: {
       ...theme.type.body,
@@ -261,6 +306,36 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
       ...theme.type.body,
       color: theme.colors.textMuted,
       marginBottom: theme.spacing.sm,
+    },
+    contactList: {
+      gap: theme.spacing.sm,
+    },
+    contactRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: theme.spacing.sm,
+      paddingVertical: 2,
+    },
+    contactIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.accentSoft,
+      marginTop: 1,
+    },
+    contactCopy: {
+      flex: 1,
+    },
+    contactLabel: {
+      ...theme.type.caption,
+      color: theme.colors.textSubtle,
+      marginBottom: 2,
+    },
+    contactValue: {
+      ...theme.type.bodyStrong,
+      color: theme.colors.textStrong,
     },
     resultItem: {
       paddingVertical: theme.spacing.md,

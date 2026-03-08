@@ -21,7 +21,7 @@ const VerificationPendingScreen = () => {
     <LinearGradient colors={theme.gradients.appBackground} style={styles.container}>
       <View style={styles.content}>
         <StaggeredEntrance>
-          <GlassCard style={styles.hero}>
+          <GlassCard style={styles.hero} contentStyle={styles.heroContent}>
             <View style={styles.illustrationWrap}>
               <AnimatedHeroIllustration size={128} variant="pending" />
             </View>
@@ -70,12 +70,15 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
       paddingBottom: theme.spacing.xl,
     },
     hero: {
+      marginBottom: theme.spacing.lg,
+    },
+    heroContent: {
       padding: theme.spacing.xl,
       alignItems: 'center',
-      marginBottom: theme.spacing.lg,
     },
     illustrationWrap: {
       marginBottom: theme.spacing.md,
+      alignSelf: 'center',
     },
     heroEyebrow: {
       ...theme.type.label,

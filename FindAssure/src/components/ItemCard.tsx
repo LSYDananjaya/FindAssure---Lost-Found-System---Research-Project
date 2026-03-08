@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useAppTheme } from '../context/ThemeContext';
 import { FoundItem } from '../types/models';
+import { getDisplayImageUri } from '../utils/cloudinaryImage';
 import { getVisualMatchDisplay } from '../utils/visualMatch';
 import { GlassCard } from './GlassCard';
 
@@ -55,7 +56,7 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item, onPress }) => {
         }}
       >
         <GlassCard style={styles.card} contentStyle={styles.cardContent}>
-          <Image source={{ uri: item.imageUrl }} style={styles.image} contentFit="cover" />
+          <Image source={{ uri: getDisplayImageUri(item.imageUrl) }} style={styles.image} contentFit="cover" cachePolicy="memory-disk" transition={120} />
           <View style={styles.content}>
             <View style={styles.header}>
               <Text style={styles.category}>{item.category}</Text>
@@ -141,7 +142,7 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
       borderRadius: theme.radius.pill,
     },
     statusText: {
-      color: theme.colors.inverse,
+      color: theme.colors.onTint,
       fontSize: 11,
       fontWeight: '700',
       textTransform: 'capitalize',

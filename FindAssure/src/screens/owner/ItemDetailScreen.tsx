@@ -8,6 +8,7 @@ import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { GlassCard } from '../../components/GlassCard';
 import { useAppTheme } from '../../context/ThemeContext';
+import { getDisplayImageUri } from '../../utils/cloudinaryImage';
 import { getVisualMatchDisplay } from '../../utils/visualMatch';
 
 type ItemDetailNavigationProp = StackNavigationProp<RootStackParamList, 'ItemDetail'>;
@@ -53,7 +54,7 @@ const ItemDetailScreen = () => {
     <LinearGradient colors={theme.gradients.appBackground} style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <GlassCard style={styles.mediaCard} contentStyle={styles.mediaCardContent}>
-          <Image source={{ uri: foundItem.imageUrl }} style={styles.heroImage} contentFit="cover" />
+          <Image source={{ uri: getDisplayImageUri(foundItem.imageUrl) }} style={styles.heroImage} contentFit="cover" cachePolicy="memory-disk" transition={120} />
 
           <View style={styles.badgeRow}>
             <View style={[styles.statusBadge, getStatusBadgeStyle(theme, foundItem.status)]}>
@@ -135,7 +136,7 @@ const ItemDetailScreen = () => {
               'Look directly at the camera.',
               'Speak clearly and keep answers concise.',
               'Use a quiet, well-lit environment.',
-              'Mention details only the true owner would know.',
+              'Mention details only you have confidence..',
             ].map((tip) => (
               <View key={tip} style={styles.tipRow}>
                 <View style={styles.tipDot} />
@@ -222,7 +223,7 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
     },
     statusText: {
       ...theme.type.caption,
-      color: theme.colors.inverse,
+      color: theme.colors.onTint,
       fontWeight: '700',
       textTransform: 'uppercase',
     },

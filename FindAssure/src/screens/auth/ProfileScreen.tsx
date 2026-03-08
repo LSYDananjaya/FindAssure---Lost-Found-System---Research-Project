@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -15,6 +14,7 @@ import { RootStackParamList } from '../../types/models';
 import { authApi } from '../../api/authApi';
 import { FormInput } from '../../components/FormInput';
 import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { gradients, palette, radius, spacing, type } from '../../theme/designSystem';
 
@@ -101,7 +101,7 @@ const ProfileScreen = () => {
 
   return (
     <LinearGradient colors={gradients.appBackground} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.content}>
         <GlassCard style={styles.hero}>
           <View style={styles.heroBadge}>
             <Text style={styles.heroBadgeText}>Profile</Text>
@@ -190,7 +190,7 @@ const ProfileScreen = () => {
             ))
           )}
         </GlassCard>
-      </ScrollView>
+      </KeyboardAwareFormScreen>
     </LinearGradient>
   );
 };

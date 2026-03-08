@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -19,6 +16,7 @@ import { itemsApi } from '../../api/itemsApi';
 import { useAuth } from '../../context/AuthContext';
 import { FormInput } from '../../components/FormInput';
 import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { gradients, palette, radius, spacing, type } from '../../theme/designSystem';
 
 type ReportFoundLocationNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundLocation'>;
@@ -86,63 +84,61 @@ const ReportFoundLocationScreen = () => {
 
   return (
     <LinearGradient colors={gradients.appBackground} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <GlassCard style={styles.hero}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>Final step</Text>
-            </View>
-            <Text style={styles.heroEyebrow}>Final step</Text>
-            <Text style={styles.heroTitle}>Pin the location and share contact details.</Text>
-            <Text style={styles.heroBody}>Finder contact information remains hidden until an owner is verified successfully.</Text>
-          </GlassCard>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.content}>
+        <GlassCard style={styles.hero}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>Final step</Text>
+          </View>
+          <Text style={styles.heroEyebrow}>Final step</Text>
+          <Text style={styles.heroTitle}>Pin the location and share contact details.</Text>
+          <Text style={styles.heroBody}>Finder contact information remains hidden until an owner is verified successfully.</Text>
+        </GlassCard>
 
-          <GlassCard style={styles.cardGap}>
-            <Text style={styles.sectionEyebrow}>Location</Text>
-            <Text style={styles.sectionTitle}>Where was the item found?</Text>
-            <LocationPicker selectedValue={location} onValueChange={setLocation} userType="founder" error={!location ? undefined : ''} />
-          </GlassCard>
+        <GlassCard style={styles.cardGap}>
+          <Text style={styles.sectionEyebrow}>Location</Text>
+          <Text style={styles.sectionTitle}>Where was the item found?</Text>
+          <LocationPicker selectedValue={location} onValueChange={setLocation} userType="founder" error={!location ? undefined : ''} />
+        </GlassCard>
 
-          <GlassCard style={styles.cardGap}>
-            <Text style={styles.sectionEyebrow}>Finder contact</Text>
-            <Text style={styles.sectionTitle}>How verified owners will reach you</Text>
-            {user ? <Text style={styles.autoFillHint}>Auto-filled from your profile. You can still edit it here.</Text> : null}
-            <FormInput
-              label="Your name"
-              placeholder="Enter your full name"
-              value={founderName}
-              onChangeText={setFounderName}
-              autoCapitalize="words"
-              containerStyle={styles.fieldGap}
-            />
-            <FormInput
-              label="Your email"
-              placeholder="Enter your email"
-              value={founderEmail}
-              onChangeText={setFounderEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-              containerStyle={styles.fieldGap}
-            />
-            <FormInput
-              label="Your phone number"
-              placeholder="Enter your phone number"
-              value={founderPhone}
-              onChangeText={setFounderPhone}
-              keyboardType="phone-pad"
-              autoComplete="tel"
-            />
-          </GlassCard>
+        <GlassCard style={styles.cardGap}>
+          <Text style={styles.sectionEyebrow}>Finder contact</Text>
+          <Text style={styles.sectionTitle}>How verified owners will reach you</Text>
+          {user ? <Text style={styles.autoFillHint}>Auto-filled from your profile. You can still edit it here.</Text> : null}
+          <FormInput
+            label="Your name"
+            placeholder="Enter your full name"
+            value={founderName}
+            onChangeText={setFounderName}
+            autoCapitalize="words"
+            containerStyle={styles.fieldGap}
+          />
+          <FormInput
+            label="Your email"
+            placeholder="Enter your email"
+            value={founderEmail}
+            onChangeText={setFounderEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            containerStyle={styles.fieldGap}
+          />
+          <FormInput
+            label="Your phone number"
+            placeholder="Enter your phone number"
+            value={founderPhone}
+            onChangeText={setFounderPhone}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+          />
+        </GlassCard>
 
-          <GlassCard style={styles.cardGap}>
-            <Text style={styles.sectionEyebrow}>Privacy</Text>
-            <Text style={styles.sectionBody}>Contact details are revealed only after the owner passes the verification process.</Text>
-          </GlassCard>
+        <GlassCard style={styles.cardGap}>
+          <Text style={styles.sectionEyebrow}>Privacy</Text>
+          <Text style={styles.sectionBody}>Contact details are revealed only after the owner passes the verification process.</Text>
+        </GlassCard>
 
-          <PrimaryButton title="Submit Found Item" onPress={handleSubmit} loading={loading} size="lg" />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <PrimaryButton title="Submit Found Item" onPress={handleSubmit} loading={loading} size="lg" />
+      </KeyboardAwareFormScreen>
     </LinearGradient>
   );
 };

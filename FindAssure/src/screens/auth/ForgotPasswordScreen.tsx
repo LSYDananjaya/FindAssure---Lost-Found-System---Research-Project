@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -16,6 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../types/models';
 import { FormInput } from '../../components/FormInput';
 import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { gradients, palette, spacing, type } from '../../theme/designSystem';
 
@@ -58,54 +56,52 @@ const ForgotPasswordScreen = () => {
 
   return (
     <LinearGradient colors={gradients.appBackground} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <GlassCard style={styles.hero}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>Recovery</Text>
-            </View>
-            <Text style={styles.wordmark}>FIND ASSURE</Text>
-            <Text style={styles.heroTitle}>Reset your password.</Text>
-            <Text style={styles.heroBody}>Enter the email tied to your account and we will send you a reset link.</Text>
-          </GlassCard>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.scrollContent}>
+        <GlassCard style={styles.hero}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>Recovery</Text>
+          </View>
+          <Text style={styles.wordmark}>FIND ASSURE</Text>
+          <Text style={styles.heroTitle}>Reset your password.</Text>
+          <Text style={styles.heroBody}>Enter the email tied to your account and we will send you a reset link.</Text>
+        </GlassCard>
 
-          <GlassCard style={styles.formCard}>
-            <Text style={styles.sectionEyebrow}>Recovery</Text>
-            <Text style={styles.formTitle}>Send reset email</Text>
-            <FormInput
-              label="Email"
-              placeholder="name@example.com"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-              editable={!emailSent}
-              leadingIcon="mail-outline"
-            />
-            <PrimaryButton
-              title={emailSent ? 'Email Sent' : 'Send Reset Email'}
-              onPress={handleResetPassword}
-              loading={loading}
-              disabled={emailSent}
-              size="lg"
-              style={styles.buttonGap}
-            />
-            <Pressable onPress={() => navigation.goBack()} style={styles.backWrap}>
-              <Text style={styles.linkText}>Back to login</Text>
-            </Pressable>
-          </GlassCard>
+        <GlassCard style={styles.formCard}>
+          <Text style={styles.sectionEyebrow}>Recovery</Text>
+          <Text style={styles.formTitle}>Send reset email</Text>
+          <FormInput
+            label="Email"
+            placeholder="name@example.com"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            editable={!emailSent}
+            leadingIcon="mail-outline"
+          />
+          <PrimaryButton
+            title={emailSent ? 'Email Sent' : 'Send Reset Email'}
+            onPress={handleResetPassword}
+            loading={loading}
+            disabled={emailSent}
+            size="lg"
+            style={styles.buttonGap}
+          />
+          <Pressable onPress={() => navigation.goBack()} style={styles.backWrap}>
+            <Text style={styles.linkText}>Back to login</Text>
+          </Pressable>
+        </GlassCard>
 
-          <GlassCard>
-            <Text style={styles.sectionEyebrow}>Next steps</Text>
-            <Text style={styles.formTitle}>What happens after sending it</Text>
-            <Text style={styles.tipText}>1. Check your inbox and spam folder.</Text>
-            <Text style={styles.tipText}>2. Open the reset email from Firebase authentication.</Text>
-            <Text style={styles.tipText}>3. Set a new password, then return to the app.</Text>
-            <Text style={styles.tipText}>4. Sign back in with the updated password.</Text>
-          </GlassCard>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <GlassCard>
+          <Text style={styles.sectionEyebrow}>Next steps</Text>
+          <Text style={styles.formTitle}>What happens after sending it</Text>
+          <Text style={styles.tipText}>1. Check your inbox and spam folder.</Text>
+          <Text style={styles.tipText}>2. Open the reset email from Firebase authentication.</Text>
+          <Text style={styles.tipText}>3. Set a new password, then return to the app.</Text>
+          <Text style={styles.tipText}>4. Sign back in with the updated password.</Text>
+        </GlassCard>
+      </KeyboardAwareFormScreen>
     </LinearGradient>
   );
 };

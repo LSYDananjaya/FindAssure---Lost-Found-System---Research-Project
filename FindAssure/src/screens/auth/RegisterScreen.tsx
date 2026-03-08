@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -16,6 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../types/models';
 import { FormInput } from '../../components/FormInput';
 import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { gradients, palette, spacing, type } from '../../theme/designSystem';
 
@@ -70,83 +68,81 @@ const RegisterScreen = () => {
 
   return (
     <LinearGradient colors={gradients.appBackground} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <GlassCard style={styles.hero}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>Registration</Text>
-            </View>
-            <Text style={styles.wordmark}>FIND ASSURE</Text>
-            <Text style={styles.heroTitle}>Create an owner account.</Text>
-            <Text style={styles.heroBody}>Get access to search, verification history, and future claim tracking.</Text>
-          </GlassCard>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.scrollContent}>
+        <GlassCard style={styles.hero}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>Registration</Text>
+          </View>
+          <Text style={styles.wordmark}>FIND ASSURE</Text>
+          <Text style={styles.heroTitle}>Create an owner account.</Text>
+          <Text style={styles.heroBody}>Get access to search, verification history, and future claim tracking.</Text>
+        </GlassCard>
 
-          <GlassCard>
-            <Text style={styles.sectionEyebrow}>Registration</Text>
-            <Text style={styles.formTitle}>Personal details</Text>
+        <GlassCard>
+          <Text style={styles.sectionEyebrow}>Registration</Text>
+          <Text style={styles.formTitle}>Personal details</Text>
 
-            <FormInput
-              label="Full name"
-              placeholder="Enter your full name"
-              value={name}
-              onChangeText={setName}
-              autoCapitalize="words"
-              leadingIcon="person-outline"
-              containerStyle={styles.fieldGap}
-            />
-            <FormInput
-              label="Email"
-              placeholder="name@example.com"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-              leadingIcon="mail-outline"
-              containerStyle={styles.fieldGap}
-            />
-            <FormInput
-              label="Phone number"
-              placeholder="Enter your phone number"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              autoComplete="tel"
-              leadingIcon="call-outline"
-              containerStyle={styles.fieldGap}
-            />
-            <FormInput
-              label="Password"
-              placeholder="Minimum 6 characters"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="password-new"
-              leadingIcon="lock-closed-outline"
-              containerStyle={styles.fieldGap}
-            />
-            <FormInput
-              label="Confirm password"
-              placeholder="Repeat the password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              leadingIcon="checkmark-circle-outline"
-            />
+          <FormInput
+            label="Full name"
+            placeholder="Enter your full name"
+            value={name}
+            onChangeText={setName}
+            autoCapitalize="words"
+            leadingIcon="person-outline"
+            containerStyle={styles.fieldGap}
+          />
+          <FormInput
+            label="Email"
+            placeholder="name@example.com"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            leadingIcon="mail-outline"
+            containerStyle={styles.fieldGap}
+          />
+          <FormInput
+            label="Phone number"
+            placeholder="Enter your phone number"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            leadingIcon="call-outline"
+            containerStyle={styles.fieldGap}
+          />
+          <FormInput
+            label="Password"
+            placeholder="Minimum 6 characters"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="password-new"
+            leadingIcon="lock-closed-outline"
+            containerStyle={styles.fieldGap}
+          />
+          <FormInput
+            label="Confirm password"
+            placeholder="Repeat the password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            leadingIcon="checkmark-circle-outline"
+          />
 
-            <PrimaryButton title="Register" onPress={handleRegister} loading={loading} size="lg" style={styles.buttonGap} />
+          <PrimaryButton title="Register" onPress={handleRegister} loading={loading} size="lg" style={styles.buttonGap} />
 
-            <View style={styles.bottomRow}>
-              <Text style={styles.bottomText}>Already have an account?</Text>
-              <Pressable onPress={() => navigation.navigate('Login')}>
-                <Text style={styles.linkText}>Login here</Text>
-              </Pressable>
-            </View>
-          </GlassCard>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <View style={styles.bottomRow}>
+            <Text style={styles.bottomText}>Already have an account?</Text>
+            <Pressable onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.linkText}>Login here</Text>
+            </Pressable>
+          </View>
+        </GlassCard>
+      </KeyboardAwareFormScreen>
     </LinearGradient>
   );
 };

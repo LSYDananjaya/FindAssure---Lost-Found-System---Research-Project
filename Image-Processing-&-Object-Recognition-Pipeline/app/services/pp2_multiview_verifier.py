@@ -971,7 +971,7 @@ class MultiViewVerifier:
                         f"labels_match_consensus={labels_match_consensus}, {mode_context})."
                     )
                 elif (
-                    pair_cos >= float(getattr(settings, "PP2_VERIFIER_ANGLE_HARD_BRAND_RESCUE_FLOOR", self.ANGLE_HARD_BRAND_RESCUE_FLOOR))
+                    pair_cos >= float(getattr(settings, "PP2_VERIFIER_ANGLE_HARD_BRAND_RESCUE_FLOOR", None) or self.ANGLE_HARD_BRAND_RESCUE_FLOOR)
                     and labels_match_consensus
                     and self._pair_has_any_brand(per_view_results, pair_key[0], pair_key[1])
                 ):
@@ -985,6 +985,30 @@ class MultiViewVerifier:
                     )
                 else:
                     passed = False
+                    _brand_i = self._extract_brand(per_view_results[pair_key[0]]) if pair_key[0] < len(per_view_results) else ""
+                    _brand_j = self._extract_brand(per_view_results[pair_key[1]]) if pair_key[1] < len(per_view_results) else ""
+                    _ocr_i = str(per_view_results[pair_key[0]].extraction.ocr_text or "").strip()[:80] if pair_key[0] < len(per_view_results) else ""
+                    _ocr_j = str(per_view_results[pair_key[1]].extraction.ocr_text or "").strip()[:80] if pair_key[1] < len(per_view_results) else ""
+                    _color_i = str(getattr(per_view_results[pair_key[0]].extraction, 'color_vqa', '') or "") if pair_key[0] < len(per_view_results) else ""
+                    _color_j = str(getattr(per_view_results[pair_key[1]].extraction, 'color_vqa', '') or "") if pair_key[1] < len(per_view_results) else ""
+                    logger.warning(
+                        "PP2_ANGLE_HARD_RESCUE_FAILED request_id=%s pair=%s "
+                        "pair_cos=%.3f cos_th=%.3f near_miss_margin=%.3f "
+                        "floor=%.3f brand_floor=%.3f "
+                        "labels_match_consensus=%s has_any_ocr=%s strong_overlap=%s "
+                        "ocr_rescue_eligible=%s brand_i=%r brand_j=%r "
+                        "ocr_i=%r ocr_j=%r color_i=%r color_j=%r "
+                        "color_consistent=%s group=%s threshold_entry=%s",
+                        request_id, pair_name,
+                        pair_cos, cos_th, near_miss_margin,
+                        cos_th - near_miss_margin,
+                        float(getattr(settings, "PP2_VERIFIER_ANGLE_HARD_BRAND_RESCUE_FLOOR", None) or self.ANGLE_HARD_BRAND_RESCUE_FLOOR),
+                        labels_match_consensus, has_any_ocr, strong_overlap,
+                        ocr_rescue_eligible, _brand_i, _brand_j,
+                        _ocr_i, _ocr_j, _color_i, _color_j,
+                        self._pair_color_consistent(per_view_results, pair_key[0], pair_key[1]),
+                        group_label, threshold_entry,
+                    )
                     reasons.append(
                         "Not salvaged: angle_hard near-miss failed OCR consistency gate "
                         f"(ocr_rescue=false, pair={pair_name}, strong_overlap={strong_overlap}, "
@@ -1120,6 +1144,24 @@ class MultiViewVerifier:
                         )
                     else:
                         passed = False
+                        _brand_ni = self._extract_brand(per_view_results[near_i]) if near_i < len(per_view_results) else ""
+                        _brand_nj = self._extract_brand(per_view_results[near_j]) if near_j < len(per_view_results) else ""
+                        _ocr_ni = str(per_view_results[near_i].extraction.ocr_text or "").strip()[:80] if near_i < len(per_view_results) else ""
+                        _ocr_nj = str(per_view_results[near_j].extraction.ocr_text or "").strip()[:80] if near_j < len(per_view_results) else ""
+                        logger.warning(
+                            "PP2_ANGLE_HARD_3VIEW_NEAR_RESCUE_FAILED request_id=%s pair=%s "
+                            "pair_cos=%.3f cos_th=%.3f floor=%.3f "
+                            "near_labels_match=%s has_any_ocr=%s brand_i=%r brand_j=%r "
+                            "ocr_i=%r ocr_j=%r color_consistent=%s group=%s",
+                            request_id, near_pair,
+                            float(near_info.get("selected_cosine", 0.0)), cos_th, cos_th - near_miss_margin,
+                            near_labels_match,
+                            self._pair_has_any_ocr(per_view_results, near_i, near_j),
+                            _brand_ni, _brand_nj,
+                            _ocr_ni, _ocr_nj,
+                            self._pair_color_consistent(per_view_results, near_i, near_j),
+                            group_label,
+                        )
                         reasons.append(
                             "Not salvaged: angle_hard near-miss failed OCR consistency gate "
                             f"(ocr_rescue=false, pair={near_pair}, "
@@ -1235,6 +1277,24 @@ class MultiViewVerifier:
                         )
                     else:
                         passed = False
+                        _brand_wi = self._extract_brand(per_view_results[weak_i]) if weak_i < len(per_view_results) else ""
+                        _brand_wj = self._extract_brand(per_view_results[weak_j]) if weak_j < len(per_view_results) else ""
+                        _ocr_wi = str(per_view_results[weak_i].extraction.ocr_text or "").strip()[:80] if weak_i < len(per_view_results) else ""
+                        _ocr_wj = str(per_view_results[weak_j].extraction.ocr_text or "").strip()[:80] if weak_j < len(per_view_results) else ""
+                        logger.warning(
+                            "PP2_ANGLE_HARD_3VIEW_WEAK_RESCUE_FAILED request_id=%s pair=%s "
+                            "pair_cos=%.3f cos_th=%.3f "
+                            "weak_labels_match=%s has_any_ocr=%s brand_i=%r brand_j=%r "
+                            "ocr_i=%r ocr_j=%r color_consistent=%s group=%s",
+                            request_id, weak_pair,
+                            float(weak_info.get("selected_cosine", 0.0)), cos_th,
+                            weak_labels_match,
+                            self._pair_has_any_ocr(per_view_results, weak_i, weak_j),
+                            _brand_wi, _brand_wj,
+                            _ocr_wi, _ocr_wj,
+                            self._pair_color_consistent(per_view_results, weak_i, weak_j),
+                            group_label,
+                        )
                         reasons.append(
                             "Not salvaged: angle_hard weak pair failed OCR consistency gate "
                             f"(ocr_rescue=false, weak_pair={weak_pair}, "
@@ -1274,8 +1334,9 @@ class MultiViewVerifier:
         if semantic_issues:
             reasons.extend(semantic_issues)
 
-        logger.debug(
-            "PP2_VERIFY_SUMMARY request_id=%s item_id=%s strong_pairs=%s near_miss_pairs=%s weak_pairs=%s used_views=%s dropped_count=%d passed=%s",
+        _log_fn = logger.warning if not passed else logger.debug
+        _log_fn(
+            "PP2_VERIFY_SUMMARY request_id=%s item_id=%s strong_pairs=%s near_miss_pairs=%s weak_pairs=%s used_views=%s dropped_count=%d passed=%s reasons=%s",
             request_id,
             item_id,
             strong_pairs,
@@ -1284,6 +1345,7 @@ class MultiViewVerifier:
             decision_indices if len(decision_indices) == 2 else [],
             len(dropped_views or []),
             passed,
+            reasons,
         )
 
         used_views = decision_indices if len(decision_indices) == 2 else []

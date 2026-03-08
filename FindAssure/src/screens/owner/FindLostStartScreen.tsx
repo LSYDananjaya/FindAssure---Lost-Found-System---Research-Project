@@ -1,10 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -28,6 +25,7 @@ import { ITEM_CATEGORIES } from '../../constants/appConstants';
 import { AI_BACKEND_URL } from '../../config/api.config';
 import { FormInput } from '../../components/FormInput';
 import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { gradients, palette, radius, spacing, type } from '../../theme/designSystem';
 import { showImageSourceOptions } from '../../utils/imageSourceOptions';
 
@@ -165,101 +163,99 @@ const FindLostStartScreen = () => {
 
   return (
     <LinearGradient colors={gradients.appBackground} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <GlassCard style={styles.hero}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>Owner flow</Text>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.content}>
+        <GlassCard style={styles.hero}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>Owner flow</Text>
+          </View>
+          <Text style={styles.heroEyebrow}>Owner flow</Text>
+          <Text style={styles.heroTitle}>Describe what you lost.</Text>
+          <Text style={styles.heroBody}>Search works best when you combine item context, location confidence, and an optional photo.</Text>
+        </GlassCard>
+
+        <GlassCard style={styles.cardGap}>
+          <Text style={styles.sectionEyebrow}>Search context</Text>
+          <Text style={styles.sectionTitle}>Give the system enough detail to match well</Text>
+          <Text style={styles.fieldLabel}>Category</Text>
+          <CategoryPicker selectedValue={category} onValueChange={setCategory} />
+          <FormInput
+            label="Description"
+            placeholder="Describe your lost item in detail..."
+            value={description}
+            onChangeText={handleDescriptionChange}
+            multiline
+            hint={grammarNote || 'Include color, brand, materials, and identifying details.'}
+            containerStyle={styles.fieldGap}
+          />
+          {grammarChecking ? (
+            <View style={styles.grammarRow}>
+              <ActivityIndicator size="small" color={palette.primaryDeep} />
+              <Text style={styles.grammarText}>Checking grammar...</Text>
             </View>
-            <Text style={styles.heroEyebrow}>Owner flow</Text>
-            <Text style={styles.heroTitle}>Describe what you lost.</Text>
-            <Text style={styles.heroBody}>Search works best when you combine item context, location confidence, and an optional photo.</Text>
-          </GlassCard>
+          ) : null}
+        </GlassCard>
 
-          <GlassCard style={styles.cardGap}>
-            <Text style={styles.sectionEyebrow}>Search context</Text>
-            <Text style={styles.sectionTitle}>Give the system enough detail to match well</Text>
-            <Text style={styles.fieldLabel}>Category</Text>
-            <CategoryPicker selectedValue={category} onValueChange={setCategory} />
-            <FormInput
-              label="Description"
-              placeholder="Describe your lost item in detail..."
-              value={description}
-              onChangeText={handleDescriptionChange}
-              multiline
-              hint={grammarNote || 'Include color, brand, materials, and identifying details.'}
-              containerStyle={styles.fieldGap}
-            />
-            {grammarChecking ? (
-              <View style={styles.grammarRow}>
-                <ActivityIndicator size="small" color={palette.primaryDeep} />
-                <Text style={styles.grammarText}>Checking grammar...</Text>
-              </View>
-            ) : null}
-          </GlassCard>
+        <GlassCard style={styles.cardGap}>
+          <Text style={styles.sectionEyebrow}>Place memory</Text>
+          <Text style={styles.sectionTitle}>Where do you think you lost it?</Text>
+          <LocationPicker selectedValue={location} onValueChange={setLocation} allowDoNotRemember userType="owner" error={!location ? undefined : ''} />
+        </GlassCard>
 
-          <GlassCard style={styles.cardGap}>
-            <Text style={styles.sectionEyebrow}>Place memory</Text>
-            <Text style={styles.sectionTitle}>Where do you think you lost it?</Text>
-            <LocationPicker selectedValue={location} onValueChange={setLocation} allowDoNotRemember userType="owner" error={!location ? undefined : ''} />
-          </GlassCard>
-
-          <GlassCard style={styles.cardGap}>
-            <Text style={styles.sectionEyebrow}>Confidence</Text>
-            <Text style={styles.sectionTitle}>How certain are you about that location?</Text>
-            <View style={styles.confidenceGrid}>
-              {CONFIDENCE_OPTIONS.map((option) => {
-                const active = confidenceStage === option.value;
-                return (
-                  <Pressable
-                    key={option.value}
-                    style={[styles.confidenceCard, active && { borderColor: option.tone, backgroundColor: `${option.tone}18` }]}
-                    onPress={() => setConfidenceStage(option.value)}
-                  >
-                    <Text style={styles.confidenceEmoji}>{option.emoji}</Text>
-                    <Text numberOfLines={2} style={[styles.confidenceTitle, active && { color: option.tone }]}>{option.title}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </GlassCard>
-
-          <GlassCard style={styles.cardGap}>
-            <Text style={styles.sectionEyebrow}>Optional image</Text>
-            <Text style={styles.sectionTitle}>Add a photo if you have one</Text>
-            {ownerImage ? (
-              <View style={styles.ownerImageWrap}>
-                <Image source={{ uri: ownerImage.uri }} style={styles.ownerImagePreview} contentFit="cover" />
+        <GlassCard style={styles.cardGap}>
+          <Text style={styles.sectionEyebrow}>Confidence</Text>
+          <Text style={styles.sectionTitle}>How certain are you about that location?</Text>
+          <View style={styles.confidenceGrid}>
+            {CONFIDENCE_OPTIONS.map((option) => {
+              const active = confidenceStage === option.value;
+              return (
                 <Pressable
-                  onPress={() => setOwnerImage(null)}
-                  style={styles.removeWrap}
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove selected photo"
+                  key={option.value}
+                  style={[styles.confidenceCard, active && { borderColor: option.tone, backgroundColor: `${option.tone}18` }]}
+                  onPress={() => setConfidenceStage(option.value)}
                 >
-                  <Ionicons name="close" size={14} color={palette.paperStrong} />
+                  <Text style={styles.confidenceEmoji}>{option.emoji}</Text>
+                  <Text numberOfLines={2} style={[styles.confidenceTitle, active && { color: option.tone }]}>{option.title}</Text>
                 </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                style={styles.uploadCard}
-                onPress={() =>
-                  showImageSourceOptions({
-                    title: 'Add Reference Photo',
-                    onTakePhoto: handleCaptureOwnerImage,
-                    onChooseFromLibrary: handleSelectOwnerImage,
-                  })
-                }
-              >
-                <Text style={styles.uploadIcon}>⌁</Text>
-                <Text style={styles.uploadTitle}>Upload photo</Text>
-                <Text style={styles.uploadBody}>Tap to take a photo or choose one from your library.</Text>
-              </Pressable>
-            )}
-          </GlassCard>
+              );
+            })}
+          </View>
+        </GlassCard>
 
-          <PrimaryButton title="Search Found Items" onPress={handleSearch} loading={loading} size="lg" />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <GlassCard style={styles.cardGap}>
+          <Text style={styles.sectionEyebrow}>Optional image</Text>
+          <Text style={styles.sectionTitle}>Add a photo if you have one</Text>
+          {ownerImage ? (
+            <View style={styles.ownerImageWrap}>
+              <Image source={{ uri: ownerImage.uri }} style={styles.ownerImagePreview} contentFit="cover" />
+              <Pressable
+                onPress={() => setOwnerImage(null)}
+                style={styles.removeWrap}
+                accessibilityRole="button"
+                accessibilityLabel="Remove selected photo"
+              >
+                <Ionicons name="close" size={14} color={palette.paperStrong} />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              style={styles.uploadCard}
+              onPress={() =>
+                showImageSourceOptions({
+                  title: 'Add Reference Photo',
+                  onTakePhoto: handleCaptureOwnerImage,
+                  onChooseFromLibrary: handleSelectOwnerImage,
+                })
+              }
+            >
+              <Text style={styles.uploadIcon}>⌁</Text>
+              <Text style={styles.uploadTitle}>Upload photo</Text>
+              <Text style={styles.uploadBody}>Tap to take a photo or choose one from your library.</Text>
+            </Pressable>
+          )}
+        </GlassCard>
+
+        <PrimaryButton title="Search Found Items" onPress={handleSearch} loading={loading} size="lg" />
+      </KeyboardAwareFormScreen>
     </LinearGradient>
   );
 };

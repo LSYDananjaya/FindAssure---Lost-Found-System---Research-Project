@@ -5,15 +5,13 @@ import {
   Text, 
   TextInput, 
   StyleSheet, 
-  ScrollView, 
-  KeyboardAvoidingView, 
-  Platform,
   Alert
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../types/models';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 
 type AdminLoginNavigationProp = StackNavigationProp<RootStackParamList, 'AdminLogin'>;
@@ -47,11 +45,7 @@ const AdminLoginScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+    <KeyboardAwareFormScreen contentContainerStyle={styles.scrollContent} style={styles.container}>
         <View style={styles.content}>
           <View style={styles.header}>
             <View style={styles.iconContainer}>
@@ -102,8 +96,7 @@ const AdminLoginScreen = () => {
             </Text>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAwareFormScreen>
   );
 };
 

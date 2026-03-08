@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -17,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import { RootStackParamList } from '../../types/models';
 import { FormInput } from '../../components/FormInput';
 import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { gradients, palette, spacing, type } from '../../theme/designSystem';
 
@@ -69,69 +67,67 @@ const LoginScreen = () => {
 
   return (
     <LinearGradient colors={gradients.appBackground} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <GlassCard style={styles.hero}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>Account access</Text>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.scrollContent}>
+        <GlassCard style={styles.hero}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>Account access</Text>
+          </View>
+          <Text style={styles.wordmark}>FIND ASSURE</Text>
+          <Text style={styles.heroTitle}>Welcome back.</Text>
+          <Text style={styles.heroBody}>Sign in to start searching, track claims, and manage your account details.</Text>
+        </GlassCard>
+
+        <GlassCard style={styles.formCard}>
+          <Text style={styles.sectionEyebrow}>Account access</Text>
+          <Text style={styles.formTitle}>Sign in</Text>
+
+          <FormInput
+            label="Email"
+            placeholder="name@example.com"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+            leadingIcon="mail-outline"
+            containerStyle={styles.fieldGap}
+          />
+
+          <FormInput
+            label="Password"
+            placeholder="Enter your password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="password"
+            leadingIcon="lock-closed-outline"
+          />
+
+          <Pressable style={styles.inlineRow} onPress={() => setKeepLoggedIn(!keepLoggedIn)}>
+            <View style={[styles.toggle, keepLoggedIn && styles.toggleOn]}>
+              {keepLoggedIn ? <Ionicons name="checkmark" size={14} color={palette.paperStrong} /> : null}
             </View>
-            <Text style={styles.wordmark}>FIND ASSURE</Text>
-            <Text style={styles.heroTitle}>Welcome back.</Text>
-            <Text style={styles.heroBody}>Sign in to start searching, track claims, and manage your account details.</Text>
-          </GlassCard>
-
-          <GlassCard style={styles.formCard}>
-            <Text style={styles.sectionEyebrow}>Account access</Text>
-            <Text style={styles.formTitle}>Sign in</Text>
-
-            <FormInput
-              label="Email"
-              placeholder="name@example.com"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-              leadingIcon="mail-outline"
-              containerStyle={styles.fieldGap}
-            />
-
-            <FormInput
-              label="Password"
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoComplete="password"
-              leadingIcon="lock-closed-outline"
-            />
-
-            <Pressable style={styles.inlineRow} onPress={() => setKeepLoggedIn(!keepLoggedIn)}>
-              <View style={[styles.toggle, keepLoggedIn && styles.toggleOn]}>
-                {keepLoggedIn ? <Ionicons name="checkmark" size={14} color={palette.paperStrong} /> : null}
-              </View>
-              <View style={styles.inlineCopy}>
-                <Text style={styles.inlineTitle}>Keep me logged in</Text>
-                <Text style={styles.inlineBody}>Stay signed in on this device and refresh the session automatically.</Text>
-              </View>
-            </Pressable>
-
-            <PrimaryButton title="Login" onPress={handleLogin} loading={loading} size="lg" style={styles.buttonGap} />
-
-            <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={styles.linkWrap}>
-              <Text style={styles.linkText}>Forgot password?</Text>
-            </Pressable>
-
-            <View style={styles.bottomRow}>
-              <Text style={styles.bottomText}>Need an account?</Text>
-              <Pressable onPress={() => navigation.navigate('Register')}>
-                <Text style={styles.linkText}>Register here</Text>
-              </Pressable>
+            <View style={styles.inlineCopy}>
+              <Text style={styles.inlineTitle}>Keep me logged in</Text>
+              <Text style={styles.inlineBody}>Stay signed in on this device and refresh the session automatically.</Text>
             </View>
-          </GlassCard>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </Pressable>
+
+          <PrimaryButton title="Login" onPress={handleLogin} loading={loading} size="lg" style={styles.buttonGap} />
+
+          <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={styles.linkWrap}>
+            <Text style={styles.linkText}>Forgot password?</Text>
+          </Pressable>
+
+          <View style={styles.bottomRow}>
+            <Text style={styles.bottomText}>Need an account?</Text>
+            <Pressable onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.linkText}>Register here</Text>
+            </Pressable>
+          </View>
+        </GlassCard>
+      </KeyboardAwareFormScreen>
     </LinearGradient>
   );
 };

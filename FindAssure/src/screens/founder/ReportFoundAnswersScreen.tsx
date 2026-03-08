@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -15,6 +12,7 @@ import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { FormInput } from '../../components/FormInput';
 import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { gradients, palette, radius, spacing, type } from '../../theme/designSystem';
 
 type ReportFoundAnswersNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundAnswers'>;
@@ -51,39 +49,37 @@ const ReportFoundAnswersScreen = () => {
 
   return (
     <LinearGradient colors={gradients.appBackground} style={styles.container}>
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content}>
-          <GlassCard style={styles.hero}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>Founder answers</Text>
-            </View>
-            <Text style={styles.heroEyebrow}>Founder answers</Text>
-            <Text style={styles.heroTitle}>Store the correct answers privately.</Text>
-            <Text style={styles.heroBody}>Owners answer these later during verification, so be specific and consistent.</Text>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.content}>
+        <GlassCard style={styles.hero}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>Founder answers</Text>
+          </View>
+          <Text style={styles.heroEyebrow}>Founder answers</Text>
+          <Text style={styles.heroTitle}>Store the correct answers privately.</Text>
+          <Text style={styles.heroBody}>Owners answer these later during verification, so be specific and consistent.</Text>
+        </GlassCard>
+
+        {selectedQuestions.map((question, index) => (
+          <GlassCard key={index} style={styles.cardGap}>
+            <Text style={styles.questionLabel}>Question {index + 1}</Text>
+            <Text style={styles.questionText}>{question}</Text>
+            <FormInput
+              placeholder="Type your answer here..."
+              value={answers[index]}
+              onChangeText={(text) => handleAnswerChange(index, text)}
+              multiline
+            />
           </GlassCard>
+        ))}
 
-          {selectedQuestions.map((question, index) => (
-            <GlassCard key={index} style={styles.cardGap}>
-              <Text style={styles.questionLabel}>Question {index + 1}</Text>
-              <Text style={styles.questionText}>{question}</Text>
-              <FormInput
-                placeholder="Type your answer here..."
-                value={answers[index]}
-                onChangeText={(text) => handleAnswerChange(index, text)}
-                multiline
-              />
-            </GlassCard>
-          ))}
+        <GlassCard style={styles.cardGap}>
+          <Text style={styles.tipTitle}>Answering tips</Text>
+          <Text style={styles.tipText}>Examine the item closely and include details like color, brand, materials, size, or unique marks.</Text>
+          <Text style={styles.tipText}>Keep answers truthful and specific so only the real owner can match them later.</Text>
+        </GlassCard>
 
-          <GlassCard style={styles.cardGap}>
-            <Text style={styles.tipTitle}>Answering tips</Text>
-            <Text style={styles.tipText}>Examine the item closely and include details like color, brand, materials, size, or unique marks.</Text>
-            <Text style={styles.tipText}>Keep answers truthful and specific so only the real owner can match them later.</Text>
-          </GlassCard>
-
-          <PrimaryButton title="Next" onPress={handleNext} size="lg" />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <PrimaryButton title="Next" onPress={handleNext} size="lg" />
+      </KeyboardAwareFormScreen>
     </LinearGradient>
   );
 };

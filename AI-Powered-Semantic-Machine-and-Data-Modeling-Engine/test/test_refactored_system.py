@@ -321,7 +321,9 @@ def test_attribute_matching():
     assert score_exact > 0.85, f"Exact match should score >0.85, got {score_exact}"
     assert score_diff < 0.20, f"Different attr should score <0.20, got {score_diff}"
     assert 0.25 <= score_null <= 0.35, f"Null found should get partial credit, got {score_null}"
-    assert score_empty == 0.5, f"No found attrs → neutral 0.5, got {score_empty}"
+    # Empty found attrs dict means fa.get("color") etc. return None → partial credit (0.3×)
+    # This is DIFFERENT from the case where the LOST item has no attrs (→ neutral 0.5)
+    assert 0.25 <= score_empty <= 0.35, f"Empty found attrs should get partial credit ~0.3, got {score_empty}"
     logger.info(f"  exact={score_exact:.4f}  diff={score_diff:.4f}  null={score_null:.4f}  empty={score_empty:.4f}")
     logger.info("✅ TEST 5 PASSED: Attribute matching correct\n")
 
@@ -392,8 +394,15 @@ def test_normalizer_fallback():
     assert result["_fallback"] is True
     assert isinstance(result["keywords"], list)
     assert result["clean_description"] == raw.strip()
+
+    # BUG-FIX verification: fallback should now extract basic attributes
+    attrs = result["attributes"]
+    assert attrs.get("color") == "black", f"Expected color='black', got {attrs.get('color')}"
+    assert attrs.get("brand") == "samsung", f"Expected brand='samsung', got {attrs.get('brand')}"
     logger.info(f"  keywords: {result['keywords']}")
-    logger.info("  ✅ Fallback lost extraction produces valid schema")
+    logger.info(f"  color: {attrs.get('color')}, brand: {attrs.get('brand')}")
+    logger.info(f"  must_match_tokens: {result['must_match_tokens']}")
+    logger.info("  ✅ Fallback lost extraction produces valid schema with attribute extraction")
 
     result_found = _passthrough_found(raw, "Electronics")
     assert "searchable_tokens" in result_found

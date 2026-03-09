@@ -208,19 +208,77 @@ Return ONLY a valid JSON object. No explanation, no markdown, no code fence.
 # ---------------------------------------------------------------------------
 
 def _passthrough_lost(raw_text: str, category: str) -> dict:
-    """Minimal structured dict from raw text when Gemini is unavailable."""
-    tokens = [w.lower() for w in raw_text.split() if len(w) > 2]
+    """Minimal structured dict from raw text when Gemini is unavailable.
+
+    BUG-FIX: The original fallback returned all attributes as None, which
+    caused the 22-feature scoring system to get -1.0 (N/A) for every
+    attribute feature, reducing matching to vector-only search.  Now we do
+    basic regex/keyword extraction so the scorer has *something* to work with.
+    """
+    import re as _re
+
+    text_lower = raw_text.lower()
+    words = text_lower.split()
+
+    # ---- Basic colour detection ----
+    _COLORS = {
+        "black", "white", "red", "blue", "green", "brown", "grey", "gray",
+        "pink", "gold", "silver", "yellow", "orange", "purple", "navy",
+        "maroon", "beige", "cream", "ivory",
+    }
+    detected_color = next((w for w in words if w in _COLORS), None)
+
+    # ---- Basic brand detection ----
+    _BRANDS = {
+        "samsung", "apple", "iphone", "nokia", "huawei", "xiaomi", "oppo",
+        "vivo", "realme", "oneplus", "sony", "lg", "hp", "dell", "lenovo",
+        "asus", "acer", "toshiba", "nike", "adidas", "puma", "reebok",
+        "gucci", "louis vuitton", "jbl", "bose", "beats", "anker",
+    }
+    detected_brand = next((w for w in words if w in _BRANDS), None)
+
+    # ---- Basic material detection ----
+    _MATERIALS = {
+        "leather", "plastic", "metal", "fabric", "cloth", "cotton",
+        "nylon", "canvas", "rubber", "wood", "glass", "ceramic", "silk",
+    }
+    detected_material = next((w for w in words if w in _MATERIALS), None)
+
+    # ---- Numeric identifiers (serial-like patterns: 6+ digit sequences) ----
+    id_candidates = _re.findall(r'\b[A-Za-z]*\d{6,}\b', raw_text)
+    identifiers = [{"type": "other", "value": v} for v in id_candidates[:3]]
+    must_match = [v for v in id_candidates[:3]]
+
+    # ---- Keywords: filter common stopwords ----
+    _STOP = {
+        "i", "my", "the", "a", "an", "is", "was", "it", "in", "on", "at",
+        "to", "of", "and", "or", "with", "for", "has", "had", "have", "been",
+        "this", "that", "its", "from", "near", "lost", "found", "left",
+    }
+    tokens = [w for w in words if len(w) > 2 and w not in _STOP]
+
+    # Build missing_fields list
+    missing = []
+    if not detected_color:   missing.append("color")
+    if not detected_brand:   missing.append("brand")
+    if not detected_material: missing.append("material")
+    missing.extend(["model", "size"])  # can't extract these without NLP
+
     return {
         "clean_description": raw_text.strip(),
         "language_detected": "unknown",
         "keywords": tokens[:10],
         "attributes": {
-            "brand": None, "model": None, "color": None,
-            "material": None, "size": None,
-            "identifiers": [], "unique_marks": None,
+            "brand": detected_brand,
+            "model": None,
+            "color": detected_color,
+            "material": detected_material,
+            "size": None,
+            "identifiers": identifiers,
+            "unique_marks": None,
         },
-        "must_match_tokens": [],
-        "missing_fields": ["brand", "model", "color", "material", "size"],
+        "must_match_tokens": must_match,
+        "missing_fields": missing,
         "confidence": "low",
         "_fallback": True,
     }

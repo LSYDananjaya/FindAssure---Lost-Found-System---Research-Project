@@ -35,6 +35,7 @@ import os
 import queue
 import re
 import logging
+import math
 import threading
 import time
 
@@ -43,9 +44,11 @@ from PIL import Image
 from app.domain.category_specs import canonicalize_label, CATEGORY_SPECS
 from app.domain.color_utils import normalize_color, extract_color_from_text
 from app.config.settings import settings
+from app.services.description_service import DescriptionComposer
 from app.services.gpu_semaphore import gpu_inference_guard
 
 logger = logging.getLogger(__name__)
+description_composer = DescriptionComposer()
 
 
 def _lite_worker_main(req_q: Any, resp_q: Any, service_cfg: Dict[str, Any]) -> None:
@@ -103,6 +106,19 @@ class FlorenceDetection:
     ocr_text: str
 
 
+@dataclass
+class OCRToken:
+    text: str
+    bbox: Tuple[float, float, float, float]
+
+
+@dataclass
+class OCRLine:
+    text: str
+    bbox: Tuple[float, float, float, float]
+    block_index: int
+
+
 def _safe_str(x: Any) -> str:
     if x is None:
         return ""
@@ -154,6 +170,222 @@ def _normalize_grounding_candidates(candidates: List[str]) -> List[str]:
 
 def _chunk_list(items: List[str], chunk_size: int = 25) -> List[List[str]]:
     return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+
+
+def _normalize_ocr_text(value: Any) -> str:
+    return re.sub(r"\s+", " ", _safe_str(value)).strip()
+
+
+def _median(values: List[float], default: float = 0.0) -> float:
+    clean = sorted(float(v) for v in values if v is not None)
+    if not clean:
+        return float(default)
+    mid = len(clean) // 2
+    if len(clean) % 2:
+        return clean[mid]
+    return (clean[mid - 1] + clean[mid]) / 2.0
+
+
+def _flatten_numbers(value: Any) -> List[float]:
+    if isinstance(value, dict):
+        out: List[float] = []
+        for nested in value.values():
+            out.extend(_flatten_numbers(nested))
+        return out
+    if isinstance(value, (list, tuple)):
+        out: List[float] = []
+        for nested in value:
+            out.extend(_flatten_numbers(nested))
+        return out
+    try:
+        return [float(value)]
+    except Exception:
+        return []
+
+
+def _coerce_bbox(value: Any) -> Optional[Tuple[float, float, float, float]]:
+    if value is None:
+        return None
+
+    if isinstance(value, dict):
+        for key in ("bbox", "box", "quad_box", "quad_boxes", "polygon", "polygons", "points"):
+            if key in value:
+                coerced = _coerce_bbox(value.get(key))
+                if coerced:
+                    return coerced
+        keys = ("x1", "y1", "x2", "y2")
+        if all(k in value for k in keys):
+            try:
+                x1, y1, x2, y2 = (float(value[k]) for k in keys)
+                if x2 > x1 and y2 > y1:
+                    return (x1, y1, x2, y2)
+            except Exception:
+                return None
+
+    nums = _flatten_numbers(value)
+    if len(nums) == 4:
+        x1, y1, x2, y2 = nums
+        if x2 > x1 and y2 > y1:
+            return (x1, y1, x2, y2)
+    if len(nums) >= 8 and len(nums) % 2 == 0:
+        xs = nums[0::2]
+        ys = nums[1::2]
+        x1, x2 = min(xs), max(xs)
+        y1, y2 = min(ys), max(ys)
+        if x2 > x1 and y2 > y1:
+            return (x1, y1, x2, y2)
+    return None
+
+
+def _union_bbox(boxes: List[Tuple[float, float, float, float]]) -> Tuple[float, float, float, float]:
+    x1 = min(box[0] for box in boxes)
+    y1 = min(box[1] for box in boxes)
+    x2 = max(box[2] for box in boxes)
+    y2 = max(box[3] for box in boxes)
+    return (x1, y1, x2, y2)
+
+
+def _join_ocr_tokens(tokens: List[OCRToken]) -> str:
+    if not tokens:
+        return ""
+
+    pieces: List[str] = []
+    last_text = ""
+    for token in tokens:
+        text = _normalize_ocr_text(token.text)
+        if not text:
+            continue
+        if not pieces:
+            pieces.append(text)
+            last_text = text
+            continue
+
+        no_space_before = bool(re.match(r"^[,.;:!?%)}\]/]", text))
+        no_space_after_prev = bool(re.search(r"[(\[{/$-]$", last_text))
+        if no_space_before or no_space_after_prev:
+            pieces[-1] = pieces[-1] + text
+        else:
+            pieces.append(text)
+        last_text = text
+
+    return " ".join(piece for piece in pieces if piece).strip()
+
+
+def _build_ocr_layout(tokens: List[OCRToken], source: str) -> Dict[str, Any]:
+    clean_tokens = [
+        OCRToken(text=_normalize_ocr_text(token.text), bbox=token.bbox)
+        for token in tokens
+        if _normalize_ocr_text(token.text)
+    ]
+    if not clean_tokens:
+        return {
+            "ocr_text": "",
+            "ocr_text_display": "",
+            "ocr_lines": [],
+            "ocr_layout_source": source,
+            "ocr_tokens": [],
+        }
+
+    sorted_tokens = sorted(
+        clean_tokens,
+        key=lambda token: (
+            (token.bbox[1] + token.bbox[3]) / 2.0,
+            token.bbox[0],
+        ),
+    )
+    token_heights = [max(1.0, token.bbox[3] - token.bbox[1]) for token in sorted_tokens]
+    median_height = max(8.0, _median(token_heights, 10.0))
+    line_y_threshold = max(8.0, median_height * 0.7)
+
+    grouped_lines: List[List[OCRToken]] = []
+    line_centers: List[float] = []
+    for token in sorted_tokens:
+        token_center_y = (token.bbox[1] + token.bbox[3]) / 2.0
+        if grouped_lines and abs(token_center_y - line_centers[-1]) <= line_y_threshold:
+            grouped_lines[-1].append(token)
+            centers = [
+                (line_token.bbox[1] + line_token.bbox[3]) / 2.0
+                for line_token in grouped_lines[-1]
+            ]
+            line_centers[-1] = sum(centers) / float(len(centers))
+        else:
+            grouped_lines.append([token])
+            line_centers.append(token_center_y)
+
+    built_lines: List[OCRLine] = []
+    sorted_grouped = sorted(
+        grouped_lines,
+        key=lambda group: min(token.bbox[1] for token in group),
+    )
+
+    line_heights: List[float] = []
+    prev_line: Optional[OCRLine] = None
+    current_block = 0
+    for token_group in sorted_grouped:
+        ordered_tokens = sorted(token_group, key=lambda token: token.bbox[0])
+        line_text = _join_ocr_tokens(ordered_tokens)
+        if not line_text:
+            continue
+        line_bbox = _union_bbox([token.bbox for token in ordered_tokens])
+        line_height = max(1.0, line_bbox[3] - line_bbox[1])
+        line_heights.append(line_height)
+
+        if prev_line is not None:
+            prev_bbox = prev_line.bbox
+            vertical_gap = line_bbox[1] - prev_bbox[3]
+            indent_delta = abs(line_bbox[0] - prev_bbox[0])
+            median_line_height = max(10.0, _median(line_heights, line_height))
+            new_block = (
+                vertical_gap > (median_line_height * 0.9)
+                or (indent_delta > (median_line_height * 1.2) and vertical_gap > math.ceil(median_line_height * 0.2))
+            )
+            if new_block:
+                current_block += 1
+
+        built_lines.append(
+            OCRLine(
+                text=line_text,
+                bbox=line_bbox,
+                block_index=current_block,
+            )
+        )
+        prev_line = built_lines[-1]
+
+    deduped_lines: List[OCRLine] = []
+    for line in built_lines:
+        if deduped_lines and deduped_lines[-1].text.lower() == line.text.lower():
+            continue
+        deduped_lines.append(line)
+
+    display_parts: List[str] = []
+    for idx, line in enumerate(deduped_lines):
+        if idx > 0 and line.block_index != deduped_lines[idx - 1].block_index:
+            display_parts.append("")
+        display_parts.append(line.text)
+
+    compact_text = " ".join(line.text for line in deduped_lines).strip()
+    display_text = "\n".join(display_parts).strip()
+
+    return {
+        "ocr_text": compact_text,
+        "ocr_text_display": display_text,
+        "ocr_lines": [
+            {
+                "text": line.text,
+                "bbox": [round(coord, 2) for coord in line.bbox],
+                "block_index": line.block_index,
+            }
+            for line in deduped_lines
+        ],
+        "ocr_layout_source": source,
+        "ocr_tokens": [
+            {
+                "text": token.text,
+                "bbox": [round(coord, 2) for coord in token.bbox],
+            }
+            for token in sorted_tokens
+        ],
+    }
 
 
 def _caption_mentions_person(text: str) -> bool:
@@ -239,6 +471,152 @@ def _is_generic_caption(text: str) -> bool:
              return True
              
     return False
+
+
+DESCRIPTION_WORD_LIMIT = 30
+DESCRIPTION_BANNED_FEATURES = {
+    "brand name",
+    "logo",
+    "text",
+    "name",
+    "id number",
+    "student number",
+    "institution name",
+    "date of birth",
+    "issuing authority",
+    "signature",
+    "place of birth",
+    "national flag",
+}
+
+LABEL_DESCRIPTION_MAP = {
+    "Wallet": "wallet",
+    "Handbag": "handbag",
+    "Backpack": "backpack",
+    "Laptop": "laptop",
+    "Smart Phone": "smartphone",
+    "Helmet": "helmet",
+    "Key": "key",
+    "Power Bank": "power bank",
+    "Laptop/Mobile chargers & cables": "charger or cable",
+    "Earbuds - Earbuds case": "earbuds case",
+    "Headphone": "headphones",
+    "Student ID": "student ID card",
+    "NIC / National ID Card": "national ID card",
+}
+
+
+def _normalize_phrase(value: Any) -> str:
+    return re.sub(r"\s+", " ", _safe_str(value)).strip()
+
+
+def _word_count(text: Any) -> int:
+    return len(re.findall(r"\b\S+\b", _safe_str(text)))
+
+
+def _trim_to_word_limit(text: str, limit: int = DESCRIPTION_WORD_LIMIT) -> str:
+    words = re.findall(r"\S+", _safe_str(text))
+    if len(words) <= limit:
+        return _safe_str(text).strip()
+    return " ".join(words[:limit]).strip().rstrip(",;:-")
+
+
+def _clean_description_text(text: Any, limit: int = DESCRIPTION_WORD_LIMIT) -> str:
+    cleaned = _normalize_phrase(text)
+    if not cleaned:
+        return ""
+    cleaned = re.split(r"(?<=[.!?])\s+", cleaned)[0].strip()
+    cleaned = re.sub(r"\b(?:not visible|unknown|none|n/?a)\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,;:-")
+    cleaned = _trim_to_word_limit(cleaned, limit=limit)
+    if cleaned and cleaned[-1] not in ".!?":
+        cleaned = f"{cleaned}."
+    return cleaned
+
+
+def _safe_description_label(label: Optional[str], key_count: Optional[int] = None) -> str:
+    canonical = canonicalize_label(label or "") or _normalize_phrase(label)
+    if canonical == "Key" and isinstance(key_count, int) and key_count > 1:
+        return f"{key_count} keys"
+    return LABEL_DESCRIPTION_MAP.get(canonical, canonical.lower() if canonical else "item")
+
+
+def _format_feature_phrase(phrase: Any) -> str:
+    text = _normalize_phrase(phrase).lower()
+    if not text or text in DESCRIPTION_BANNED_FEATURES:
+        return ""
+    text = text.replace(" attached", "")
+    replacements = {
+        "front pocket": "front pocket",
+        "side pockets": "side pockets",
+        "shoulder straps": "shoulder straps",
+        "top handle": "top handle",
+        "camera module": "camera module",
+        "phone case": "case",
+        "screen protector": "screen protector",
+        "card holder": "card holder",
+        "metal key ring": "key ring",
+        "key head hole": "key head hole",
+        "slot in head": "head slot",
+    }
+    return replacements.get(text, text)
+
+
+def _format_defect_phrase(phrase: Any) -> str:
+    text = _normalize_phrase(phrase).lower()
+    if not text:
+        return ""
+    replacements = {
+        "scratch": "minor scratches",
+        "screen scratches": "screen scratches",
+        "scuff marks": "scuff marks",
+        "cracked screen": "cracked screen",
+        "crack": "visible crack",
+        "dent": "small dent",
+        "broken zipper": "broken zipper",
+    }
+    return replacements.get(text, text)
+
+
+def _extract_short_ocr_snippet(ocr_text: str) -> str:
+    tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9+._-]*", _safe_str(ocr_text))
+    if not tokens:
+        return ""
+
+    disallowed = {
+        "press", "home", "unlock", "camera", "sun", "mon", "tue", "wed", "thu", "fri", "sat",
+        "am", "pm", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+    }
+    kept = [token for token in tokens if token.lower() not in disallowed]
+    if not kept:
+        return ""
+
+    snippet_tokens = kept[:3]
+    snippet = " ".join(snippet_tokens).strip()
+    if not re.search(r"[A-Za-z]", snippet):
+        return ""
+    if len(snippet) > 24:
+        return ""
+    return snippet
+
+
+def _salvage_caption_phrases(caption: str, spec_key: Optional[str]) -> List[str]:
+    caption_norm = _normalize_phrase(caption).lower()
+    if not caption_norm or not spec_key or spec_key not in CATEGORY_SPECS:
+        return []
+    allowed_candidates = (
+        CATEGORY_SPECS[spec_key].get("features", [])
+        + CATEGORY_SPECS[spec_key].get("attachments", [])
+        + CATEGORY_SPECS[spec_key].get("defects", [])
+    )
+    out: List[str] = []
+    for candidate in allowed_candidates:
+        candidate_norm = _normalize_phrase(candidate).lower()
+        if not candidate_norm or candidate_norm in DESCRIPTION_BANNED_FEATURES:
+            continue
+        if candidate_norm in caption_norm:
+            out.append(candidate_norm)
+    return _dedup_phrases(out)
 
 
 class FlorenceService:
@@ -703,37 +1081,190 @@ class FlorenceService:
             logger.debug("VQA extraction failed", exc_info=True)
             return ""
 
+    def _extract_ocr_region_tokens(self, payload: Any) -> List[OCRToken]:
+        tokens: List[OCRToken] = []
+
+        def _append_token(text_value: Any, bbox_value: Any) -> None:
+            text = _normalize_ocr_text(text_value)
+            bbox = _coerce_bbox(bbox_value)
+            if not text or bbox is None:
+                return
+            tokens.append(OCRToken(text=text, bbox=bbox))
+
+        def _walk(value: Any) -> None:
+            if isinstance(value, dict):
+                token_items = value.get("tokens")
+                if isinstance(token_items, list):
+                    for item in token_items:
+                        if isinstance(item, dict):
+                            _append_token(
+                                item.get("text") or item.get("label") or item.get("value"),
+                                item.get("bbox")
+                                or item.get("box")
+                                or item.get("quad_box")
+                                or item.get("quad_boxes")
+                                or item.get("polygon")
+                                or item.get("polygons"),
+                            )
+
+                labels = value.get("labels") or value.get("texts") or value.get("text")
+                boxes = (
+                    value.get("quad_boxes")
+                    or value.get("bboxes")
+                    or value.get("boxes")
+                    or value.get("polygons")
+                )
+                if isinstance(labels, list) and isinstance(boxes, list) and len(labels) == len(boxes):
+                    for label, box in zip(labels, boxes):
+                        _append_token(label, box)
+
+                regions = value.get("regions")
+                if isinstance(regions, list):
+                    for item in regions:
+                        if isinstance(item, dict):
+                            _append_token(
+                                item.get("text") or item.get("label") or item.get("value"),
+                                item.get("bbox")
+                                or item.get("box")
+                                or item.get("quad_box")
+                                or item.get("quad_boxes")
+                                or item.get("polygon")
+                                or item.get("polygons"),
+                            )
+
+                for nested in value.values():
+                    if isinstance(nested, (dict, list)):
+                        _walk(nested)
+
+            elif isinstance(value, list):
+                for item in value:
+                    _walk(item)
+
+        _walk(payload)
+
+        deduped: List[OCRToken] = []
+        seen = set()
+        for token in tokens:
+            key = (
+                token.text.lower(),
+                round(token.bbox[0], 1),
+                round(token.bbox[1], 1),
+                round(token.bbox[2], 1),
+                round(token.bbox[3], 1),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(token)
+
+        return deduped
+
+    def _parse_plain_ocr_output(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        plain_lines: List[str] = []
+
+        for key in ("text", "ocr", "<OCR>"):
+            value = payload.get(key)
+            if isinstance(value, str):
+                plain_lines = [line.strip() for line in value.splitlines() if line.strip()]
+                if plain_lines:
+                    break
+            if isinstance(value, list):
+                plain_lines = [_normalize_ocr_text(item) for item in value]
+                plain_lines = [line for line in plain_lines if line]
+                if plain_lines:
+                    break
+
+        if not plain_lines:
+            tokens = payload.get("tokens")
+            if isinstance(tokens, list):
+                plain_lines = [
+                    _normalize_ocr_text(item.get("text") if isinstance(item, dict) else item)
+                    for item in tokens
+                ]
+                plain_lines = [line for line in plain_lines if line]
+
+        if not plain_lines:
+            raw_text = _normalize_ocr_text(payload.get("_raw_text", ""))
+            if raw_text:
+                plain_lines = [raw_text]
+
+        fallback_tokens = [
+            OCRToken(text=line, bbox=(0.0, float(idx) * 24.0, max(120.0, float(len(line) * 8.0)), float(idx) * 24.0 + 20.0))
+            for idx, line in enumerate(plain_lines)
+            if line
+        ]
+        return _build_ocr_layout(fallback_tokens, source="ocr_text_fallback")
+
+    def ocr_structured(self, image: Image.Image, profile: Optional[str] = None) -> Dict[str, Any]:
+        """
+        OCR task with additive layout-aware output.
+        Returns:
+          {
+            "ocr_text": str,
+            "ocr_text_display": str,
+            "ocr_lines": list[dict],
+            "ocr_layout_source": str,
+            "ocr_tokens": list[dict],
+          }
+        """
+        try:
+            region_out = self._run_task(image, "<OCR_WITH_REGION>", profile=profile)
+            region_tokens = self._extract_ocr_region_tokens(region_out)
+            if region_tokens:
+                return _build_ocr_layout(region_tokens, source="ocr_with_region")
+        except Exception:
+            logger.debug("OCR_WITH_REGION extraction failed", exc_info=True)
+
+        try:
+            plain_out = self._run_task(image, "<OCR>", profile=profile)
+            return self._parse_plain_ocr_output(plain_out)
+        except Exception:
+            logger.debug("OCR extraction failed", exc_info=True)
+            return {
+                "ocr_text": "",
+                "ocr_text_display": "",
+                "ocr_lines": [],
+                "ocr_layout_source": "ocr_text_fallback",
+                "ocr_tokens": [],
+            }
+
     def ocr(self, image: Image.Image, profile: Optional[str] = None) -> str:
         """
         OCR task. Returns plain concatenated text. If OCR task unsupported, returns "".
         """
-        try:
-            out = self._run_task(image, "<OCR>", profile=profile)
-            # Some variants return {"text": "..."} or a list of lines.
-            for k in ("text", "ocr", "<OCR>"):
-                val = out.get(k)
-                if isinstance(val, str):
-                    return val.strip()
-                if isinstance(val, list):
-                    parts = [_safe_str(x).strip() for x in val]
-                    parts = [p for p in parts if p]
-                    return "\n".join(parts).strip()
+        return str(self.ocr_structured(image, profile=profile).get("ocr_text", "") or "").strip()
 
-            # Sometimes OCR returns tokens with boxes:
-            # {"tokens": [{"text": "..."} ...]}
-            tokens = out.get("tokens")
-            if isinstance(tokens, list):
-                parts = []
-                for t in tokens:
-                    if isinstance(t, dict) and "text" in t:
-                        parts.append(_safe_str(t["text"]).strip())
-                parts = [p for p in parts if p]
-                return "\n".join(parts).strip()
-
-            return ""
-        except Exception:
-            logger.debug("OCR extraction failed", exc_info=True)
-            return ""
+    def compose_grounded_description(
+        self,
+        *,
+        canonical_label: Optional[str],
+        color_vqa: Optional[str],
+        ocr_text: str,
+        grounded_features: Optional[List[str]] = None,
+        grounded_defects: Optional[List[str]] = None,
+        grounded_attachments: Optional[List[str]] = None,
+        caption: str = "",
+        key_count: Optional[int] = None,
+        profile: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        result = description_composer.compose(
+            label=canonical_label,
+            color=color_vqa,
+            ocr_text=ocr_text,
+            features=grounded_features or [],
+            defects=grounded_defects or [],
+            attachments=grounded_attachments or [],
+            caption=caption,
+            key_count=key_count,
+        )
+        return {
+            **result,
+            "description": result.get("final_description"),
+            "source": result.get("detailed_description_source"),
+            "word_count": (result.get("description_word_count") or {}).get("detailed_description", 0),
+            "evidence_used": (result.get("description_evidence_used") or {}).get("detailed", []),
+            "filters_applied": result.get("description_filters_applied", []),
+        }
 
     def ground_phrases(self, image: Image.Image, text: str, profile: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -935,7 +1466,11 @@ class FlorenceService:
         else:
             final_caption = ""
 
-        ocr_text = self.ocr(crop, profile=profile_key)
+        ocr_payload = self.ocr_structured(crop, profile=profile_key)
+        ocr_text = str(ocr_payload.get("ocr_text", "") or "").strip()
+        ocr_text_display = str(ocr_payload.get("ocr_text_display", "") or "").strip()
+        ocr_lines = list(ocr_payload.get("ocr_lines", []) or [])
+        ocr_layout_source = str(ocr_payload.get("ocr_layout_source", "ocr_text_fallback") or "ocr_text_fallback")
         color_q = (
             "What is the primary color of the main foreground object? "
             "Ignore the background, hands, and any surface the object rests on. "
@@ -960,6 +1495,9 @@ class FlorenceService:
         return {
             "caption": final_caption,
             "ocr_text": ocr_text,
+            "ocr_text_display": ocr_text_display,
+            "ocr_lines": ocr_lines,
+            "ocr_layout_source": ocr_layout_source,
             "color_vqa": color_vqa,
             "grounded_features": [],
             "grounded_defects": [],
@@ -967,6 +1505,11 @@ class FlorenceService:
             "key_count": None,
             "raw": {
                 "caption_source": "lite_caption",
+                "ocr_layout": {
+                    "source": ocr_layout_source,
+                    "lines": ocr_lines,
+                    "tokens": ocr_payload.get("ocr_tokens", []),
+                },
                 "guided_caption": guided_caption,
                 "lite_prompt": lite_prompt,
                 "lite": {
@@ -1023,6 +1566,9 @@ class FlorenceService:
 
         caption_text = ""
         ocr_text = ""
+        ocr_text_display = ""
+        ocr_lines: List[Dict[str, Any]] = []
+        ocr_layout_source = "ocr_text_fallback"
         color_vqa: Optional[str] = None
         grounded_features: List[str] = []
         grounded_defects: List[str] = []
@@ -1084,7 +1630,7 @@ class FlorenceService:
             raw["florence"] = florence_meta
 
         def _try_timeout_recovery(stage_name: str) -> bool:
-            nonlocal ocr_text
+            nonlocal ocr_text, ocr_text_display, ocr_lines, ocr_layout_source
             florence_meta = raw.get("florence", {})
             if not isinstance(florence_meta, dict):
                 florence_meta = {}
@@ -1114,6 +1660,23 @@ class FlorenceService:
             if recovered_text:
                 if not ocr_text:
                     ocr_text = recovered_text
+                    recovered_layout = _build_ocr_layout(
+                        [
+                            OCRToken(
+                                text=recovered_text,
+                                bbox=(0.0, 0.0, max(120.0, float(len(recovered_text) * 8.0)), 24.0),
+                            )
+                        ],
+                        source="ocr_recovery",
+                    )
+                    ocr_text_display = str(recovered_layout.get("ocr_text_display", "") or "").strip()
+                    ocr_lines = list(recovered_layout.get("ocr_lines", []) or [])
+                    ocr_layout_source = "ocr_recovery"
+                    raw["ocr_layout"] = {
+                        "source": "ocr_recovery",
+                        "lines": ocr_lines,
+                        "tokens": recovered_layout.get("ocr_tokens", []),
+                    }
                 florence_meta["recovery_succeeded"] = True
                 florence_meta["status"] = "degraded"
                 florence_meta["reason"] = "timeout_recovered_ocr_only"
@@ -1154,6 +1717,9 @@ class FlorenceService:
             return {
                 "caption": caption_text,
                 "ocr_text": ocr_text,
+                "ocr_text_display": ocr_text_display,
+                "ocr_lines": ocr_lines,
+                "ocr_layout_source": ocr_layout_source,
                 "color_vqa": color_vqa,
                 "grounded_features": grounded_features,
                 "grounded_defects": grounded_defects,
@@ -1165,13 +1731,21 @@ class FlorenceService:
         # Step 1: OCR first (hard requirement for stage order).
         ocr_start = time.perf_counter()
         try:
-            ocr_raw = self._run_with_timeout(
-                self.ocr,
+            ocr_payload = self._run_with_timeout(
+                self.ocr_structured,
                 ocr_timeout_ms,
                 ocr_image,
                 profile_key,
             )
-            ocr_text = str(ocr_raw or "").strip()
+            ocr_text = str(ocr_payload.get("ocr_text", "") or "").strip()
+            ocr_text_display = str(ocr_payload.get("ocr_text_display", "") or "").strip()
+            ocr_lines = list(ocr_payload.get("ocr_lines", []) or [])
+            ocr_layout_source = str(ocr_payload.get("ocr_layout_source", "ocr_text_fallback") or "ocr_text_fallback")
+            raw["ocr_layout"] = {
+                "source": ocr_layout_source,
+                "lines": ocr_lines,
+                "tokens": ocr_payload.get("ocr_tokens", []),
+            }
             _record_attempt("primary_ocr", "success", "ok_nonempty" if ocr_text else "ok_empty_ocr", (time.perf_counter() - ocr_start) * 1000.0)
         except TimeoutError as exc:
             raw["error"] = {"type": "timeout", "stage": "ocr", "message": str(exc)}
@@ -1464,9 +2038,30 @@ class FlorenceService:
                 recovered_nonempty = bool(str(recovered_ocr or "").strip())
                 florence_status = "degraded" if recovered_nonempty else "failed"
                 florence_reason = "timeout_recovered_ocr_only" if recovered_nonempty else "timeout"
+                recovered_layout = (
+                    _build_ocr_layout(
+                        [
+                            OCRToken(
+                                text=recovered_ocr,
+                                bbox=(0.0, 0.0, max(120.0, float(len(recovered_ocr) * 8.0)), 24.0),
+                            )
+                        ],
+                        source="ocr_recovery",
+                    )
+                    if recovered_nonempty
+                    else {
+                        "ocr_text_display": "",
+                        "ocr_lines": [],
+                        "ocr_layout_source": "ocr_text_fallback",
+                        "ocr_tokens": [],
+                    }
+                )
                 return {
                     "caption": "",
                     "ocr_text": recovered_ocr if recovered_nonempty else "",
+                    "ocr_text_display": str(recovered_layout.get("ocr_text_display", "") or "").strip(),
+                    "ocr_lines": list(recovered_layout.get("ocr_lines", []) or []),
+                    "ocr_layout_source": str(recovered_layout.get("ocr_layout_source", "ocr_text_fallback") or "ocr_text_fallback"),
                     "color_vqa": None,
                     "grounded_features": [],
                     "grounded_defects": [],
@@ -1474,6 +2069,11 @@ class FlorenceService:
                     "key_count": None,
                     "raw": {
                         "caption_source": "lite_caption",
+                        "ocr_layout": {
+                            "source": str(recovered_layout.get("ocr_layout_source", "ocr_text_fallback") or "ocr_text_fallback"),
+                            "lines": list(recovered_layout.get("ocr_lines", []) or []),
+                            "tokens": recovered_layout.get("ocr_tokens", []),
+                        },
                         "error": {"type": "timeout", "message": str(exc)},
                         "lite": {
                             "status": florence_status,
@@ -1508,6 +2108,9 @@ class FlorenceService:
                 return {
                     "caption": "",
                     "ocr_text": "",
+                    "ocr_text_display": "",
+                    "ocr_lines": [],
+                    "ocr_layout_source": "ocr_text_fallback",
                     "color_vqa": None,
                     "grounded_features": [],
                     "grounded_defects": [],
@@ -1594,7 +2197,7 @@ class FlorenceService:
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         def _ocr_task():
-            return self.ocr(crop, profile=profile_key)
+            return self.ocr_structured(crop, profile=profile_key)
 
         def _color_vqa_task():
             color_q = (
@@ -1626,7 +2229,11 @@ class FlorenceService:
             fut_color = pool.submit(_color_vqa_task)
             fut_key = pool.submit(_key_count_task)
 
-        ocr_text = fut_ocr.result()
+        ocr_payload = fut_ocr.result()
+        ocr_text = str(ocr_payload.get("ocr_text", "") or "").strip()
+        ocr_text_display = str(ocr_payload.get("ocr_text_display", "") or "").strip()
+        ocr_lines = list(ocr_payload.get("ocr_lines", []) or [])
+        ocr_layout_source = str(ocr_payload.get("ocr_layout_source", "ocr_text_fallback") or "ocr_text_fallback")
         color_vqa = fut_color.result()
         key_count: Optional[int] = fut_key.result()
 
@@ -1664,13 +2271,37 @@ class FlorenceService:
                                     found_items.add(cand)
                     grounded_features = list(found_items)
 
+            grounded_description = self.compose_grounded_description(
+                canonical_label=canonical_label,
+                color_vqa=color_vqa,
+                ocr_text=ocr_text,
+                grounded_features=grounded_features,
+                grounded_defects=[],
+                grounded_attachments=[],
+                caption=final_caption,
+                key_count=key_count,
+                profile=profile_key,
+            )
+
             raw_fast: Dict[str, Any] = {
                 "caption": final_caption,
                 "caption_primary": raw_caption,
                 "caption_guided": guided_val,
                 "caption_source": caption_source,
                 "caption_is_generic": caption_is_generic,
+                "grounded_description_debug": grounded_description,
+                "description_source": grounded_description.get("description_source"),
+                "detailed_description_source": grounded_description.get("detailed_description_source"),
+                "description_evidence_used": grounded_description.get("description_evidence_used"),
+                "description_filters_applied": grounded_description.get("description_filters_applied"),
+                "description_word_count": grounded_description.get("description_word_count"),
+                "description_timings_ms": grounded_description.get("description_timings_ms"),
                 "ocr": ocr_text,
+                "ocr_layout": {
+                    "source": ocr_layout_source,
+                    "lines": ocr_lines,
+                    "tokens": ocr_payload.get("ocr_tokens", []),
+                },
                 "color_vqa": color_vqa,
                 "defects_vqa": "None",
                 "grounding_raw": {
@@ -1681,7 +2312,18 @@ class FlorenceService:
 
             return {
                 "caption": final_caption,
+                "grounded_description": grounded_description.get("description"),
+                "final_description": grounded_description.get("final_description"),
+                "detailed_description": grounded_description.get("detailed_description"),
+                "description_source": grounded_description.get("description_source"),
+                "detailed_description_source": grounded_description.get("detailed_description_source"),
+                "description_evidence_used": grounded_description.get("description_evidence_used"),
+                "description_filters_applied": grounded_description.get("description_filters_applied"),
+                "description_word_count": grounded_description.get("description_word_count"),
                 "ocr_text": ocr_text,
+                "ocr_text_display": ocr_text_display,
+                "ocr_lines": ocr_lines,
+                "ocr_layout_source": ocr_layout_source,
                 "color_vqa": color_vqa,
                 "grounded_features": grounded_features,
                 "grounded_defects": [],
@@ -1759,13 +2401,37 @@ class FlorenceService:
         if defects_vqa_ans.lower() in ["none", "no", "n/a"]:
             defects_vqa_ans = "None"
 
+        grounded_description = self.compose_grounded_description(
+            canonical_label=canonical_label,
+            color_vqa=color_vqa,
+            ocr_text=ocr_text,
+            grounded_features=grounded_features,
+            grounded_defects=grounded_defects,
+            grounded_attachments=grounded_attachments,
+            caption=final_caption,
+            key_count=key_count,
+            profile=profile_key,
+        )
+
         raw: Dict[str, Any] = {
             "caption": final_caption,
             "caption_primary": raw_caption,
             "caption_guided": guided_val,
             "caption_source": caption_source,
             "caption_is_generic": caption_is_generic,
+            "grounded_description_debug": grounded_description,
+            "description_source": grounded_description.get("description_source"),
+            "detailed_description_source": grounded_description.get("detailed_description_source"),
+            "description_evidence_used": grounded_description.get("description_evidence_used"),
+            "description_filters_applied": grounded_description.get("description_filters_applied"),
+            "description_word_count": grounded_description.get("description_word_count"),
+            "description_timings_ms": grounded_description.get("description_timings_ms"),
             "ocr": ocr_text,
+            "ocr_layout": {
+                "source": ocr_layout_source,
+                "lines": ocr_lines,
+                "tokens": ocr_payload.get("ocr_tokens", []),
+            },
             "color_vqa": color_vqa,
             "defects_vqa": defects_vqa_ans,
             "grounding_raw": {
@@ -1776,7 +2442,18 @@ class FlorenceService:
 
         return {
             "caption": final_caption,
+            "grounded_description": grounded_description.get("description"),
+            "final_description": grounded_description.get("final_description"),
+            "detailed_description": grounded_description.get("detailed_description"),
+            "description_source": grounded_description.get("description_source"),
+            "detailed_description_source": grounded_description.get("detailed_description_source"),
+            "description_evidence_used": grounded_description.get("description_evidence_used"),
+            "description_filters_applied": grounded_description.get("description_filters_applied"),
+            "description_word_count": grounded_description.get("description_word_count"),
             "ocr_text": ocr_text,
+            "ocr_text_display": ocr_text_display,
+            "ocr_lines": ocr_lines,
+            "ocr_layout_source": ocr_layout_source,
             "color_vqa": color_vqa,
             "grounded_features": grounded_features,
             "grounded_defects": grounded_defects,

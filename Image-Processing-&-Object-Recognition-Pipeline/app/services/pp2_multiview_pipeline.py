@@ -625,6 +625,23 @@ class MultiViewPipeline:
         else:
             ocr_text = ocr_raw if isinstance(ocr_raw, str) else str(ocr_raw)
 
+        ocr_text_display_raw = data.get("ocr_text_display", "")
+        if isinstance(ocr_text_display_raw, str):
+            ocr_text_display = ocr_text_display_raw.strip()
+        else:
+            ocr_text_display = str(ocr_text_display_raw or "").strip()
+
+        ocr_lines_raw = data.get("ocr_lines", [])
+        if isinstance(ocr_lines_raw, list):
+            ocr_lines = [dict(line) for line in ocr_lines_raw if isinstance(line, dict)]
+        else:
+            ocr_lines = []
+
+        ocr_layout_source_raw = data.get("ocr_layout_source", "")
+        ocr_layout_source = (
+            str(ocr_layout_source_raw).strip() if ocr_layout_source_raw is not None else ""
+        )
+
         grounded_raw = data.get("grounded_features", {})
         if isinstance(grounded_raw, dict):
             grounded_features: Dict[str, Any] = dict(grounded_raw)
@@ -669,6 +686,9 @@ class MultiViewPipeline:
         return {
             "caption": caption,
             "ocr_text": ocr_text,
+            "ocr_text_display": ocr_text_display,
+            "ocr_lines": ocr_lines,
+            "ocr_layout_source": ocr_layout_source or None,
             "grounded_features": grounded_features,
             "raw": raw,
         }
@@ -2486,8 +2506,9 @@ class MultiViewPipeline:
                     phase2_timeout = float(getattr(settings, "PP2_PHASE2_TIMEOUT_S", 15))
                     phase2_result = _pp2_phase2_future.result(timeout=phase2_timeout)
                     if isinstance(phase2_result, dict) and phase2_result.get("status") == "accepted":
-                        if phase2_result.get("final_description"):
-                            fused.caption = str(phase2_result["final_description"])
+                        if phase2_result.get("final_description") and not getattr(fused, "detailed_description", None):
+                            fused.detailed_description = str(phase2_result["final_description"])
+                            fused.detailed_description_source = "phase2_gemini_fallback"
                         if phase2_result.get("color"):
                             fused.color = str(phase2_result["color"])
                         logger.debug(

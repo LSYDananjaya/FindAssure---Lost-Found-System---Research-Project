@@ -5,6 +5,7 @@ import { Types } from 'mongoose';
 import { User } from '../models/User';
 import { FoundItem } from '../models/FoundItem';
 import { FoundItemPreAnalysis } from '../models/FoundItemPreAnalysis';
+import * as founderPrefillFeedbackService from '../services/founderPrefillFeedbackService';
 import * as itemService from '../services/itemService';
 import * as verificationService from '../services/verificationService';
 import * as geminiService from '../services/geminiService';
@@ -18,6 +19,7 @@ const PRE_ANALYSIS_TTL_MS = 24 * 60 * 60 * 1000;
 
 type FoundItemAnalysisSnapshot = {
   analysisMode: 'pp1' | 'pp2' | null;
+  taskId: string | null;
   pythonItemId: string | null;
   faissId: number | null;
   faissIds: number[];
@@ -110,6 +112,7 @@ const sanitizeFoundItemForOwner = (item: any) => itemService.sanitizeFoundItemFo
 
 const buildDefaultAnalysisSnapshot = (): FoundItemAnalysisSnapshot => ({
   analysisMode: null,
+  taskId: null,
   pythonItemId: null,
   faissId: null,
   faissIds: [],
@@ -128,6 +131,147 @@ const normalizePreAnalysisToken = (value: unknown): string | null => {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+};
+
+const normalizeFeedbackText = (value: unknown): string =>
+  typeof value === 'string'
+    ? value.trim().replace(/\s+/g, ' ').toLowerCase()
+    : '';
+
+const trimString = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const buildFounderFeedbackAnalysisEvidence = (
+  analysis: FoundItemAnalysisSnapshot
+): Record<string, unknown> | null => {
+  const response = analysis.pipelineResponse;
+  if (!response) {
+    return null;
+  }
+
+  if (analysis.analysisMode === 'pp2') {
+    const verification = response?.verification;
+    const fused = response?.fused;
+    const perView = Array.isArray(response?.per_view)
+      ? response.per_view.map((view: any) => ({
+          view_index: typeof view?.view_index === 'number' ? view.view_index : null,
+          status: trimString(view?.status),
+          quality_score:
+            typeof view?.quality_score === 'number' ? view.quality_score : null,
+          detection: view?.detection
+            ? {
+                cls_name: trimString(view.detection.cls_name),
+                confidence:
+                  typeof view.detection.confidence === 'number'
+                    ? view.detection.confidence
+                    : null,
+                selected_by: trimString(view.detection.selected_by),
+                outlier_view:
+                  typeof view.detection.outlier_view === 'boolean'
+                    ? view.detection.outlier_view
+                    : null,
+              }
+            : null,
+          extraction: view?.extraction
+            ? {
+                caption: trimString(view.extraction.caption),
+                ocr_text: trimString(view.extraction.ocr_text),
+                grounded_features:
+                  view.extraction.grounded_features &&
+                  typeof view.extraction.grounded_features === 'object'
+                    ? view.extraction.grounded_features
+                    : {},
+              }
+            : null,
+        }))
+      : [];
+
+    return {
+      verification: verification
+        ? {
+            mode: trimString(verification.mode),
+            passed:
+              typeof verification.passed === 'boolean'
+                ? verification.passed
+                : null,
+            failure_reasons: Array.isArray(verification.failure_reasons)
+              ? verification.failure_reasons.map((reason: unknown) => String(reason))
+              : [],
+            used_views: Array.isArray(verification.used_views)
+              ? verification.used_views.filter((value: unknown) => typeof value === 'number')
+              : [],
+            dropped_views: Array.isArray(verification.dropped_views)
+              ? verification.dropped_views
+                  .filter((entry: unknown) => entry && typeof entry === 'object')
+                  .map((entry: any) => ({
+                    view_index:
+                      typeof entry.view_index === 'number' ? entry.view_index : null,
+                    reason: trimString(entry.reason),
+                  }))
+              : [],
+            cosine_sim_matrix: Array.isArray(verification.cosine_sim_matrix)
+              ? verification.cosine_sim_matrix
+              : [],
+            faiss_sim_matrix: Array.isArray(verification.faiss_sim_matrix)
+              ? verification.faiss_sim_matrix
+              : [],
+            geometric_scores:
+              verification.geometric_scores &&
+              typeof verification.geometric_scores === 'object'
+                ? verification.geometric_scores
+                : {},
+          }
+        : null,
+      fused: fused
+        ? {
+            category: trimString(fused.category),
+            color: trimString(fused.color),
+            caption: trimString(fused.caption),
+            detailed_description: trimString(fused.detailed_description),
+            attributes:
+              fused.attributes && typeof fused.attributes === 'object'
+                ? fused.attributes
+                : {},
+            defects: Array.isArray(fused.defects) ? fused.defects : [],
+            description_evidence_used:
+              fused.description_evidence_used &&
+              typeof fused.description_evidence_used === 'object'
+                ? fused.description_evidence_used
+                : {},
+          }
+        : null,
+      per_view: perView,
+    };
+  }
+
+  const accepted = selectAcceptedPP1Detection(response);
+  if (!accepted) {
+    return null;
+  }
+
+  return {
+    pp1: {
+      label: trimString(accepted.label),
+      color: trimString(accepted.color),
+      final_description: trimString(accepted.final_description),
+      detailed_description: trimString(accepted.detailed_description),
+      ocr_text: trimString(accepted.ocr_text),
+      category_details:
+        accepted.category_details && typeof accepted.category_details === 'object'
+          ? accepted.category_details
+          : {},
+      raw:
+        accepted.raw && typeof accepted.raw === 'object'
+          ? accepted.raw
+          : {},
+    },
+  };
 };
 
 const getAnalysisPathLabel = (imageCount: number): string =>
@@ -309,6 +453,7 @@ const loadFoundItemPreAnalysisByTaskId = async (
     token: entry.token,
     analysis: {
       analysisMode: entry.analysisMode ?? null,
+      taskId: entry.taskId ?? null,
       pythonItemId: entry.pythonItemId ?? null,
       faissId: typeof entry.faissId === 'number' ? entry.faissId : null,
       faissIds: Array.isArray(entry.faissIds)
@@ -340,6 +485,7 @@ const loadFoundItemPreAnalysis = async (
 
   return {
     analysisMode: entry.analysisMode ?? null,
+    taskId: entry.taskId ?? null,
     pythonItemId: entry.pythonItemId ?? null,
     faissId: typeof entry.faissId === 'number' ? entry.faissId : null,
     faissIds: Array.isArray(entry.faissIds)
@@ -828,6 +974,52 @@ export const createFoundItem = async (
       pipelineResponse: analysisSnapshot.pipelineResponse,
       searchable: analysisSnapshot.searchable,
     });
+
+    if (preAnalysisToken && analysisSnapshot.analysisMode) {
+      const normalizedPredictedCategory = normalizeFeedbackText(analysisSnapshot.detectedCategory);
+      const normalizedFinalCategory = normalizeFeedbackText(category);
+      const normalizedPredictedDescription = normalizeFeedbackText(analysisSnapshot.detectedDescription);
+      const normalizedFinalDescription = normalizeFeedbackText(description);
+      const analysisEvidence = buildFounderFeedbackAnalysisEvidence(analysisSnapshot);
+
+      const categoryChanged = normalizedPredictedCategory.length > 0
+        ? normalizedPredictedCategory !== normalizedFinalCategory
+        : false;
+      const descriptionChanged = normalizedPredictedDescription.length > 0
+        ? normalizedPredictedDescription !== normalizedFinalDescription
+        : false;
+
+      try {
+        const feedbackEvent = await founderPrefillFeedbackService.createFounderPrefillFeedback({
+          foundItemId: foundItem._id.toString(),
+          createdBy: req.user?.id || null,
+          preAnalysisToken,
+          taskId: analysisSnapshot.taskId,
+          analysisMode: analysisSnapshot.analysisMode,
+          pythonItemId: analysisSnapshot.pythonItemId,
+          imageCount: imageFiles.length,
+          imageUrls: uploadedImageUrls,
+          predictedCategory: analysisSnapshot.detectedCategory,
+          predictedDescription: analysisSnapshot.detectedDescription,
+          predictedColor: analysisSnapshot.detectedColor,
+          analysisEvidence,
+          finalCategory: category,
+          finalDescription: description,
+          categoryChanged,
+          descriptionChanged,
+          acceptedAsIs: !categoryChanged && !descriptionChanged,
+        });
+
+        void founderPrefillFeedbackService.relayFounderPrefillFeedbackEvent(
+          feedbackEvent._id.toString()
+        );
+      } catch (feedbackError) {
+        console.error(
+          'Founder prefill feedback logging failed (non-blocking):',
+          feedbackError instanceof Error ? feedbackError.message : feedbackError
+        );
+      }
+    }
 
     res.status(201).json(foundItem);
   } catch (error) {

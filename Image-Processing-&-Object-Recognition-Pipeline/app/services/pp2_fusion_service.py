@@ -5,8 +5,12 @@ from collections import Counter, defaultdict
 from typing import List, Dict, Any, Optional, Set
 from app.schemas.pp2_schemas import PP2PerViewResult, PP2FusedProfile
 from app.domain.color_utils import normalize_color, extract_color_from_text
+from app.services.description_service import DescriptionComposer
+
+description_composer = DescriptionComposer()
 
 class MultiViewFusionService:
+    _CARD_LABELS = {"Student ID", "NIC / National ID Card"}
     _URL_OR_DOMAIN_RE = re.compile(r"(?:\bHTTP\b|\bHTTPS\b|\bWWW\b|(?:^|[^\s])\.(?:COM|NET|LK|ORG|CO)\b)")
     _SPLIT_RE = re.compile(r"[\/\._-]+")
     _TECH_STOPWORDS = {"HTTP", "HTTPS", "WWW", "COM", "NET", "LK", "ORG", "CO"}
@@ -317,6 +321,114 @@ class MultiViewFusionService:
         ranked = sorted(counts.items(), key=lambda item: (-int(item[1]), -len(item[0]), item[0]))
         return ranked[0][0]
 
+    @staticmethod
+    def _collect_card_tokens(text: str) -> List[str]:
+        tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", str(text or ""))
+        out: List[str] = []
+        for token in tokens:
+            clean = str(token).strip().upper()
+            if len(clean) < 3:
+                continue
+            out.append(clean)
+        return out
+
+    def _merge_card_ocr_tokens(self, per_view: List[PP2PerViewResult], best_view_index: int) -> List[str]:
+        token_to_views: Dict[str, Set[int]] = defaultdict(set)
+        best_view_tokens: List[str] = []
+        for res in per_view:
+            tokens = self._collect_card_tokens(getattr(res.extraction, "ocr_text", "") or "")
+            deduped = self._dedupe_keep_order(tokens)
+            if int(res.view_index) == int(best_view_index):
+                best_view_tokens = deduped
+            for token in deduped:
+                token_to_views[token].add(int(res.view_index))
+
+        ranked = sorted(
+            token_to_views.items(),
+            key=lambda item: (-len(item[1]), -int(item[0] in best_view_tokens), item[0]),
+        )
+        supported = [token for token, views in ranked if len(views) >= 2]
+        if not supported:
+            supported = best_view_tokens[:]
+        return supported[:2]
+
+    @staticmethod
+    def _extract_caption_snippet(caption: str) -> str:
+        text = str(caption or "").strip()
+        if not text:
+            return ""
+        lowered = text.lower().strip().rstrip(".")
+        match = re.search(r"\bwith\s+(.+)", lowered)
+        if not match:
+            return ""
+        snippet = match.group(1)
+        snippet = re.split(r"\b(?:on|against|near|beside|sitting on|lying on)\b", snippet)[0].strip(" ,.")
+        if len(snippet.split()) < 2:
+            return ""
+        if any(term in snippet for term in ("hand", "person", "background", "table", "desk")):
+            return ""
+        return snippet
+
+    @staticmethod
+    def _pick_majority_value(values: List[str]) -> Optional[str]:
+        cleaned = [str(v).strip() for v in values if str(v).strip()]
+        if not cleaned:
+            return None
+        counts = Counter(cleaned)
+        winner, count = sorted(
+            counts.items(),
+            key=lambda item: (-int(item[1]), -len(item[0]), item[0]),
+        )[0]
+        if int(count) >= 2:
+            return winner
+        return None
+
+    def _select_detail_scope_best_view(self, scope_views: List[PP2PerViewResult]) -> Optional[PP2PerViewResult]:
+        if not scope_views:
+            return None
+        ranked = sorted(
+            scope_views,
+            key=lambda view: (float(view.quality_score), float(view.detection.confidence)),
+            reverse=True,
+        )
+        return ranked[0]
+
+    def _collect_supported_field_values(
+        self,
+        scope_views: List[PP2PerViewResult],
+        *,
+        field_name: str,
+        best_view: Optional[PP2PerViewResult],
+        support_needed: int,
+    ) -> tuple[List[str], List[str]]:
+        support_counts: Dict[str, int] = defaultdict(int)
+        display_map: Dict[str, str] = {}
+        best_view_values: List[str] = []
+
+        for view in scope_views:
+            grounded = view.extraction.grounded_features or {}
+            current_values = self._to_clean_str_list(grounded.get(field_name))
+            current_values = self._dedupe_keep_order(current_values)
+            seen_norms: Set[str] = set()
+            for value in current_values:
+                norm = str(value).strip().lower()
+                if not norm or norm in seen_norms:
+                    continue
+                seen_norms.add(norm)
+                support_counts[norm] += 1
+                display_map.setdefault(norm, value)
+            if best_view is not None and int(view.view_index) == int(best_view.view_index):
+                best_view_values = current_values
+
+        consensus_values = [
+            display_map[norm]
+            for norm, count in support_counts.items()
+            if int(count) >= max(1, int(support_needed))
+        ]
+        consensus_values = self._dedupe_keep_order(consensus_values)
+        fallback_values = self._dedupe_keep_order(best_view_values) if not consensus_values else []
+        return consensus_values, fallback_values
+
     def _collect_caption_ocr_tokens(
         self,
         scope_views: List[PP2PerViewResult],
@@ -616,6 +728,9 @@ class MultiViewFusionService:
         caption_features = self._dedupe_keep_order(caption_features)
         caption_attachments = self._dedupe_keep_order(caption_attachments)
         caption_ocr_tokens = self._collect_caption_ocr_tokens(caption_scope_views, merged_ocr_tokens)
+        if final_category in self._CARD_LABELS:
+            merged_ocr_tokens = self._merge_card_ocr_tokens(per_view, best_view.view_index)
+            caption_ocr_tokens = merged_ocr_tokens[:2]
 
         # 6. Defects (consensus-based across eligible views)
         eligible_view_count = len(eligible_category_views)
@@ -665,6 +780,96 @@ class MultiViewFusionService:
             defects=sorted_defects,
             attachments=caption_attachments,
         )
+        caption_snippets = self._dedupe_keep_order(
+            [
+                self._extract_caption_snippet(getattr(res.extraction, "caption", "") or "")
+                for res in caption_scope_views
+            ]
+        )
+        if not caption_features and not caption_attachments and not sorted_defects and len(caption_snippets) == 1:
+            main_caption = f"{main_caption} Visible details: {caption_snippets[0]}."
+            merged_attributes["caption_enrichment_mode"] = "conservative_plus_caption_snippet"
+            merged_attributes["caption_snippets_used"] = caption_snippets
+        else:
+            merged_attributes["caption_enrichment_mode"] = "conservative_only"
+            merged_attributes["caption_snippets_used"] = []
+
+        detailed_scope_views = [
+            r for r in caption_scope_views
+            if r.view_index in eligible_category_views
+        ] or caption_scope_views
+        detail_best_view = self._select_detail_scope_best_view(detailed_scope_views)
+        support_needed = 2 if len(detailed_scope_views) >= 2 else 1
+
+        detailed_brand = self._pick_majority_value(scope_brands)
+        if not detailed_brand and detail_best_view is not None:
+            detailed_brand = str((detail_best_view.extraction.grounded_features or {}).get("brand") or "").strip() or None
+
+        detailed_color = self._pick_majority_value(scope_colors)
+        if not detailed_color and detail_best_view is not None:
+            best_view_color = normalize_color(str((detail_best_view.extraction.grounded_features or {}).get("color") or "").strip())
+            if best_view_color:
+                detailed_color = best_view_color
+            else:
+                best_view_caption = str(getattr(detail_best_view.extraction, "caption", "") or "").strip()
+                if best_view_caption:
+                    detailed_color = extract_color_from_text(best_view_caption)
+
+        consensus_features, best_view_feature_fallback = self._collect_supported_field_values(
+            detailed_scope_views,
+            field_name="features",
+            best_view=detail_best_view,
+            support_needed=support_needed,
+        )
+        consensus_attachments, best_view_attachment_fallback = self._collect_supported_field_values(
+            detailed_scope_views,
+            field_name="attachments",
+            best_view=detail_best_view,
+            support_needed=support_needed,
+        )
+        consensus_defects, best_view_defect_fallback = self._collect_supported_field_values(
+            detailed_scope_views,
+            field_name="defects",
+            best_view=detail_best_view,
+            support_needed=support_needed,
+        )
+
+        detailed_description_filters: List[str] = ["consensus_only"]
+        detailed_features_for_description = consensus_features[:]
+        detailed_attachments_for_description = consensus_attachments[:]
+        detailed_defects_for_description = consensus_defects[:]
+        if not detailed_features_for_description and best_view_feature_fallback:
+            detailed_features_for_description = best_view_feature_fallback[:2]
+            detailed_description_filters.append("best_view_feature_fallback")
+        if not detailed_attachments_for_description and best_view_attachment_fallback:
+            detailed_attachments_for_description = best_view_attachment_fallback[:1]
+            detailed_description_filters.append("best_view_attachment_fallback")
+        if not detailed_defects_for_description and best_view_defect_fallback:
+            detailed_defects_for_description = best_view_defect_fallback[:1]
+            detailed_description_filters.append("best_view_defect_fallback")
+
+        detailed_ocr_text = " ".join(merged_ocr_tokens[:2]).strip()
+        detailed_caption = ""
+        if detail_best_view is not None:
+            detailed_caption = str(getattr(detail_best_view.extraction, "caption", "") or "")
+
+        detailed_description_bundle = description_composer.compose(
+            label=final_category,
+            color=detailed_color,
+            brand=detailed_brand,
+            ocr_text=detailed_ocr_text,
+            features=detailed_features_for_description,
+            defects=detailed_defects_for_description,
+            attachments=detailed_attachments_for_description,
+            caption=detailed_caption,
+            key_count=merged_attributes.get("key_count"),
+            allow_caption_salvage=False,
+        )
+        detailed_description_filters.extend(
+            detailed_description_bundle.get("description_filters_applied", []) or []
+        )
+        merged_attributes["description_scope_view_indices"] = [int(v.view_index) for v in detailed_scope_views]
+        merged_attributes["description_timings_ms"] = detailed_description_bundle.get("description_timings_ms", {})
 
         # 7. Fused Embedding metadata (actual fused-vector math is exposed via compute_fused_vector)
         fused_embedding_id = f"{item_id}_fused"
@@ -674,6 +879,12 @@ class MultiViewFusionService:
             brand=final_brand,
             color=final_color,
             caption=main_caption,
+            detailed_description=detailed_description_bundle.get("detailed_description"),
+            description_source="consensus_conservative_caption",
+            detailed_description_source=detailed_description_bundle.get("detailed_description_source"),
+            description_evidence_used=detailed_description_bundle.get("description_evidence_used"),
+            description_filters_applied=self._dedupe_keep_order(detailed_description_filters),
+            description_word_count=detailed_description_bundle.get("description_word_count"),
             merged_ocr_tokens=merged_ocr_tokens,
             attributes=merged_attributes,
             defects=sorted_defects,

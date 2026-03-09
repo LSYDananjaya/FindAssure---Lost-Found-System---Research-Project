@@ -25,7 +25,20 @@ type FoundItemAnalysisSnapshot = {
   faissIds: number[];
   detectedCategory: string | null;
   detectedDescription: string | null;
+  detailedDescription: string | null;
   detectedColor: string | null;
+  ocrText: string | null;
+  ocrTextDisplay: string | null;
+  categoryDetails: {
+    features: string[];
+    defects: string[];
+    attachments: string[];
+  };
+  descriptionEvidenceUsed: {
+    summary: string[];
+    detailed: string[];
+  };
+  descriptionFiltersApplied: string[];
   vector128: number[];
   pipelineResponse: any;
   searchable: boolean;
@@ -49,7 +62,20 @@ type PreAnalysisResponseBody = {
   stageMessage?: string | null;
   detectedCategory: string | null;
   detectedDescription: string | null;
+  detailedDescription: string | null;
   detectedColor: string | null;
+  ocrText: string | null;
+  ocrTextDisplay: string | null;
+  categoryDetails: {
+    features: string[];
+    defects: string[];
+    attachments: string[];
+  };
+  descriptionEvidenceUsed: {
+    summary: string[];
+    detailed: string[];
+  };
+  descriptionFiltersApplied: string[];
   searchable: boolean;
   message: string;
 };
@@ -118,7 +144,20 @@ const buildDefaultAnalysisSnapshot = (): FoundItemAnalysisSnapshot => ({
   faissIds: [],
   detectedCategory: null,
   detectedDescription: null,
+  detailedDescription: null,
   detectedColor: null,
+  ocrText: null,
+  ocrTextDisplay: null,
+  categoryDetails: {
+    features: [],
+    defects: [],
+    attachments: [],
+  },
+  descriptionEvidenceUsed: {
+    summary: [],
+    detailed: [],
+  },
+  descriptionFiltersApplied: [],
   vector128: [],
   pipelineResponse: null,
   searchable: false,
@@ -145,6 +184,119 @@ const trimString = (value: unknown): string | null => {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+};
+
+const normalizeStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => trimString(entry))
+    .filter((entry): entry is string => Boolean(entry));
+};
+
+const normalizeCategoryDetails = (value: unknown): FoundItemAnalysisSnapshot['categoryDetails'] => {
+  const fallback = {
+    features: [],
+    defects: [],
+    attachments: [],
+  };
+
+  if (!value || typeof value !== 'object') {
+    return fallback;
+  }
+
+  const source = value as Record<string, unknown>;
+  return {
+    features: normalizeStringArray(source.features),
+    defects: normalizeStringArray(source.defects),
+    attachments: normalizeStringArray(source.attachments),
+  };
+};
+
+const normalizeDescriptionEvidenceUsed = (
+  value: unknown
+): FoundItemAnalysisSnapshot['descriptionEvidenceUsed'] => {
+  const fallback = {
+    summary: [],
+    detailed: [],
+  };
+
+  if (!value || typeof value !== 'object') {
+    return fallback;
+  }
+
+  const source = value as Record<string, unknown>;
+  return {
+    summary: normalizeStringArray(source.summary),
+    detailed: normalizeStringArray(source.detailed),
+  };
+};
+
+const pickBestText = (...values: unknown[]): string | null => {
+  for (const value of values) {
+    const trimmed = trimString(value);
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  return null;
+};
+
+const buildAnalysisPrefillFields = (analysis: FoundItemAnalysisSnapshot) => ({
+  detectedCategory: analysis.detectedCategory,
+  detectedDescription: analysis.detectedDescription,
+  detailedDescription: analysis.detailedDescription,
+  detectedColor: analysis.detectedColor,
+  ocrText: analysis.ocrText,
+  ocrTextDisplay: analysis.ocrTextDisplay,
+  categoryDetails: analysis.categoryDetails,
+  descriptionEvidenceUsed: analysis.descriptionEvidenceUsed,
+  descriptionFiltersApplied: analysis.descriptionFiltersApplied,
+  searchable: analysis.searchable,
+});
+
+const extractPP1AnalysisDetails = (detection: any) => {
+  const raw = detection?.raw && typeof detection.raw === 'object' ? detection.raw : {};
+
+  return {
+    detectedDescription: pickBestText(detection?.final_description, detection?.message),
+    detailedDescription: pickBestText(
+      detection?.detailed_description,
+      detection?.final_description,
+      detection?.message
+    ),
+    ocrText: pickBestText(detection?.ocr_text),
+    ocrTextDisplay: pickBestText(detection?.ocr_text_display, detection?.ocr_text),
+    categoryDetails: normalizeCategoryDetails(detection?.category_details),
+    descriptionEvidenceUsed: normalizeDescriptionEvidenceUsed(detection?.description_evidence_used),
+    descriptionFiltersApplied: normalizeStringArray(detection?.description_filters_applied),
+    caption: pickBestText(detection?.caption, raw?.caption, raw?.caption_primary),
+  };
+};
+
+const extractPP2AnalysisDetails = (pp2Result: any) => {
+  const fused = pp2Result?.fused && typeof pp2Result.fused === 'object' ? pp2Result.fused : {};
+  const attributes = fused?.attributes && typeof fused.attributes === 'object' ? fused.attributes : {};
+  const mergedOcrTokens = normalizeStringArray(fused?.merged_ocr_tokens);
+  const mergedOcrText = mergedOcrTokens.length > 0 ? mergedOcrTokens.join(' ') : null;
+  const mergedOcrDisplay = mergedOcrTokens.length > 0 ? mergedOcrTokens.join('\n') : null;
+
+  return {
+    detectedDescription: pickBestText(fused?.caption, fused?.detailed_description),
+    detailedDescription: pickBestText(fused?.detailed_description, fused?.caption),
+    ocrText: mergedOcrText,
+    ocrTextDisplay: mergedOcrDisplay || mergedOcrText,
+    categoryDetails: normalizeCategoryDetails({
+      features: attributes.features,
+      defects: fused?.defects,
+      attachments: attributes.attachments,
+    }),
+    descriptionEvidenceUsed: normalizeDescriptionEvidenceUsed(fused?.description_evidence_used),
+    descriptionFiltersApplied: normalizeStringArray(fused?.description_filters_applied),
+  };
 };
 
 const buildFounderFeedbackAnalysisEvidence = (
@@ -307,7 +459,20 @@ const buildPreAnalysisResponse = ({
   stageMessage = null,
   detectedCategory = null,
   detectedDescription = null,
+  detailedDescription = null,
   detectedColor = null,
+  ocrText = null,
+  ocrTextDisplay = null,
+  categoryDetails = {
+    features: [],
+    defects: [],
+    attachments: [],
+  },
+  descriptionEvidenceUsed = {
+    summary: [],
+    detailed: [],
+  },
+  descriptionFiltersApplied = [],
   searchable = false,
 }: {
   status: PreAnalysisStatus;
@@ -321,7 +486,13 @@ const buildPreAnalysisResponse = ({
   stageMessage?: string | null;
   detectedCategory?: string | null;
   detectedDescription?: string | null;
+  detailedDescription?: string | null;
   detectedColor?: string | null;
+  ocrText?: string | null;
+  ocrTextDisplay?: string | null;
+  categoryDetails?: FoundItemAnalysisSnapshot['categoryDetails'];
+  descriptionEvidenceUsed?: FoundItemAnalysisSnapshot['descriptionEvidenceUsed'];
+  descriptionFiltersApplied?: string[];
   searchable?: boolean;
 }): PreAnalysisResponseBody => {
   const terminalStatus =
@@ -342,7 +513,13 @@ const buildPreAnalysisResponse = ({
     stageMessage,
     detectedCategory,
     detectedDescription,
+    detailedDescription,
     detectedColor,
+    ocrText,
+    ocrTextDisplay,
+    categoryDetails,
+    descriptionEvidenceUsed,
+    descriptionFiltersApplied,
     searchable,
     message: stageMessage || analysisSummary,
   };
@@ -372,8 +549,8 @@ const buildPP1AnalysisSnapshot = (pp1Result: any): FoundItemAnalysisSnapshot | n
   analysis.analysisMode = 'pp1';
   analysis.pythonItemId = detection.item_id ?? null;
   analysis.detectedCategory = detection.label ?? null;
-  analysis.detectedDescription = detection.final_description || detection.message || null;
   analysis.detectedColor = detection.color ?? null;
+  Object.assign(analysis, extractPP1AnalysisDetails(detection));
   analysis.vector128 = Array.isArray(detection.embeddings?.vector_128d)
     ? detection.embeddings.vector_128d
     : [];
@@ -391,8 +568,8 @@ const buildPP2AnalysisSnapshot = (pp2Result: any): FoundItemAnalysisSnapshot | n
   analysis.analysisMode = 'pp2';
   analysis.pythonItemId = pp2Result?.item_id ?? null;
   analysis.detectedCategory = pp2Result.fused.category ?? null;
-  analysis.detectedDescription = pp2Result.fused.caption ?? null;
   analysis.detectedColor = pp2Result.fused.color ?? null;
+  Object.assign(analysis, extractPP2AnalysisDetails(pp2Result));
   analysis.faissIds = Array.isArray(pp2Result.faiss_ids)
     ? pp2Result.faiss_ids.filter((id: unknown) => typeof id === 'number')
     : [];
@@ -423,7 +600,13 @@ const storeFoundItemPreAnalysis = async (
       faissIds: analysis.faissIds,
       detectedCategory: analysis.detectedCategory,
       detectedDescription: analysis.detectedDescription,
+      detailedDescription: analysis.detailedDescription,
       detectedColor: analysis.detectedColor,
+      ocrText: analysis.ocrText,
+      ocrTextDisplay: analysis.ocrTextDisplay,
+      categoryDetails: analysis.categoryDetails,
+      descriptionEvidenceUsed: analysis.descriptionEvidenceUsed,
+      descriptionFiltersApplied: analysis.descriptionFiltersApplied,
       vector128: analysis.vector128,
       pipelineResponse: analysis.pipelineResponse,
       searchable: analysis.searchable,
@@ -461,7 +644,13 @@ const loadFoundItemPreAnalysisByTaskId = async (
         : [],
       detectedCategory: entry.detectedCategory ?? null,
       detectedDescription: entry.detectedDescription ?? null,
+      detailedDescription: entry.detailedDescription ?? null,
       detectedColor: entry.detectedColor ?? null,
+      ocrText: entry.ocrText ?? null,
+      ocrTextDisplay: entry.ocrTextDisplay ?? null,
+      categoryDetails: normalizeCategoryDetails(entry.categoryDetails),
+      descriptionEvidenceUsed: normalizeDescriptionEvidenceUsed(entry.descriptionEvidenceUsed),
+      descriptionFiltersApplied: normalizeStringArray(entry.descriptionFiltersApplied),
       vector128: Array.isArray(entry.vector128)
         ? entry.vector128.filter((value: unknown) => typeof value === 'number')
         : [],
@@ -493,7 +682,13 @@ const loadFoundItemPreAnalysis = async (
       : [],
     detectedCategory: entry.detectedCategory ?? null,
     detectedDescription: entry.detectedDescription ?? null,
+    detailedDescription: entry.detailedDescription ?? null,
     detectedColor: entry.detectedColor ?? null,
+    ocrText: entry.ocrText ?? null,
+    ocrTextDisplay: entry.ocrTextDisplay ?? null,
+    categoryDetails: normalizeCategoryDetails(entry.categoryDetails),
+    descriptionEvidenceUsed: normalizeDescriptionEvidenceUsed(entry.descriptionEvidenceUsed),
+    descriptionFiltersApplied: normalizeStringArray(entry.descriptionFiltersApplied),
     vector128: Array.isArray(entry.vector128)
       ? entry.vector128.filter((value: unknown) => typeof value === 'number')
       : [],
@@ -534,16 +729,18 @@ export const preAnalyzeFoundImages = async (
         const detection = selectAcceptedPP1Detection(pp1Result);
 
         if (detection) {
-          const analysis = buildDefaultAnalysisSnapshot();
-          analysis.analysisMode = 'pp1';
-          analysis.pythonItemId = detection.item_id ?? null;
-          analysis.detectedCategory = detection.label ?? null;
-          analysis.detectedDescription = detection.final_description || detection.message || null;
-          analysis.detectedColor = detection.color ?? null;
-          analysis.vector128 = Array.isArray(detection.embeddings?.vector_128d)
-            ? detection.embeddings.vector_128d
-            : [];
-          analysis.pipelineResponse = pp1Result;
+          const analysis = buildPP1AnalysisSnapshot(pp1Result);
+
+          if (!analysis) {
+            const pp1FallbackBody = buildPreAnalysisResponse({
+              status: 'manual_fallback',
+              imageCount: tempImagePaths.length,
+              analysisMode: 'pp1',
+            });
+            console.log('[PRE-ANALYZE] Response (PP1 no detection):', JSON.stringify(pp1FallbackBody, null, 2));
+            res.status(200).json(pp1FallbackBody);
+            return;
+          }
 
           if (analysis.pythonItemId && analysis.vector128.length === 128) {
             try {
@@ -576,10 +773,7 @@ export const preAnalyzeFoundImages = async (
             imageCount: tempImagePaths.length,
             preAnalysisToken,
             analysisMode: analysis.analysisMode,
-            detectedCategory: analysis.detectedCategory,
-            detectedDescription: analysis.detectedDescription,
-            detectedColor: analysis.detectedColor,
-            searchable: analysis.searchable,
+            ...buildAnalysisPrefillFields(analysis),
           });
           console.log('[PRE-ANALYZE] Response (PP1 ok):', JSON.stringify(pp1OkBody, null, 2));
           res.status(200).json(pp1OkBody);
@@ -610,18 +804,18 @@ export const preAnalyzeFoundImages = async (
       const pp2Result = await imageProcessingService.analyzePP2(tempImagePaths);
 
       if (pp2Result?.verification?.passed === true && pp2Result?.fused) {
-        const analysis = buildDefaultAnalysisSnapshot();
-        analysis.analysisMode = 'pp2';
-        analysis.pythonItemId = pp2Result?.item_id ?? null;
-        analysis.detectedCategory = pp2Result.fused.category ?? null;
-        analysis.detectedDescription = pp2Result.fused.caption ?? null;
-        analysis.detectedColor = pp2Result.fused.color ?? null;
-        analysis.faissIds = Array.isArray(pp2Result.faiss_ids)
-          ? pp2Result.faiss_ids.filter((id: unknown) => typeof id === 'number')
-          : [];
-        analysis.faissId = analysis.faissIds[0] ?? null;
-        analysis.pipelineResponse = pp2Result;
-        analysis.searchable = pp2Result.stored === true;
+        const analysis = buildPP2AnalysisSnapshot(pp2Result);
+
+        if (!analysis) {
+          const pp2FallbackBody = buildPreAnalysisResponse({
+            status: 'manual_fallback',
+            imageCount: tempImagePaths.length,
+            analysisMode: 'pp2',
+          });
+          console.log('[PRE-ANALYZE] Response (PP2 verification failed):', JSON.stringify(pp2FallbackBody, null, 2));
+          res.status(200).json(pp2FallbackBody);
+          return;
+        }
 
         const preAnalysisToken = await storeFoundItemPreAnalysis(
           tempImagePaths.length,
@@ -634,10 +828,7 @@ export const preAnalyzeFoundImages = async (
           imageCount: tempImagePaths.length,
           preAnalysisToken,
           analysisMode: analysis.analysisMode,
-          detectedCategory: analysis.detectedCategory,
-          detectedDescription: analysis.detectedDescription,
-          detectedColor: analysis.detectedColor,
-          searchable: analysis.searchable,
+          ...buildAnalysisPrefillFields(analysis),
         });
         console.log('[PRE-ANALYZE] Response (PP2 ok):', JSON.stringify(pp2OkBody, null, 2));
         res.status(200).json(pp2OkBody);
@@ -768,10 +959,7 @@ export const getPreAnalyzeFoundImagesStatus = async (
             analysisMode: cached.analysis.analysisMode,
             retryAfterMs:
               typeof pipelineStatus?.retryAfterMs === 'number' ? pipelineStatus.retryAfterMs : 1000,
-            detectedCategory: cached.analysis.detectedCategory,
-            detectedDescription: cached.analysis.detectedDescription,
-            detectedColor: cached.analysis.detectedColor,
-            searchable: cached.analysis.searchable,
+            ...buildAnalysisPrefillFields(cached.analysis),
           })
         );
         return;
@@ -833,10 +1021,7 @@ export const getPreAnalyzeFoundImagesStatus = async (
           analysisMode: analysis.analysisMode,
           retryAfterMs:
             typeof pipelineStatus?.retryAfterMs === 'number' ? pipelineStatus.retryAfterMs : 1000,
-          detectedCategory: analysis.detectedCategory,
-          detectedDescription: analysis.detectedDescription,
-          detectedColor: analysis.detectedColor,
-          searchable: analysis.searchable,
+          ...buildAnalysisPrefillFields(analysis),
         })
       );
       return;
@@ -938,7 +1123,13 @@ export const createFoundItem = async (
         analysisSnapshot.faissIds = cachedAnalysis.faissIds;
         analysisSnapshot.detectedCategory = cachedAnalysis.detectedCategory;
         analysisSnapshot.detectedDescription = cachedAnalysis.detectedDescription;
+        analysisSnapshot.detailedDescription = cachedAnalysis.detailedDescription;
         analysisSnapshot.detectedColor = cachedAnalysis.detectedColor;
+        analysisSnapshot.ocrText = cachedAnalysis.ocrText;
+        analysisSnapshot.ocrTextDisplay = cachedAnalysis.ocrTextDisplay;
+        analysisSnapshot.categoryDetails = cachedAnalysis.categoryDetails;
+        analysisSnapshot.descriptionEvidenceUsed = cachedAnalysis.descriptionEvidenceUsed;
+        analysisSnapshot.descriptionFiltersApplied = cachedAnalysis.descriptionFiltersApplied;
         analysisSnapshot.vector128 = cachedAnalysis.vector128;
         analysisSnapshot.pipelineResponse = cachedAnalysis.pipelineResponse;
         analysisSnapshot.searchable = cachedAnalysis.searchable;

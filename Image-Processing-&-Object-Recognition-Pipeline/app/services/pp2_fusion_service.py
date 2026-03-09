@@ -5,9 +5,6 @@ from collections import Counter, defaultdict
 from typing import List, Dict, Any, Optional, Set
 from app.schemas.pp2_schemas import PP2PerViewResult, PP2FusedProfile
 from app.domain.color_utils import normalize_color, extract_color_from_text
-from app.services.description_service import DescriptionComposer
-
-description_composer = DescriptionComposer()
 
 class MultiViewFusionService:
     _CARD_LABELS = {"Student ID", "NIC / National ID Card"}
@@ -853,18 +850,29 @@ class MultiViewFusionService:
         if detail_best_view is not None:
             detailed_caption = str(getattr(detail_best_view.extraction, "caption", "") or "")
 
-        detailed_description_bundle = description_composer.compose(
-            label=final_category,
-            color=detailed_color,
-            brand=detailed_brand,
-            ocr_text=detailed_ocr_text,
-            features=detailed_features_for_description,
-            defects=detailed_defects_for_description,
-            attachments=detailed_attachments_for_description,
-            caption=detailed_caption,
-            key_count=merged_attributes.get("key_count"),
-            allow_caption_salvage=False,
-        )
+        # Use the best view's Florence description directly if available,
+        # otherwise fall back to the caption
+        best_view_description = ""
+        if detail_best_view is not None:
+            best_view_description = str(
+                getattr(detail_best_view.extraction, "detailed_description", "")
+                or getattr(detail_best_view.extraction, "final_description", "")
+                or ""
+            ).strip()
+        if not best_view_description:
+            best_view_description = detailed_caption
+
+        detailed_description_bundle = {
+            "detailed_description": best_view_description or detailed_caption,
+            "detailed_description_source": "florence_direct",
+            "description_evidence_used": {"summary": ["florence_caption"], "detailed": ["florence_caption"]},
+            "description_filters_applied": ["florence_direct"],
+            "description_word_count": {
+                "final_description": len((best_view_description or detailed_caption).split()),
+                "detailed_description": len((best_view_description or detailed_caption).split()),
+            },
+            "description_timings_ms": {},
+        }
         detailed_description_filters.extend(
             detailed_description_bundle.get("description_filters_applied", []) or []
         )

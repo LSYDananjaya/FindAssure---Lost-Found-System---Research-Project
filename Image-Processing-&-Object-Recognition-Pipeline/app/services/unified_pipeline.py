@@ -19,7 +19,6 @@ from app.services.gemini_reasoner import (
 )
 from app.services.dino_embedder import DINOEmbedder
 from app.services.detection_arbiter import should_run_florence_od, arbitrate
-from app.services.description_service import DescriptionComposer
 from app.domain.color_utils import normalize_color
 from app.domain.label_keywords import (
     CATEGORY_KEYWORDS,
@@ -32,7 +31,6 @@ from app.domain.category_specs import canonicalize_label
 # from app.domain.category_specs import ALLOWED_LABELS # Removed restriction
 
 logger = logging.getLogger(__name__)
-description_composer = DescriptionComposer()
 
 class UnifiedPipeline:
     LABEL_RERANK_TOPK = 5
@@ -121,20 +119,17 @@ class UnifiedPipeline:
         category_details: Optional[Dict[str, Any]],
         key_count: Optional[int],
     ) -> Dict[str, Any]:
-        details = category_details if isinstance(category_details, dict) else {}
-        features = details.get("features") or analysis.get("grounded_features") or []
-        defects = details.get("defects") or analysis.get("grounded_defects") or []
-        attachments = details.get("attachments") or analysis.get("grounded_attachments") or []
-        return description_composer.compose(
-            label=label,
-            color=color,
-            ocr_text=str(analysis.get("ocr_text", "") or ""),
-            features=features,
-            defects=defects,
-            attachments=attachments,
-            caption=str(analysis.get("caption", "") or ""),
-            key_count=key_count,
-        )
+        """Pass through Florence's description fields directly."""
+        return {
+            "final_description": analysis.get("final_description") or analysis.get("detailed_description") or analysis.get("caption", ""),
+            "detailed_description": analysis.get("detailed_description") or analysis.get("final_description") or analysis.get("caption", ""),
+            "description_source": analysis.get("description_source", "florence_direct"),
+            "detailed_description_source": analysis.get("detailed_description_source", "florence_direct"),
+            "description_evidence_used": analysis.get("description_evidence_used", {"summary": [], "detailed": []}),
+            "description_filters_applied": analysis.get("description_filters_applied", []),
+            "description_word_count": analysis.get("description_word_count", {"final_description": 0, "detailed_description": 0}),
+            "description_timings_ms": analysis.get("raw", {}).get("description_timings_ms", {}),
+        }
 
     @staticmethod
     def _normalize_text_for_rerank(text: Any) -> str:

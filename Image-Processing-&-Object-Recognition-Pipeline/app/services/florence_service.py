@@ -16,7 +16,7 @@ Responsibilities:
     }
 
 Notes:
-- Loads model from local path: app/models/florence2-base-ft/
+- Loads model from local path: app/models/florence2-large-ft/
 - Fails fast if model path is missing.
 - Uses CATEGORY_SPECS for grounding candidates.
 - For PP2, list-style grounded fields are normalized in the pipeline into
@@ -44,11 +44,9 @@ from PIL import Image
 from app.domain.category_specs import canonicalize_label, CATEGORY_SPECS
 from app.domain.color_utils import normalize_color, extract_color_from_text
 from app.config.settings import settings
-from app.services.description_service import DescriptionComposer
 from app.services.gpu_semaphore import gpu_inference_guard
 
 logger = logging.getLogger(__name__)
-description_composer = DescriptionComposer()
 
 
 def _lite_worker_main(req_q: Any, resp_q: Any, service_cfg: Dict[str, Any]) -> None:
@@ -57,7 +55,7 @@ def _lite_worker_main(req_q: Any, resp_q: Any, service_cfg: Dict[str, Any]) -> N
     This allows hard timeouts by terminating the worker process.
     """
     svc = FlorenceService(
-        model_path=str(service_cfg.get("model_path", "app/models/florence2-base-ft/")),
+        model_path=str(service_cfg.get("model_path", "app/models/florence2-large-ft/")),
         device=str(service_cfg.get("device", "cuda")),
         torch_dtype=str(service_cfg.get("torch_dtype", "auto")),
         max_new_tokens=int(service_cfg.get("max_new_tokens", 512)),
@@ -473,150 +471,100 @@ def _is_generic_caption(text: str) -> bool:
     return False
 
 
-DESCRIPTION_WORD_LIMIT = 30
-DESCRIPTION_BANNED_FEATURES = {
-    "brand name",
-    "logo",
-    "text",
-    "name",
-    "id number",
-    "student number",
-    "institution name",
-    "date of birth",
-    "issuing authority",
-    "signature",
-    "place of birth",
-    "national flag",
-}
+def _build_florence_description(
+    caption: str,
+    label: Optional[str] = None,
+    color: Optional[str] = None,
+    ocr_text: str = "",
+    grounded_features: Optional[List[str]] = None,
+    grounded_defects: Optional[List[str]] = None,
+    grounded_attachments: Optional[List[str]] = None,
+    key_count: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Build a description directly from Florence caption/VQA output.
+    No word-cap — preserves the full richness of Florence's output.
+    """
+    # Clean caption: remove meta-phrases that Florence sometimes injects
+    desc = _safe_str(caption).strip()
+    meta_patterns = [
+        r"(?i)^this (?:image |picture |photo |answering |answer ).*?(?:shows?|depicts?|contains?|requires?)\s+",
+        r"(?i)^(?:the image |the picture |the photo )(?:shows?|depicts?|contains?)\s+",
+        r"(?i)\bthis (?:answering|answer) does not require\b.*$",
+    ]
+    for pat in meta_patterns:
+        desc = re.sub(pat, "", desc).strip()
 
-LABEL_DESCRIPTION_MAP = {
-    "Wallet": "wallet",
-    "Handbag": "handbag",
-    "Backpack": "backpack",
-    "Laptop": "laptop",
-    "Smart Phone": "smartphone",
-    "Helmet": "helmet",
-    "Key": "key",
-    "Power Bank": "power bank",
-    "Laptop/Mobile chargers & cables": "charger or cable",
-    "Earbuds - Earbuds case": "earbuds case",
-    "Headphone": "headphones",
-    "Student ID": "student ID card",
-    "NIC / National ID Card": "national ID card",
-}
+    # Build a structured prefix with label/color if available
+    prefix_parts = []
+    canonical = canonicalize_label(label or "") if label else None
+    if canonical:
+        label_word = canonical.lower()
+        if canonical == "Key" and isinstance(key_count, int) and key_count > 1:
+            label_word = f"{key_count} keys"
+        prefix_parts.append(label_word)
 
+    if color and str(color).lower() not in ("unknown", "none", ""):
+        prefix_parts.insert(0, str(color).lower())
 
-def _normalize_phrase(value: Any) -> str:
-    return re.sub(r"\s+", " ", _safe_str(value)).strip()
+    # Only prepend label/color if the caption doesn't already mention them
+    desc_lower = desc.lower()
+    if prefix_parts:
+        prefix = " ".join(prefix_parts)
+        # Check if the caption already starts with something similar
+        if not any(p in desc_lower[:60] for p in prefix_parts):
+            desc = f"A {prefix}. {desc}" if desc else f"A {prefix}."
 
+    # Append grounded evidence that the caption may have missed
+    extras = []
+    features = grounded_features or []
+    defects = grounded_defects or []
+    attachments = grounded_attachments or []
 
-def _word_count(text: Any) -> int:
-    return len(re.findall(r"\b\S+\b", _safe_str(text)))
+    unseen_features = [f for f in features if f.lower() not in desc_lower]
+    if unseen_features:
+        extras.append("Features: " + ", ".join(unseen_features[:5]))
 
+    unseen_defects = [d for d in defects if d.lower() not in desc_lower]
+    if unseen_defects:
+        extras.append("Wear: " + ", ".join(unseen_defects[:3]))
 
-def _trim_to_word_limit(text: str, limit: int = DESCRIPTION_WORD_LIMIT) -> str:
-    words = re.findall(r"\S+", _safe_str(text))
-    if len(words) <= limit:
-        return _safe_str(text).strip()
-    return " ".join(words[:limit]).strip().rstrip(",;:-")
+    unseen_attachments = [a for a in attachments if a.lower() not in desc_lower]
+    if unseen_attachments:
+        extras.append("Attachments: " + ", ".join(unseen_attachments[:3]))
 
+    if ocr_text and ocr_text.strip():
+        snippet = " ".join(ocr_text.strip().split()[:4])
+        if snippet.lower() not in desc_lower:
+            extras.append(f'Text on object: "{snippet}"')
 
-def _clean_description_text(text: Any, limit: int = DESCRIPTION_WORD_LIMIT) -> str:
-    cleaned = _normalize_phrase(text)
-    if not cleaned:
-        return ""
-    cleaned = re.split(r"(?<=[.!?])\s+", cleaned)[0].strip()
-    cleaned = re.sub(r"\b(?:not visible|unknown|none|n/?a)\b", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,;:-")
-    cleaned = _trim_to_word_limit(cleaned, limit=limit)
-    if cleaned and cleaned[-1] not in ".!?":
-        cleaned = f"{cleaned}."
-    return cleaned
+    if extras:
+        desc = desc.rstrip(". ") + ". " + ". ".join(extras) + "."
 
+    word_count = len(desc.split())
 
-def _safe_description_label(label: Optional[str], key_count: Optional[int] = None) -> str:
-    canonical = canonicalize_label(label or "") or _normalize_phrase(label)
-    if canonical == "Key" and isinstance(key_count, int) and key_count > 1:
-        return f"{key_count} keys"
-    return LABEL_DESCRIPTION_MAP.get(canonical, canonical.lower() if canonical else "item")
+    evidence = []
+    if caption:
+        evidence.append("florence_caption")
+    if features:
+        evidence.append("grounded_features")
+    if defects:
+        evidence.append("grounded_defects")
+    if attachments:
+        evidence.append("grounded_attachments")
+    if ocr_text:
+        evidence.append("ocr_text")
 
-
-def _format_feature_phrase(phrase: Any) -> str:
-    text = _normalize_phrase(phrase).lower()
-    if not text or text in DESCRIPTION_BANNED_FEATURES:
-        return ""
-    text = text.replace(" attached", "")
-    replacements = {
-        "front pocket": "front pocket",
-        "side pockets": "side pockets",
-        "shoulder straps": "shoulder straps",
-        "top handle": "top handle",
-        "camera module": "camera module",
-        "phone case": "case",
-        "screen protector": "screen protector",
-        "card holder": "card holder",
-        "metal key ring": "key ring",
-        "key head hole": "key head hole",
-        "slot in head": "head slot",
+    return {
+        "final_description": desc,
+        "detailed_description": desc,
+        "description_source": "florence_direct",
+        "detailed_description_source": "florence_direct",
+        "description_evidence_used": {"summary": evidence, "detailed": evidence},
+        "description_filters_applied": ["florence_direct"],
+        "description_word_count": {"final_description": word_count, "detailed_description": word_count},
+        "description_timings_ms": {},
     }
-    return replacements.get(text, text)
-
-
-def _format_defect_phrase(phrase: Any) -> str:
-    text = _normalize_phrase(phrase).lower()
-    if not text:
-        return ""
-    replacements = {
-        "scratch": "minor scratches",
-        "screen scratches": "screen scratches",
-        "scuff marks": "scuff marks",
-        "cracked screen": "cracked screen",
-        "crack": "visible crack",
-        "dent": "small dent",
-        "broken zipper": "broken zipper",
-    }
-    return replacements.get(text, text)
-
-
-def _extract_short_ocr_snippet(ocr_text: str) -> str:
-    tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9+._-]*", _safe_str(ocr_text))
-    if not tokens:
-        return ""
-
-    disallowed = {
-        "press", "home", "unlock", "camera", "sun", "mon", "tue", "wed", "thu", "fri", "sat",
-        "am", "pm", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
-    }
-    kept = [token for token in tokens if token.lower() not in disallowed]
-    if not kept:
-        return ""
-
-    snippet_tokens = kept[:3]
-    snippet = " ".join(snippet_tokens).strip()
-    if not re.search(r"[A-Za-z]", snippet):
-        return ""
-    if len(snippet) > 24:
-        return ""
-    return snippet
-
-
-def _salvage_caption_phrases(caption: str, spec_key: Optional[str]) -> List[str]:
-    caption_norm = _normalize_phrase(caption).lower()
-    if not caption_norm or not spec_key or spec_key not in CATEGORY_SPECS:
-        return []
-    allowed_candidates = (
-        CATEGORY_SPECS[spec_key].get("features", [])
-        + CATEGORY_SPECS[spec_key].get("attachments", [])
-        + CATEGORY_SPECS[spec_key].get("defects", [])
-    )
-    out: List[str] = []
-    for candidate in allowed_candidates:
-        candidate_norm = _normalize_phrase(candidate).lower()
-        if not candidate_norm or candidate_norm in DESCRIPTION_BANNED_FEATURES:
-            continue
-        if candidate_norm in caption_norm:
-            out.append(candidate_norm)
-    return _dedup_phrases(out)
 
 
 class FlorenceService:
@@ -628,7 +576,7 @@ class FlorenceService:
 
     def __init__(
         self,
-        model_path: str = "app/models/florence2-base-ft/",
+        model_path: str = "app/models/florence2-large-ft/",
         device: str = "cuda",
         torch_dtype: str = "auto",
         max_new_tokens: int = 512,
@@ -1197,7 +1145,8 @@ class FlorenceService:
 
     def ocr_structured(self, image: Image.Image, profile: Optional[str] = None) -> Dict[str, Any]:
         """
-        OCR task with additive layout-aware output.
+        OCR task with additive layout-aware output using Florence OCR.
+
         Returns:
           {
             "ocr_text": str,
@@ -1207,6 +1156,7 @@ class FlorenceService:
             "ocr_tokens": list[dict],
           }
         """
+        # --- Florence OCR --------------------------
         try:
             region_out = self._run_task(image, "<OCR_WITH_REGION>", profile=profile)
             region_tokens = self._extract_ocr_region_tokens(region_out)
@@ -1233,38 +1183,6 @@ class FlorenceService:
         OCR task. Returns plain concatenated text. If OCR task unsupported, returns "".
         """
         return str(self.ocr_structured(image, profile=profile).get("ocr_text", "") or "").strip()
-
-    def compose_grounded_description(
-        self,
-        *,
-        canonical_label: Optional[str],
-        color_vqa: Optional[str],
-        ocr_text: str,
-        grounded_features: Optional[List[str]] = None,
-        grounded_defects: Optional[List[str]] = None,
-        grounded_attachments: Optional[List[str]] = None,
-        caption: str = "",
-        key_count: Optional[int] = None,
-        profile: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        result = description_composer.compose(
-            label=canonical_label,
-            color=color_vqa,
-            ocr_text=ocr_text,
-            features=grounded_features or [],
-            defects=grounded_defects or [],
-            attachments=grounded_attachments or [],
-            caption=caption,
-            key_count=key_count,
-        )
-        return {
-            **result,
-            "description": result.get("final_description"),
-            "source": result.get("detailed_description_source"),
-            "word_count": (result.get("description_word_count") or {}).get("detailed_description", 0),
-            "evidence_used": (result.get("description_evidence_used") or {}).get("detailed", []),
-            "filters_applied": result.get("description_filters_applied", []),
-        }
 
     def ground_phrases(self, image: Image.Image, text: str, profile: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -1494,6 +1412,13 @@ class FlorenceService:
 
         return {
             "caption": final_caption,
+            "final_description": final_caption,
+            "detailed_description": final_caption,
+            "description_source": "florence_lite",
+            "detailed_description_source": "florence_lite",
+            "description_evidence_used": {"summary": ["florence_caption"], "detailed": ["florence_caption"]},
+            "description_filters_applied": ["florence_lite"],
+            "description_word_count": {"final_description": len(final_caption.split()), "detailed_description": len(final_caption.split())},
             "ocr_text": ocr_text,
             "ocr_text_display": ocr_text_display,
             "ocr_lines": ocr_lines,
@@ -2161,16 +2086,23 @@ class FlorenceService:
         raw_caption = self.caption(crop, detailed=(profile_key != "fast"), profile=profile_key)
         sanitized_caption, _ = _sanitize_caption(raw_caption)
         
-        # B) Guided VQA (Object-only) — skip if caption is already substantial
+        # B) Guided VQA (Object-only) — always run for richer detail
         guided_val = ""
         sanitized_guided = ""
-        if profile_key != "fast" and len(sanitized_caption.split()) < 12:
+        if profile_key != "fast":
             guide_prompt = (
-                "Describe ONLY the main object (ignore the person/hand and background) in 2–4 sentences. "
-                "Include: object type, material (if visible), primary color/shade, shape, any logos/text (if visible), "
-                "any attachments/accessories (only separate add-ons like a metal ring, lanyard, tag, or remote fob — if clearly visible), and any visible wear/defects "
-                "(scratches, dents, cracks, stains, rust, bends). If something is not visible, say 'not visible'. "
-                "Do NOT mention the person, hand, skin, gender, or race. Do NOT guess. Do NOT treat holes/slots/built-in parts as attachments."
+                "Describe ONLY the main object in this image in 3–5 detailed sentences. "
+                "Focus on physical characteristics you can directly observe: "
+                "object type, material and texture (e.g. leather, fabric, metal, plastic), "
+                "primary color and shade, exact shape and size, "
+                "any brand names/logos/printed text (spell them out exactly as written), "
+                "stitching style, closure mechanism (zipper, button, snap, clasp), "
+                "compartments/pockets, surface condition, "
+                "any attachments or accessories (only separate add-ons like a metal ring, lanyard, tag, or remote fob — if clearly visible), "
+                "and any visible wear or defects (scratches, dents, cracks, stains, rust, bends, fading, peeling, tears). "
+                "IMPORTANT: Describe only what is physically visible. Do NOT mention the person, hand, background, or any surface. "
+                "Do NOT include meta-commentary about the task or about reading text. "
+                "Do NOT say 'this image shows' or 'I can see'. Just describe the object directly."
             )
             guided_val = self.vqa(crop, guide_prompt, profile=profile_key)
             sanitized_guided, _ = _sanitize_caption(guided_val)
@@ -2237,14 +2169,34 @@ class FlorenceService:
         color_vqa = fut_color.result()
         key_count: Optional[int] = fut_key.result()
 
-        # Normalize color and cross-check with caption
+        # Normalize color and cross-validate with pixel-based extraction
         if color_vqa:
             color_vqa = normalize_color(color_vqa) or color_vqa
-        caption_color_full = extract_color_from_text(final_caption) if final_caption else None
-        if caption_color_full and color_vqa and caption_color_full != normalize_color(color_vqa):
-            color_vqa = caption_color_full
-        elif caption_color_full and not color_vqa:
-            color_vqa = caption_color_full
+
+        # Pixel-based dominant color extraction for cross-validation
+        pixel_color: Optional[str] = None
+        try:
+            from app.services.image_preprocessing import extract_pixel_dominant_color
+            pixel_color = extract_pixel_dominant_color(crop)
+        except Exception:
+            logger.debug("Pixel color extraction failed", exc_info=True)
+
+        if pixel_color and color_vqa:
+            # If VQA and pixel disagree, prefer pixel (more reliable for solid colors)
+            norm_vqa = normalize_color(color_vqa)
+            if norm_vqa != pixel_color:
+                logger.debug(
+                    "COLOR_CROSS_VALIDATION vqa=%s pixel=%s → using pixel",
+                    norm_vqa, pixel_color,
+                )
+                color_vqa = pixel_color
+        elif pixel_color and not color_vqa:
+            color_vqa = pixel_color
+        elif not color_vqa:
+            # Last resort: try extracting from caption text
+            caption_color_full = extract_color_from_text(final_caption) if final_caption else None
+            if caption_color_full:
+                color_vqa = caption_color_full
 
         spec_key = canonicalize_label(canonical_label) if canonical_label else None
 
@@ -2271,16 +2223,15 @@ class FlorenceService:
                                     found_items.add(cand)
                     grounded_features = list(found_items)
 
-            grounded_description = self.compose_grounded_description(
-                canonical_label=canonical_label,
-                color_vqa=color_vqa,
+            grounded_description = _build_florence_description(
+                caption=final_caption,
+                label=canonical_label,
+                color=color_vqa,
                 ocr_text=ocr_text,
                 grounded_features=grounded_features,
                 grounded_defects=[],
                 grounded_attachments=[],
-                caption=final_caption,
                 key_count=key_count,
-                profile=profile_key,
             )
 
             raw_fast: Dict[str, Any] = {
@@ -2289,7 +2240,6 @@ class FlorenceService:
                 "caption_guided": guided_val,
                 "caption_source": caption_source,
                 "caption_is_generic": caption_is_generic,
-                "grounded_description_debug": grounded_description,
                 "description_source": grounded_description.get("description_source"),
                 "detailed_description_source": grounded_description.get("detailed_description_source"),
                 "description_evidence_used": grounded_description.get("description_evidence_used"),
@@ -2312,7 +2262,7 @@ class FlorenceService:
 
             return {
                 "caption": final_caption,
-                "grounded_description": grounded_description.get("description"),
+                "grounded_description": grounded_description.get("final_description"),
                 "final_description": grounded_description.get("final_description"),
                 "detailed_description": grounded_description.get("detailed_description"),
                 "description_source": grounded_description.get("description_source"),
@@ -2401,16 +2351,15 @@ class FlorenceService:
         if defects_vqa_ans.lower() in ["none", "no", "n/a"]:
             defects_vqa_ans = "None"
 
-        grounded_description = self.compose_grounded_description(
-            canonical_label=canonical_label,
-            color_vqa=color_vqa,
+        grounded_description = _build_florence_description(
+            caption=final_caption,
+            label=canonical_label,
+            color=color_vqa,
             ocr_text=ocr_text,
             grounded_features=grounded_features,
             grounded_defects=grounded_defects,
             grounded_attachments=grounded_attachments,
-            caption=final_caption,
             key_count=key_count,
-            profile=profile_key,
         )
 
         raw: Dict[str, Any] = {
@@ -2419,7 +2368,6 @@ class FlorenceService:
             "caption_guided": guided_val,
             "caption_source": caption_source,
             "caption_is_generic": caption_is_generic,
-            "grounded_description_debug": grounded_description,
             "description_source": grounded_description.get("description_source"),
             "detailed_description_source": grounded_description.get("detailed_description_source"),
             "description_evidence_used": grounded_description.get("description_evidence_used"),
@@ -2442,7 +2390,7 @@ class FlorenceService:
 
         return {
             "caption": final_caption,
-            "grounded_description": grounded_description.get("description"),
+            "grounded_description": grounded_description.get("final_description"),
             "final_description": grounded_description.get("final_description"),
             "detailed_description": grounded_description.get("detailed_description"),
             "description_source": grounded_description.get("description_source"),

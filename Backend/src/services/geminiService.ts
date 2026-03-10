@@ -745,18 +745,20 @@ const ensureThreeToFourWordPhrase = (answer: string, question: string): string =
   if (!sanitized) return '';
 
   const words = sanitized.split(' ').filter(Boolean);
-  if (words.length >= 3) return words.slice(0, 4).join(' ');
+  if (words.length >= 2) return words.slice(0, 4).join(' ');
 
   const q = question.toLowerCase();
   const joined = words.join(' ');
 
-  if (q.includes('color')) return `${joined} color tone`.split(' ').slice(0, 4).join(' ');
-  if (q.includes('brand') || q.includes('logo')) return `${joined} brand logo`.split(' ').slice(0, 4).join(' ');
-  if (q.includes('how many') || q.includes('count') || q.includes('number')) return `${joined} items total`;
-  if (q.includes('material')) return `${joined} material finish`;
-  if (q.includes('fold')) return `${joined} fold type`;
+  if (q.includes('color')) return `${joined} color`.trim();
+  if (q.includes('brand') || q.includes('logo')) return `${joined} brand`.trim();
+  if (q.includes('how many') || q.includes('count') || q.includes('number')) return `${joined} items`.trim();
+  if (q.includes('material')) return `${joined} material`.trim();
+  if (q.includes('fold')) return `${joined} fold`.trim();
+  if (q.includes('scratch') || q.includes('crack') || q.includes('dent') || q.includes('damage')) return `${joined} mark`.trim();
+  if (q.includes('inside') || q.includes('pocket') || q.includes('compartment') || q.includes('slot')) return `${joined} inside`.trim();
 
-  return `${joined} detail noted`.split(' ').slice(0, 4).join(' ');
+  return `${joined} detail`.trim();
 };
 
 const inferAnswerFromDescription = (question: string, description: string): string | null => {
@@ -765,42 +767,42 @@ const inferAnswerFromDescription = (question: string, description: string): stri
 
   if (q.includes('how many') || q.includes('count') || q.includes('number')) {
     const num = d.match(/\b\d+\b/)?.[0];
-    if (num) return `${num} items total`;
+    if (num) return `${num} items`;
   }
 
   if (q.includes('color')) {
     const color = findFirstWordMatch(d, COLOR_WORDS);
-    if (color) return `${color} color tone`;
+    if (color) return `${color} color`;
   }
 
   if (q.includes('brand') || q.includes('logo') || q.includes('model')) {
     const brand = findFirstWordMatch(d, BRAND_WORDS);
-    if (brand) return `${brand} brand logo`;
+    if (brand) return `${brand} brand`;
   }
 
   if (q.includes('material') || q.includes('made')) {
     const material = findFirstWordMatch(d, MATERIAL_WORDS);
-    if (material) return `${material} material finish`;
+    if (material) return `${material} material`;
   }
 
   if (q.includes('fold')) {
-    if (d.includes('bifold')) return 'bifold fold style';
-    if (d.includes('trifold')) return 'trifold fold style';
-    if (d.includes('fold')) return 'fold type noted';
+    if (d.includes('bifold')) return 'bifold fold';
+    if (d.includes('trifold')) return 'trifold fold';
+    if (d.includes('fold')) return 'fold style';
     return null;
   }
 
   if (q.includes('crack') || q.includes('scratch') || q.includes('dent') || q.includes('damage')) {
-    if (d.includes('crack') || d.includes('broken')) return 'screen crack visible';
-    if (d.includes('scratch')) return 'minor scratches visible';
+    if (d.includes('crack') || d.includes('broken')) return 'crack visible';
+    if (d.includes('scratch')) return 'scratch visible';
     return null;
   }
 
   if (q.includes('inside') || q.includes('compartment') || q.includes('pocket') || q.includes('slot')) {
-    if (d.includes('card')) return 'cards kept inside';
-    if (d.includes('key')) return 'keys kept inside';
-    if (d.includes('charger')) return 'charger kept inside';
-    if (d.includes('pocket') || d.includes('compartment') || d.includes('inside')) return 'inner section noted';
+    if (d.includes('card')) return 'cards inside';
+    if (d.includes('key')) return 'keys inside';
+    if (d.includes('charger')) return 'charger inside';
+    if (d.includes('pocket') || d.includes('compartment') || d.includes('inside')) return 'inside pocket';
     return null;
   }
 
@@ -811,7 +813,7 @@ const inferAnswerFromDescription = (question: string, description: string): stri
   if ((q.startsWith('is there') || q.startsWith('are there')) && d.length > 0) {
     const keyTokens = tokenizeText(q).filter((t) => t.length > 2 && !['there', 'what', 'which'].includes(t));
     if (keyTokens.some((t) => d.includes(t))) {
-      return 'yes clearly visible';
+      return 'yes';
     }
   }
 

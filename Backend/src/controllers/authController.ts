@@ -256,7 +256,9 @@ export const getClaimedItems = async (
       .sort({ createdAt: -1 })
       .select('-__v');
 
-    res.status(200).json(claimedItems);
+    const existingClaimedItems = claimedItems.filter((item) => item.foundItemId);
+
+    res.status(200).json(existingClaimedItems);
   } catch (error) {
     next(error);
   }

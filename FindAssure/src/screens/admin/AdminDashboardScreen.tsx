@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, BackHandler, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, BackHandler, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CommonActions, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList, FoundItem, AdminOverview } from '../../types/models';
-import { itemsApi } from '../../api/itemsApi';
 import { adminApi } from '../../api/adminApi';
-import { ItemCard } from '../../components/ItemCard';
 import { AnimatedHeroIllustration } from '../../components/AnimatedHeroIllustration';
 import { GlassCard } from '../../components/GlassCard';
 import { LoadingScreen } from '../../components/LoadingScreen';
@@ -15,7 +14,8 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { StaggeredEntrance } from '../../components/StaggeredEntrance';
 import { useAuth } from '../../context/AuthContext';
 import { useAppTheme } from '../../context/ThemeContext';
-import { getAdminPalette } from './adminTheme';
+import { getDisplayImageUri } from '../../utils/cloudinaryImage';
+import { getAdminItemStatusTone, getAdminPalette } from './adminTheme';
 
 type AdminDashboardNavigationProp = StackNavigationProp<RootStackParamList, 'AdminDashboard'>;
 
@@ -30,10 +30,12 @@ const AdminDashboardScreen = () => {
   const [foundItems, setFoundItems] = useState<FoundItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | FoundItem['status']>('all');
 
   const fetchData = useCallback(async () => {
     try {
-      const [overviewData, itemsData] = await Promise.all([adminApi.getOverview(), itemsApi.getFoundItems()]);
+      const [overviewData, itemsData] = await Promise.all([adminApi.getOverview(), adminApi.getAllFoundItems()]);
       setOverview(overviewData);
       setFoundItems(itemsData);
     } catch (error: any) {
@@ -94,6 +96,57 @@ const AdminDashboardScreen = () => {
   const handleItemPress = (item: FoundItem) => {
     navigation.navigate('AdminItemDetail', { foundItem: item });
   };
+
+  const statusCounts = useMemo(
+    () => ({
+      all: foundItems.length,
+      available: foundItems.filter((item) => item.status === 'available').length,
+      pending_verification: foundItems.filter((item) => item.status === 'pending_verification').length,
+      claimed: foundItems.filter((item) => item.status === 'claimed').length,
+    }),
+    [foundItems]
+  );
+
+  const filteredItems = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return [...foundItems]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .filter((item) => {
+        if (statusFilter !== 'all' && item.status !== statusFilter) {
+          return false;
+        }
+
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        const searchableFields = [
+          item.category,
+          item.description,
+          item.founderContact?.name,
+          item.founderContact?.email,
+          item.claimedBy?.name,
+          item.claimedBy?.email,
+          item.found_location?.map((loc) => [loc.location, loc.floor_id, loc.hall_name].filter(Boolean).join(' ')).join(' '),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        return searchableFields.includes(normalizedQuery);
+      });
+  }, [foundItems, searchQuery, statusFilter]);
+
+  const filterChips: Array<{ key: 'all' | FoundItem['status']; label: string; count: number }> = useMemo(
+    () => [
+      { key: 'all', label: 'All', count: statusCounts.all },
+      { key: 'available', label: 'Available', count: statusCounts.available },
+      { key: 'pending_verification', label: 'Pending', count: statusCounts.pending_verification },
+      { key: 'claimed', label: 'Claimed', count: statusCounts.claimed },
+    ],
+    [statusCounts]
+  );
 
   if (loading) {
     return (
@@ -196,18 +249,128 @@ const AdminDashboardScreen = () => {
             <View style={styles.sectionHeader}>
               <View>
                 <Text style={styles.sectionEyebrow}>Inventory oversight</Text>
-                <Text style={styles.sectionTitle}>Recent found items</Text>
+                <Text style={styles.sectionTitle}>Found items queue</Text>
               </View>
-              <Text style={styles.sectionMeta}>{foundItems.length} records</Text>
+              <Text style={styles.sectionMeta}>{filteredItems.length} visible</Text>
             </View>
 
-            {foundItems.length === 0 ? (
+            <Text style={styles.sectionBody}>
+              Search by item, founder, or location, then narrow the queue by status before opening details.
+            </Text>
+
+            <View style={styles.searchWrap}>
+              <Ionicons name="search-outline" size={18} color={theme.colors.textSubtle} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search category, founder, location..."
+                placeholderTextColor={theme.colors.textSubtle}
+                style={styles.searchInput}
+              />
+            </View>
+
+            <View style={styles.filterRow}>
+              {filterChips.map((filter) => {
+                const active = statusFilter === filter.key;
+                return (
+                  <Pressable
+                    key={filter.key}
+                    onPress={() => setStatusFilter(filter.key)}
+                    style={[
+                      styles.filterChip,
+                      active && { backgroundColor: adminPalette.accent, borderColor: adminPalette.accent },
+                    ]}
+                  >
+                    <Text style={[styles.filterChipText, active && { color: adminPalette.contrastText }]}>
+                      {filter.label} {filter.count}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {filteredItems.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No found items yet</Text>
-                <Text style={styles.emptyText}>New reports will appear here as soon as founders submit them.</Text>
+                <Text style={styles.emptyTitle}>No matching items</Text>
+                <Text style={styles.emptyText}>Adjust the search or status filter to see more records.</Text>
               </View>
             ) : (
-              foundItems.map((item) => <ItemCard key={item._id} item={item} onPress={() => handleItemPress(item)} />)
+              filteredItems.map((item) => {
+                const statusTone = getAdminItemStatusTone(theme, item.status);
+                const primaryLocation = item.found_location?.[0];
+                const locationLabel = primaryLocation
+                  ? [primaryLocation.location, primaryLocation.floor_id ? `Floor ${primaryLocation.floor_id}` : null, primaryLocation.hall_name]
+                      .filter(Boolean)
+                      .join(' • ')
+                  : 'Location not specified';
+
+                return (
+                  <Pressable key={item._id} onPress={() => handleItemPress(item)}>
+                    <GlassCard style={styles.queueCard} contentStyle={styles.queueCardContent}>
+                      <Image
+                        source={{ uri: getDisplayImageUri(item.imageUrl) }}
+                        style={styles.queueImage}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={120}
+                      />
+
+                      <View style={styles.queueBody}>
+                        <View style={styles.queueTopRow}>
+                          <Text style={styles.queueTitle} numberOfLines={1}>
+                            {item.category}
+                          </Text>
+                          <View style={[styles.statusBadge, { backgroundColor: statusTone.backgroundColor }]}>
+                            <Text style={[styles.statusBadgeText, { color: statusTone.textColor }]}>
+                              {item.status.split('_').join(' ')}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={styles.queueDescription} numberOfLines={2}>
+                          {item.description}
+                        </Text>
+
+                        <View style={styles.metaRow}>
+                          <Ionicons name="location-outline" size={14} color={theme.colors.textSubtle} />
+                          <Text style={styles.metaText} numberOfLines={1}>
+                            {locationLabel}
+                          </Text>
+                        </View>
+
+                        <View style={styles.metaRow}>
+                          <Ionicons name="person-outline" size={14} color={theme.colors.textSubtle} />
+                          <Text style={styles.metaText} numberOfLines={1}>
+                            {item.founderContact?.name || 'Unknown founder'}
+                          </Text>
+                        </View>
+
+                        {item.status === 'claimed' ? (
+                          <View style={styles.metaRow}>
+                            <Ionicons name="checkmark-done-outline" size={14} color={theme.colors.textSubtle} />
+                            <Text style={styles.metaText} numberOfLines={1}>
+                              {item.claimedBy?.name
+                                ? `Claimed by ${item.claimedBy.name}`
+                                : 'Claimed owner not available'}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        <View style={styles.metaFooter}>
+                          <Text style={styles.metaFootText}>
+                            {item.status === 'claimed' && item.claimedAt
+                              ? `Claimed ${new Date(item.claimedAt).toLocaleDateString()}`
+                              : `${item.questions.length} questions`}
+                          </Text>
+                          <Text style={styles.metaFootText}>
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      </View>
+                    </GlassCard>
+                  </Pressable>
+                );
+              })
             )}
           </GlassCard>
         </StaggeredEntrance>
@@ -332,6 +495,44 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
       ...theme.type.caption,
       color: theme.colors.textSubtle,
     },
+    searchWrap: {
+      marginTop: theme.spacing.md,
+      marginBottom: theme.spacing.sm,
+      borderRadius: theme.radius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.cardMuted,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: theme.spacing.md,
+      minHeight: 48,
+      gap: theme.spacing.sm,
+    },
+    searchInput: {
+      flex: 1,
+      ...theme.type.body,
+      color: theme.colors.textStrong,
+      paddingVertical: theme.spacing.sm,
+    },
+    filterRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.md,
+    },
+    filterChip: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: 8,
+      borderRadius: theme.radius.pill,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
+    },
+    filterChipText: {
+      ...theme.type.caption,
+      color: theme.colors.textStrong,
+      fontWeight: '700',
+    },
     emptyState: {
       backgroundColor: theme.colors.cardMuted,
       borderRadius: theme.radius.md,
@@ -348,6 +549,75 @@ const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
       ...theme.type.body,
       color: theme.colors.textMuted,
       textAlign: 'center',
+    },
+    queueCard: {
+      marginBottom: theme.spacing.sm,
+    },
+    queueCardContent: {
+      flexDirection: 'row',
+      padding: theme.spacing.sm,
+      gap: theme.spacing.md,
+      alignItems: 'stretch',
+    },
+    queueImage: {
+      width: 92,
+      height: 92,
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.inputMuted,
+    },
+    queueBody: {
+      flex: 1,
+      minHeight: 92,
+    },
+    queueTopRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: theme.spacing.sm,
+      marginBottom: 6,
+    },
+    queueTitle: {
+      ...theme.type.bodyStrong,
+      color: theme.colors.textStrong,
+      flex: 1,
+      textTransform: 'capitalize',
+    },
+    statusBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: theme.radius.pill,
+    },
+    statusBadgeText: {
+      ...theme.type.caption,
+      fontWeight: '700',
+      textTransform: 'capitalize',
+    },
+    queueDescription: {
+      ...theme.type.body,
+      color: theme.colors.textMuted,
+      marginBottom: theme.spacing.sm,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 4,
+    },
+    metaText: {
+      ...theme.type.caption,
+      color: theme.colors.textMuted,
+      flex: 1,
+    },
+    metaFooter: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: 'auto',
+      paddingTop: 2,
+    },
+    metaFootText: {
+      ...theme.type.caption,
+      color: theme.colors.textSubtle,
     },
   });
 

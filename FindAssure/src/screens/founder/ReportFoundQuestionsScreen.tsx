@@ -1,13 +1,16 @@
-// ReportFoundQuestionsScreen – follow the spec
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../types/models';
+import { LoadingScreen } from '../../components/LoadingScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { QuestionChip } from '../../components/QuestionChip';
+import { GlassCard } from '../../components/GlassCard';
 import { itemsApi } from '../../api/itemsApi';
-import { BASE_URL } from '../../config/api.config';
+import { useAppTheme } from '../../context/ThemeContext';
+import { useToast } from '../../context/ToastContext';
 
 type ReportFoundQuestionsNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundQuestions'>;
 type ReportFoundQuestionsRouteProp = RouteProp<RootStackParamList, 'ReportFoundQuestions'>;
@@ -15,228 +18,185 @@ type ReportFoundQuestionsRouteProp = RouteProp<RootStackParamList, 'ReportFoundQ
 const ReportFoundQuestionsScreen = () => {
   const navigation = useNavigation<ReportFoundQuestionsNavigationProp>();
   const route = useRoute<ReportFoundQuestionsRouteProp>();
+  const { theme } = useAppTheme();
+  const { showToast } = useToast();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { images, preAnalysisToken, category, description } = route.params;
 
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [suggestedAnswersByQuestion, setSuggestedAnswersByQuestion] = useState<Record<string, string>>({});
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchQuestionsFromAI();
-  }, [category, description]);
-
-  const fetchQuestionsFromAI = async () => {
+  const fetchQuestionsFromAI = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      console.log('🔍 Fetching questions for:', { category, description });
-      console.log('📡 API Base URL:', BASE_URL);
-      
-      // Call the API to generate questions using Gemini AI
-      const response = await itemsApi.generateQuestions({
-        category,
-        description,
-      });
-
-      console.log('✅ Received questions:', response.questions);
-      console.log('📝 First question:', response.questions[0]);
-      
+      const response = await itemsApi.generateQuestions({ category, description });
       setSuggestedQuestions(response.questions);
+
+      const answerMap: Record<string, string> = {};
+      response.questions.forEach((question, index) => {
+        const suggested = response.suggestedFounderAnswers?.[index];
+        if (suggested && suggested.trim().length > 0) {
+          answerMap[question] = suggested.trim();
+        }
+      });
+      setSuggestedAnswersByQuestion(answerMap);
     } catch (err: any) {
-      console.error('❌ Error generating questions:', err);
-      console.error('Error details:', err.response?.data || err.message);
       setError('Failed to generate questions. Please try again.');
-      
-      // Show error alert with more details
-      Alert.alert(
-        'Error',
-        `Failed to generate questions: ${err.response?.data?.message || err.message || 'Network error'}`,
-        [
-          {
-            text: 'Retry',
-            onPress: () => fetchQuestionsFromAI(),
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-        ]
-      );
+      showToast({
+        title: 'Could not prepare questions',
+        message: err.response?.data?.message || err.message || 'Check your connection and try again.',
+        variant: 'error',
+        actionLabel: 'Retry',
+        onAction: () => void fetchQuestionsFromAI(),
+        dedupeKey: 'report-found-questions-fetch',
+      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [category, description, showToast]);
+
+  useEffect(() => {
+    void fetchQuestionsFromAI();
+  }, [fetchQuestionsFromAI]);
 
   const handleToggleQuestion = (question: string) => {
     if (selectedQuestions.includes(question)) {
-      setSelectedQuestions(selectedQuestions.filter(q => q !== question));
-    } else {
-      if (selectedQuestions.length >= 5) {
-        Alert.alert('Limit Reached', 'You can only select exactly 5 questions');
-        return;
-      }
-      setSelectedQuestions([...selectedQuestions, question]);
+      setSelectedQuestions(selectedQuestions.filter((q) => q !== question));
+      return;
     }
+    if (selectedQuestions.length >= 5) {
+      showToast({
+        title: 'Question limit reached',
+        message: 'Choose any five questions before continuing.',
+        variant: 'warning',
+        dedupeKey: 'report-found-questions-limit',
+      });
+      return;
+    }
+    setSelectedQuestions([...selectedQuestions, question]);
   };
 
   const handleNext = () => {
     if (selectedQuestions.length !== 5) {
-      Alert.alert(
-        'Selection Required',
-        `You must select exactly 5 questions. Currently selected: ${selectedQuestions.length}`
-      );
+      showToast({
+        title: 'Select five questions',
+        message: `You have picked ${selectedQuestions.length} of 5 so far.`,
+        variant: 'warning',
+      });
       return;
     }
-
     navigation.navigate('ReportFoundAnswers', {
       images,
       preAnalysisToken,
       category,
       description,
       selectedQuestions,
+      suggestedAnswersByQuestion,
     });
   };
 
-  // Show loading state
   if (loading) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#1565C0" />
-        <Text style={styles.loadingText}>Generating questions with AI...</Text>
-      </View>
+      <LoadingScreen
+        badge="Verification setup"
+        message="Preparing ownership checks"
+        subtitle="Reviewing the item details and drafting questions for you."
+        stageLabel="Generating suggestions"
+        note="You will choose the final five questions before publishing the report."
+        illustrationVariant="pending"
+      />
     );
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Select Ownership Questions</Text>
-            <Text style={styles.subtitle}>
-              AI-generated questions based on your item description. Choose exactly 5 questions that the owner should answer to verify ownership.
-            </Text>
-            <View style={styles.counter}>
-              <Text style={styles.counterText}>
-                Selected: {selectedQuestions.length} / 5
-              </Text>
-            </View>
-          </View>
+    <LinearGradient colors={theme.gradients.appBackground} style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <LinearGradient colors={theme.gradients.heroAlt} style={styles.hero}>
+          <Text style={styles.heroEyebrow}>Verification setup</Text>
+          <Text style={styles.heroTitle}>Choose five ownership checks.</Text>
+          <Text style={styles.heroBody}>Select the questions that only the real owner should be able to answer accurately.</Text>
+        </LinearGradient>
 
-          {error && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              <PrimaryButton
-                title="Retry"
-                onPress={fetchQuestionsFromAI}
-              />
-            </View>
-          )}
+        <GlassCard style={styles.counterCard}>
+          <Text style={styles.counterLabel}>Selected</Text>
+          <Text style={styles.counterValue}>{selectedQuestions.length} / 5</Text>
+        </GlassCard>
 
-          <View style={styles.questionsContainer}>
-            {suggestedQuestions.map((question, index) => (
-              <QuestionChip
-                key={index}
-                question={question}
-                selected={selectedQuestions.includes(question)}
-                onPress={() => handleToggleQuestion(question)}
-              />
-            ))}
-          </View>
-        </View>
+        {error ? (
+          <GlassCard style={styles.errorCard}>
+            <Text style={styles.errorText}>{error}</Text>
+            <PrimaryButton title="Retry" onPress={() => void fetchQuestionsFromAI()} variant="secondary" />
+          </GlassCard>
+        ) : null}
+
+        {suggestedQuestions.map((question, index) => (
+          <QuestionChip
+            key={`${question}-${index}`}
+            question={question}
+            selected={selectedQuestions.includes(question)}
+            onPress={() => handleToggleQuestion(question)}
+          />
+        ))}
+
+        <PrimaryButton title="Next" onPress={handleNext} disabled={selectedQuestions.length !== 5} size="lg" style={styles.buttonGap} />
       </ScrollView>
-
-      <View style={styles.footer}>
-        <PrimaryButton
-          title="Next"
-          onPress={handleNext}
-          disabled={selectedQuestions.length !== 5}
-        />
-      </View>
-    </View>
+    </LinearGradient>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666666',
-    fontWeight: '500',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  header: {
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666666',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  counter: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  counterText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1565C0',
-  },
-  errorContainer: {
-    backgroundColor: '#FFEBEE',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 20,
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#C62828',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  questionsContainer: {
-    marginBottom: 20,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
+  StyleSheet.create({
+    container: { flex: 1 },
+    content: {
+      paddingTop: theme.spacing.lg,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.xxl,
+    },
+    hero: {
+      borderRadius: theme.radius.lg,
+      padding: theme.spacing.lg,
+      marginBottom: theme.spacing.lg,
+    },
+    heroEyebrow: {
+      ...theme.type.label,
+      color: theme.colors.onTintSubtle,
+      marginBottom: theme.spacing.sm,
+    },
+    heroTitle: {
+      ...theme.type.title,
+      color: theme.colors.onTint,
+      marginBottom: theme.spacing.sm,
+    },
+    heroBody: {
+      ...theme.type.body,
+      color: theme.colors.onTintMuted,
+    },
+    counterCard: {
+      marginBottom: theme.spacing.lg,
+    },
+    counterLabel: {
+      ...theme.type.label,
+      marginBottom: theme.spacing.xs,
+    },
+    counterValue: {
+      ...theme.type.section,
+      color: theme.colors.primaryDeep,
+    },
+    errorCard: {
+      marginBottom: theme.spacing.lg,
+    },
+    errorText: {
+      ...theme.type.body,
+      color: theme.colors.danger,
+      marginBottom: theme.spacing.md,
+    },
+    buttonGap: {
+      marginTop: theme.spacing.md,
+    },
+  });
 
 export default ReportFoundQuestionsScreen;

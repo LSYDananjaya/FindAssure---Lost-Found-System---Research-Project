@@ -1,10 +1,15 @@
-// ItemDetailScreen – follow the spec (IMPORTANT: DO NOT show founderAnswers)
-import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, Modal, TouchableOpacity } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { GlassCard } from '../../components/GlassCard';
+import { useAppTheme } from '../../context/ThemeContext';
+import { getDisplayImageUri } from '../../utils/cloudinaryImage';
+import { getVisualMatchDisplay } from '../../utils/visualMatch';
 
 type ItemDetailNavigationProp = StackNavigationProp<RootStackParamList, 'ItemDetail'>;
 type ItemDetailRouteProp = RouteProp<RootStackParamList, 'ItemDetail'>;
@@ -13,423 +18,326 @@ const ItemDetailScreen = () => {
   const navigation = useNavigation<ItemDetailNavigationProp>();
   const route = useRoute<ItemDetailRouteProp>();
   const { foundItem } = route.params;
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [showTipsModal, setShowTipsModal] = useState(false);
+  const visualMatch = getVisualMatchDisplay(foundItem.imageMatch?.score);
 
-  const handleAnswerQuestions = () => {
-    setShowTipsModal(true);
-  };
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      setShowTipsModal(false);
+    });
 
-  const handleProceedToQuestions = () => {
-    setShowTipsModal(false);
-    navigation.navigate('AnswerQuestionsVideo', { foundItem });
-  };
+    return unsubscribe;
+  }, [navigation]);
 
-  const handleCloseTips = () => {
-    setShowTipsModal(false);
-  };
-
-  // Format location display
   const formatLocation = (locations: typeof foundItem.found_location) => {
     if (!locations || locations.length === 0) return 'Location not specified';
-    
-    return locations.map((loc, index) => {
-      let locationStr = loc.location;
-      if (loc.floor_id) locationStr += ` - Floor: ${loc.floor_id}`;
-      if (loc.hall_name) locationStr += ` - Hall: ${loc.hall_name}`;
-      return locationStr;
-    }).join('\n');
+    return locations
+      .map((loc) => {
+        let locationStr = loc.location;
+        if (loc.floor_id) locationStr += ` - Floor: ${loc.floor_id}`;
+        if (loc.hall_name) locationStr += ` - Hall: ${loc.hall_name}`;
+        return locationStr;
+      })
+      .join('\n');
+  };
+
+  const handleProceedToVerification = () => {
+    setShowTipsModal(false);
+    requestAnimationFrame(() => {
+      navigation.navigate('AnswerQuestionsVideo', { foundItem });
+    });
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Image source={{ uri: foundItem.imageUrl }} style={styles.image} />
+    <LinearGradient colors={theme.gradients.appBackground} style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <GlassCard style={styles.mediaCard} contentStyle={styles.mediaCardContent}>
+          <Image source={{ uri: getDisplayImageUri(foundItem.imageUrl) }} style={styles.heroImage} contentFit="cover" cachePolicy="memory-disk" transition={120} />
 
-        <View style={styles.card}>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>{foundItem.status}</Text>
-          </View>
+          <View style={styles.badgeRow}>
+            <View style={[styles.statusBadge, getStatusBadgeStyle(theme, foundItem.status)]}>
+              <Text style={styles.statusText}>{formatStatus(foundItem.status)}</Text>
+            </View>
 
-          <Text style={styles.category}>{foundItem.category}</Text>
-          
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Description</Text>
-            <Text style={styles.description}>{foundItem.description}</Text>
-          </View>
-
-          {foundItem.imageMatch && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Visual Similarity</Text>
-              <View style={styles.visualMatchCard}>
-                <Image source={{ uri: foundItem.imageUrl }} style={styles.visualMatchImage} />
-                <Text style={styles.visualMatchText}>
-                  {`Visual Similarity: ${Math.round(foundItem.imageMatch.score * 100)}%`}
+            {visualMatch ? (
+              <View
+                style={[
+                  styles.matchBadge,
+                  { backgroundColor: getMatchBadgeColors(theme, visualMatch.normalizedScore).backgroundColor },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.matchBadgeText,
+                    { color: getMatchBadgeColors(theme, visualMatch.normalizedScore).textColor },
+                  ]}
+                >
+                  {visualMatch.label}
                 </Text>
               </View>
-            </View>
-          )}
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📍 Found Location</Text>
-            <Text style={styles.locationText}>{formatLocation(foundItem.found_location)}</Text>
+            ) : null}
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📅 Date Found</Text>
-            <Text style={styles.dateText}>
+          <Text style={styles.eyebrow}>Reported item</Text>
+          <Text style={styles.title}>{foundItem.category}</Text>
+          <Text style={styles.description}>{foundItem.description}</Text>
+        </GlassCard>
+
+        <View style={styles.metaGrid}>
+          <GlassCard style={styles.metaCard}>
+            <Text style={styles.metaLabel}>Found location</Text>
+            <Text style={styles.metaValue}>{formatLocation(foundItem.found_location)}</Text>
+          </GlassCard>
+
+          <GlassCard style={styles.metaCard}>
+            <Text style={styles.metaLabel}>Date found</Text>
+            <Text style={styles.metaValue}>
               {new Date(foundItem.createdAt).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
               })}
             </Text>
-          </View>
+          </GlassCard>
         </View>
 
-        <View style={styles.actionSection}>
-          <PrimaryButton
-            title="Answer Ownership Questions"
-            onPress={handleAnswerQuestions}
-            style={styles.button}
-          />
-          <Text style={styles.actionNote}>
-            After verification, you'll be able to contact the founder
+        {visualMatch ? (
+          <GlassCard style={styles.detailCard}>
+            <Text style={styles.sectionEyebrow}>Visual similarity</Text>
+            <Text style={styles.sectionTitle}>{visualMatch.percentage}% likely match</Text>
+            <Text style={styles.sectionBody}>
+              This result was strengthened by the reference image you provided during search.
+            </Text>
+          </GlassCard>
+        ) : null}
+
+        <GlassCard style={styles.detailCard}>
+          <Text style={styles.sectionEyebrow}>Verification step</Text>
+          <Text style={styles.sectionTitle}>Answer the founder&apos;s ownership questions</Text>
+          <Text style={styles.sectionBody}>
+            Record one short clip per question. Contact details stay hidden until the verification result is processed.
           </Text>
+        </GlassCard>
+
+        <View style={styles.ctaBlock}>
+          <PrimaryButton title="Answer Ownership Questions" onPress={() => setShowTipsModal(true)} size="lg" />
+          <Text style={styles.noteText}>Use a clear voice and a steady camera for the best verification result.</Text>
         </View>
-      </View>
+      </ScrollView>
 
-      {/* Tips Modal */}
-      <Modal
-        visible={showTipsModal}
-        transparent
-        animationType="slide"
-        onRequestClose={handleCloseTips}
-      >
+      <Modal visible={showTipsModal} transparent animationType="slide" onRequestClose={() => setShowTipsModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalIcon}>📹</Text>
-              <Text style={styles.modalTitle}>Important Tips Before You Start</Text>
-              <Text style={styles.modalSubtitle}>Follow these guidelines for successful verification</Text>
-            </View>
-
-            <ScrollView style={styles.tipsScroll} showsVerticalScrollIndicator={false}>
-              <View style={styles.tipCard}>
-                <View style={styles.tipIconContainer}>
-                  <Text style={styles.tipIcon}>👀</Text>
-                </View>
-                <View style={styles.tipContent}>
-                  <Text style={styles.tipTitle}>Look at the Camera</Text>
-                  <Text style={styles.tipText}>Face the camera directly and maintain eye contact while recording</Text>
-                </View>
+          <GlassCard style={styles.modalCard}>
+            <Text style={styles.modalEyebrow}>Before you start</Text>
+            <Text style={styles.modalTitle}>Keep each clip short, clear, and specific.</Text>
+            {[
+              'Look directly at the camera.',
+              'Speak clearly and keep answers concise.',
+              'Use a quiet, well-lit environment.',
+              'Mention details only you have confidence..',
+            ].map((tip) => (
+              <View key={tip} style={styles.tipRow}>
+                <View style={styles.tipDot} />
+                <Text style={styles.tipText}>{tip}</Text>
               </View>
-
-              <View style={styles.tipCard}>
-                <View style={styles.tipIconContainer}>
-                  <Text style={styles.tipIcon}>🗣️</Text>
-                </View>
-                <View style={styles.tipContent}>
-                  <Text style={styles.tipTitle}>Speak Clearly</Text>
-                  <Text style={styles.tipText}>Give your answers in clear English with proper pronunciation</Text>
-                </View>
-              </View>
-
-              <View style={styles.tipCard}>
-                <View style={styles.tipIconContainer}>
-                  <Text style={styles.tipIcon}>⏱️</Text>
-                </View>
-                <View style={styles.tipContent}>
-                  <Text style={styles.tipTitle}>Keep It Short</Text>
-                  <Text style={styles.tipText}>Maximum video length is 5 seconds per answer - be concise</Text>
-                </View>
-              </View>
-
-              <View style={styles.tipCard}>
-                <View style={styles.tipIconContainer}>
-                  <Text style={styles.tipIcon}>🔊</Text>
-                </View>
-                <View style={styles.tipContent}>
-                  <Text style={styles.tipTitle}>Quiet Environment</Text>
-                  <Text style={styles.tipText}>Record in a quiet place to ensure your voice is heard clearly</Text>
-                </View>
-              </View>
-
-              <View style={styles.tipCard}>
-                <View style={styles.tipIconContainer}>
-                  <Text style={styles.tipIcon}>💡</Text>
-                </View>
-                <View style={styles.tipContent}>
-                  <Text style={styles.tipTitle}>Good Lighting</Text>
-                  <Text style={styles.tipText}>Ensure your face is well-lit and clearly visible</Text>
-                </View>
-              </View>
-
-              <View style={styles.tipCard}>
-                <View style={styles.tipIconContainer}>
-                  <Text style={styles.tipIcon}>✓</Text>
-                </View>
-                <View style={styles.tipContent}>
-                  <Text style={styles.tipTitle}>Be Specific & Accurate</Text>
-                  <Text style={styles.tipText}>Provide detailed answers that only the true owner would know</Text>
-                </View>
-              </View>
-
-              <View style={styles.noteBox}>
-                <Text style={styles.noteIcon}>ℹ️</Text>
-                <Text style={styles.noteText}>
-                  You can preview and retake your videos before final submission.
-                  Alternatively, you can type your answers if you prefer.
-                </Text>
-              </View>
-            </ScrollView>
-
+            ))}
             <View style={styles.modalActions}>
-              <TouchableOpacity 
-                style={styles.cancelButton}
-                onPress={handleCloseTips}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={styles.proceedButton}
-                onPress={handleProceedToQuestions}
-              >
-                <Text style={styles.proceedButtonText}>I Understand, Proceed</Text>
-              </TouchableOpacity>
+              <PrimaryButton title="Cancel" onPress={() => setShowTipsModal(false)} variant="secondary" />
+              <PrimaryButton title="Proceed" onPress={handleProceedToVerification} />
             </View>
-          </View>
+          </GlassCard>
         </View>
       </Modal>
-    </ScrollView>
+    </LinearGradient>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  content: {
-    paddingBottom: 30,
-  },
-  image: {
-    width: '100%',
-    height: 300,
-    backgroundColor: '#E0E0E0',
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    margin: 20,
-    marginTop: -40,
-    borderRadius: 16,
-    padding: 20,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  statusText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  category: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 20,
-    textTransform: 'capitalize',
-  },
-  section: {
-    marginBottom: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333333',
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 15,
-    color: '#666666',
-    lineHeight: 22,
-  },
-  locationText: {
-    fontSize: 15,
-    color: '#4A90E2',
-    fontWeight: '500',
-  },
-  dateText: {
-    fontSize: 15,
-    color: '#666666',
-  },
-  visualMatchCard: {
-    backgroundColor: '#F6F8FB',
-    borderRadius: 12,
-    padding: 12,
-  },
-  visualMatchImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 10,
-    backgroundColor: '#E0E0E0',
-    marginBottom: 10,
-  },
-  visualMatchText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#2B4B64',
-  },
-  actionSection: {
-    paddingHorizontal: 20,
-  },
-  button: {
-    marginBottom: 12,
-  },
-  actionNote: {
-    fontSize: 13,
-    color: '#666666',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  // Modal Styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '90%',
-    paddingTop: 24,
-  },
-  modalHeader: {
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  modalIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  tipsScroll: {
-    paddingHorizontal: 20,
-    maxHeight: 400,
-  },
-  tipCard: {
-    flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4A90E2',
-  },
-  tipIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E3F2FD',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  tipIcon: {
-    fontSize: 20,
-  },
-  tipContent: {
-    flex: 1,
-  },
-  tipTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  tipText: {
-    fontSize: 13,
-    color: '#6B7280',
-    lineHeight: 18,
-  },
-  noteBox: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF9E6',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#FFC107',
-  },
-  noteIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  noteText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#6B7280',
-    lineHeight: 18,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  proceedButton: {
-    flex: 2,
-    paddingVertical: 14,
-    borderRadius: 8,
-    backgroundColor: '#4A90E2',
-    alignItems: 'center',
-  },
-  proceedButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-});
+const formatStatus = (status: string) =>
+  status
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const getStatusBadgeStyle = (theme: ReturnType<typeof useAppTheme>['theme'], status: string) => {
+  switch (status) {
+    case 'available':
+      return { backgroundColor: theme.colors.success };
+    case 'pending_verification':
+      return { backgroundColor: theme.colors.warning };
+    case 'claimed':
+      return { backgroundColor: theme.colors.textSubtle };
+    default:
+      return { backgroundColor: theme.colors.textMuted };
+  }
+};
+
+const getMatchBadgeColors = (theme: ReturnType<typeof useAppTheme>['theme'], score: number) => {
+  if (score >= 0.8) {
+    return { backgroundColor: theme.colors.successSoft, textColor: theme.colors.success };
+  }
+
+  if (score >= 0.6) {
+    return { backgroundColor: theme.colors.warningSoft, textColor: theme.colors.warning };
+  }
+
+  return { backgroundColor: theme.colors.cardMuted, textColor: theme.colors.textMuted };
+};
+
+const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    content: {
+      paddingTop: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.xxl,
+    },
+    mediaCard: {
+      marginBottom: theme.spacing.md,
+    },
+    mediaCardContent: {
+      padding: 0,
+    },
+    heroImage: {
+      width: '100%',
+      height: 280,
+      borderTopLeftRadius: theme.radius.lg,
+      borderTopRightRadius: theme.radius.lg,
+      backgroundColor: theme.colors.inputMuted,
+    },
+    badgeRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      paddingTop: theme.spacing.md,
+      marginBottom: theme.spacing.sm,
+    },
+    statusBadge: {
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: 6,
+    },
+    statusText: {
+      ...theme.type.caption,
+      color: theme.colors.onTint,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+    },
+    matchBadge: {
+      borderRadius: theme.radius.pill,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: 6,
+    },
+    matchBadgeText: {
+      ...theme.type.caption,
+      fontWeight: '700',
+    },
+    eyebrow: {
+      ...theme.type.label,
+      color: theme.colors.accent,
+      paddingHorizontal: theme.spacing.md,
+      marginBottom: theme.spacing.xs,
+    },
+    title: {
+      ...theme.type.hero,
+      color: theme.colors.textStrong,
+      textTransform: 'capitalize',
+      paddingHorizontal: theme.spacing.md,
+      marginBottom: theme.spacing.sm,
+    },
+    description: {
+      ...theme.type.body,
+      color: theme.colors.textMuted,
+      paddingHorizontal: theme.spacing.md,
+      paddingBottom: theme.spacing.md,
+    },
+    metaGrid: {
+      gap: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+    },
+    metaCard: {
+      minHeight: 108,
+    },
+    metaLabel: {
+      ...theme.type.label,
+      marginBottom: theme.spacing.sm,
+    },
+    metaValue: {
+      ...theme.type.bodyStrong,
+      color: theme.colors.textStrong,
+      lineHeight: 22,
+    },
+    detailCard: {
+      marginBottom: theme.spacing.md,
+    },
+    sectionEyebrow: {
+      ...theme.type.label,
+      color: theme.colors.accent,
+      marginBottom: theme.spacing.xs,
+    },
+    sectionTitle: {
+      ...theme.type.section,
+      color: theme.colors.textStrong,
+      marginBottom: theme.spacing.sm,
+    },
+    sectionBody: {
+      ...theme.type.body,
+      color: theme.colors.textMuted,
+    },
+    ctaBlock: {
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.xs,
+    },
+    noteText: {
+      ...theme.type.caption,
+      color: theme.colors.textSubtle,
+      textAlign: 'center',
+      paddingHorizontal: theme.spacing.md,
+    },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: theme.colors.overlay,
+      padding: theme.spacing.md,
+    },
+    modalCard: {
+      marginBottom: theme.spacing.md,
+    },
+    modalEyebrow: {
+      ...theme.type.label,
+      color: theme.colors.accent,
+      marginBottom: theme.spacing.xs,
+    },
+    modalTitle: {
+      ...theme.type.section,
+      color: theme.colors.textStrong,
+      marginBottom: theme.spacing.lg,
+    },
+    tipRow: {
+      flexDirection: 'row',
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.md,
+    },
+    tipDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: theme.colors.accent,
+      marginTop: 7,
+    },
+    tipText: {
+      ...theme.type.body,
+      flex: 1,
+      color: theme.colors.textMuted,
+    },
+    modalActions: {
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.sm,
+    },
+  });
 
 export default ItemDetailScreen;

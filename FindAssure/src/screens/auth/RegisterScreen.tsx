@@ -1,28 +1,27 @@
-// RegisterScreen – follow the spec
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  StyleSheet, 
-  ScrollView, 
-  KeyboardAvoidingView, 
-  Platform,
-  Alert,
-  TouchableOpacity
-} from 'react-native';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useAuth } from '../../context/AuthContext';
-import { RootStackParamList } from '../../types/models';
+import React, { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AnimatedHeroIllustration } from '../../components/AnimatedHeroIllustration';
+import { FormInput } from '../../components/FormInput';
+import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { StaggeredEntrance } from '../../components/StaggeredEntrance';
+import { useAuth } from '../../context/AuthContext';
+import { useAppTheme } from '../../context/ThemeContext';
+import { useToast } from '../../context/ToastContext';
+import { RootStackParamList } from '../../types/models';
 
 type RegisterScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Register'>;
 
 const RegisterScreen = () => {
   const navigation = useNavigation<RegisterScreenNavigationProp>();
   const { signUp } = useAuth();
-  
+  const { theme } = useAppTheme();
+  const { showToast } = useToast();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -32,210 +31,220 @@ const RegisterScreen = () => {
 
   const handleRegister = async () => {
     if (!name || !email || !phone || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showToast({
+        title: 'Missing details',
+        message: 'Please fill in all fields.',
+        variant: 'warning',
+      });
       return;
     }
-
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showToast({
+        title: 'Passwords do not match',
+        message: 'Please confirm the same password in both fields.',
+        variant: 'warning',
+      });
       return;
     }
-
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      showToast({
+        title: 'Password too short',
+        message: 'Password must be at least 6 characters.',
+        variant: 'warning',
+      });
       return;
     }
 
     try {
       setLoading(true);
-      await signUp({ name, email, phone, password, role: 'owner' });
-      Alert.alert('Success', 'Account created successfully!', [
-        { 
-          text: 'OK', 
-          onPress: () => navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: 'Home' }],
-            })
-          )
-        }
-      ]);
+      await signUp({ name, email, phone, password, role: 'owner' } as any);
+      showToast({
+        title: 'Account created',
+        message: 'Your owner account is ready.',
+        variant: 'success',
+      });
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Home' }],
+        })
+      );
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.message || 'Please try again');
+      showToast({
+        title: 'Registration failed',
+        message: error.message || 'Please try again.',
+        variant: 'error',
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogin = () => {
-    navigation.navigate('Login');
-  };
-
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Register as an Item Owner</Text>
-          </View>
-
-          <View style={styles.form}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Full Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your full name"
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-              />
+    <View style={styles.container}>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.scrollContent}>
+        <StaggeredEntrance delay={20}>
+          <GlassCard style={styles.hero}>
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeText}>Registration</Text>
+              </View>
+              <AnimatedHeroIllustration size={112} variant="auth" />
             </View>
+            <Text style={styles.wordmark}>FindAssure</Text>
+            <Text style={styles.heroTitle}>Create an owner account.</Text>
+            <Text style={styles.heroBody}>Get access to search, verification history, and future claim tracking.</Text>
+          </GlassCard>
+        </StaggeredEntrance>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-              />
-            </View>
+        <StaggeredEntrance delay={90}>
+          <GlassCard>
+            <Text style={styles.sectionEyebrow}>Registration</Text>
+            <Text style={styles.formTitle}>Personal details</Text>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Phone Number</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your phone number"
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Create a password (min 6 characters)"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-                autoComplete="password-new"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
-
-            <PrimaryButton
-              title="Register"
-              onPress={handleRegister}
-              loading={loading}
-              style={styles.registerButton}
+            <FormInput
+              label="Full name"
+              placeholder="Enter your full name"
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+              leadingIcon="person-outline"
+              containerStyle={styles.fieldGap}
+            />
+            <FormInput
+              label="Email"
+              placeholder="name@example.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              leadingIcon="mail-outline"
+              containerStyle={styles.fieldGap}
+            />
+            <FormInput
+              label="Phone number"
+              placeholder="Enter your phone number"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              leadingIcon="call-outline"
+              containerStyle={styles.fieldGap}
+            />
+            <FormInput
+              label="Password"
+              placeholder="Minimum 6 characters"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password-new"
+              leadingIcon="lock-closed-outline"
+              containerStyle={styles.fieldGap}
+            />
+            <FormInput
+              label="Confirm password"
+              placeholder="Repeat the password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              leadingIcon="checkmark-circle-outline"
             />
 
-            <View style={styles.loginSection}>
-              <Text style={styles.loginText}>Already have an account? </Text>
-              <TouchableOpacity onPress={handleLogin}>
-                <Text style={styles.loginLink}>Login here</Text>
-              </TouchableOpacity>
+            <PrimaryButton title="Register" onPress={handleRegister} loading={loading} size="lg" style={styles.buttonGap} />
+
+            <View style={styles.bottomRow}>
+              <Text style={styles.bottomText}>Already have an account?</Text>
+              <Pressable onPress={() => navigation.navigate('Login')}>
+                <Text style={styles.linkText}>Login here</Text>
+              </Pressable>
             </View>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          </GlassCard>
+        </StaggeredEntrance>
+      </KeyboardAwareFormScreen>
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-    paddingTop: 10,
-  },
-  header: {
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666666',
-  },
-  form: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333333',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#DDDDDD',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#FAFAFA',
-  },
-  registerButton: {
-    marginTop: 10,
-  },
-  loginSection: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 16,
-  },
-  loginText: {
-    fontSize: 14,
-    color: '#666666',
-  },
-  loginLink: {
-    fontSize: 14,
-    color: '#4A90E2',
-    fontWeight: '600',
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    scrollContent: {
+      paddingTop: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.xxl,
+    },
+    hero: {
+      padding: theme.spacing.lg,
+      marginBottom: theme.spacing.md,
+    },
+    heroTopRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: theme.spacing.md,
+    },
+    heroBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.colors.accentSoft,
+      borderRadius: 999,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 5,
+    },
+    heroBadgeText: {
+      ...theme.type.caption,
+      color: theme.colors.accent,
+      fontWeight: '700',
+    },
+    wordmark: {
+      ...theme.type.brand,
+      color: theme.colors.accent,
+      marginBottom: theme.spacing.sm,
+    },
+    heroTitle: {
+      ...theme.type.title,
+      color: theme.colors.textStrong,
+      marginBottom: theme.spacing.sm,
+    },
+    heroBody: {
+      ...theme.type.body,
+      color: theme.colors.textMuted,
+    },
+    sectionEyebrow: {
+      ...theme.type.label,
+      marginBottom: theme.spacing.xs,
+    },
+    formTitle: {
+      ...theme.type.section,
+      color: theme.colors.textStrong,
+      marginBottom: theme.spacing.lg,
+    },
+    fieldGap: {
+      marginBottom: theme.spacing.md,
+    },
+    buttonGap: {
+      marginTop: theme.spacing.lg,
+    },
+    bottomRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      flexWrap: 'wrap',
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.lg,
+    },
+    bottomText: {
+      ...theme.type.body,
+      color: theme.colors.textMuted,
+    },
+    linkText: {
+      ...theme.type.bodyStrong,
+      color: theme.colors.accent,
+    },
+  });
 
 export default RegisterScreen;

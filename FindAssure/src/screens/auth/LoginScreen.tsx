@@ -1,29 +1,28 @@
-// LoginScreen – follow the spec
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  StyleSheet, 
-  ScrollView, 
-  KeyboardAvoidingView, 
-  Platform,
-  Alert,
-  TouchableOpacity
-} from 'react-native';
-import { useNavigation, CommonActions } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { useAuth } from '../../context/AuthContext';
-import { RootStackParamList } from '../../types/models';
-import { PrimaryButton } from '../../components/PrimaryButton';
 import { Ionicons } from '@expo/vector-icons';
+import { CommonActions, useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import React, { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AnimatedHeroIllustration } from '../../components/AnimatedHeroIllustration';
+import { FormInput } from '../../components/FormInput';
+import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { StaggeredEntrance } from '../../components/StaggeredEntrance';
+import { useAuth } from '../../context/AuthContext';
+import { useAppTheme } from '../../context/ThemeContext';
+import { useToast } from '../../context/ToastContext';
+import { RootStackParamList } from '../../types/models';
 
 type LoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
 const LoginScreen = () => {
   const navigation = useNavigation<LoginScreenNavigationProp>();
   const { signIn, user } = useAuth();
-  
+  const { theme } = useAppTheme();
+  const { showToast } = useToast();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,31 +30,36 @@ const LoginScreen = () => {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showToast({
+        title: 'Missing details',
+        message: 'Please fill in your email and password.',
+        variant: 'warning',
+      });
       return;
     }
 
     try {
       setLoading(true);
       await signIn({ email, password, keepLoggedIn });
-      
-      // Wait a moment for user data to be synced
-      setTimeout(() => {
-        // Check if user is admin and navigate accordingly
-        // The user state will be updated by AuthContext after signIn
-      }, 100);
+      showToast({
+        title: 'Signed in',
+        message: 'Your account is ready to use.',
+        variant: 'success',
+      });
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message || 'Please check your credentials');
+      showToast({
+        title: 'Login failed',
+        message: error.message || 'Please check your credentials.',
+        variant: 'error',
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Navigate based on user role after login
   React.useEffect(() => {
     if (user && !loading) {
       if (user.role === 'admin') {
-        // Reset navigation stack to prevent going back to login
         navigation.dispatch(
           CommonActions.reset({
             index: 0,
@@ -63,7 +67,6 @@ const LoginScreen = () => {
           })
         );
       } else {
-        // Reset navigation stack to prevent going back to login
         navigation.dispatch(
           CommonActions.reset({
             index: 0,
@@ -74,206 +77,197 @@ const LoginScreen = () => {
     }
   }, [user, loading, navigation]);
 
-  const handleRegister = () => {
-    navigation.navigate('Register');
-  };
-
-  const handleForgotPassword = () => {
-    navigation.navigate('ForgotPassword');
-  };
-
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Login to your account</Text>
-          </View>
-
-          <View style={styles.form}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-                autoComplete="password"
-              />
-              <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotPassword}>
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity 
-              style={styles.keepLoggedInContainer}
-              onPress={() => setKeepLoggedIn(!keepLoggedIn)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.checkbox, keepLoggedIn && styles.checkboxChecked]}>
-                {keepLoggedIn && (
-                  <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                )}
+    <View style={styles.container}>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.scrollContent}>
+        <StaggeredEntrance delay={20}>
+          <GlassCard style={styles.hero}>
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeText}>Account access</Text>
               </View>
-              <View style={styles.keepLoggedInTextContainer}>
-                <Text style={styles.keepLoggedInText}>Keep me logged in</Text>
-                <Text style={styles.keepLoggedInSubtext}>Stay signed in on this device</Text>
-              </View>
-            </TouchableOpacity>
+              <AnimatedHeroIllustration size={112} variant="auth" />
+            </View>
+            <Text style={styles.wordmark}>FindAssure</Text>
+            <Text style={styles.heroTitle}>Welcome back.</Text>
+            <Text style={styles.heroBody}>Sign in to search, track claims, and manage your account details.</Text>
+          </GlassCard>
+        </StaggeredEntrance>
 
-            <PrimaryButton
-              title="Login"
-              onPress={handleLogin}
-              loading={loading}
-              style={styles.loginButton}
+        <StaggeredEntrance delay={90}>
+          <GlassCard style={styles.formCard}>
+            <Text style={styles.sectionEyebrow}>Account access</Text>
+            <Text style={styles.formTitle}>Sign in</Text>
+
+            <FormInput
+              label="Email"
+              placeholder="name@example.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              leadingIcon="mail-outline"
+              containerStyle={styles.fieldGap}
             />
 
-            <View style={styles.registerSection}>
-              <Text style={styles.registerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={handleRegister}>
-                <Text style={styles.registerLink}>Register here</Text>
-              </TouchableOpacity>
+            <FormInput
+              label="Password"
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password"
+              leadingIcon="lock-closed-outline"
+            />
+
+            <Pressable style={styles.inlineRow} onPress={() => setKeepLoggedIn(!keepLoggedIn)}>
+              <View style={[styles.toggle, keepLoggedIn && styles.toggleOn]}>
+                {keepLoggedIn ? <Ionicons name="checkmark" size={14} color={theme.colors.inverse} /> : null}
+              </View>
+              <View style={styles.inlineCopy}>
+                <Text style={styles.inlineTitle}>Keep me logged in</Text>
+                <Text style={styles.inlineBody}>Stay signed in on this device and refresh the session automatically.</Text>
+              </View>
+            </Pressable>
+
+            <PrimaryButton title="Login" onPress={handleLogin} loading={loading} size="lg" style={styles.buttonGap} />
+
+            <Pressable onPress={() => navigation.navigate('ForgotPassword')} style={styles.linkWrap}>
+              <Text style={styles.linkText}>Forgot password?</Text>
+            </Pressable>
+
+            <View style={styles.bottomRow}>
+              <Text style={styles.bottomText}>Need an account?</Text>
+              <Pressable onPress={() => navigation.navigate('Register')}>
+                <Text style={styles.linkText}>Register here</Text>
+              </Pressable>
             </View>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          </GlassCard>
+        </StaggeredEntrance>
+      </KeyboardAwareFormScreen>
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-  },
-  header: {
-    marginBottom: 40,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666666',
-  },
-  form: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333333',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#DDDDDD',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#FAFAFA',
-  },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginTop: 8,
-  },
-  forgotPasswordText: {
-    fontSize: 13,
-    color: '#4A90E2',
-    fontWeight: '500',
-  },
-  keepLoggedInContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 5,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderWidth: 2,
-    borderColor: '#DDDDDD',
-    borderRadius: 6,
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxChecked: {
-    backgroundColor: '#4A90E2',
-    borderColor: '#4A90E2',
-  },
-  keepLoggedInTextContainer: {
-    flex: 1,
-  },
-  keepLoggedInText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333333',
-    marginBottom: 2,
-  },
-  keepLoggedInSubtext: {
-    fontSize: 12,
-    color: '#888888',
-  },
-  loginButton: {
-    marginTop: 10,
-  },
-  registerSection: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  registerText: {
-    fontSize: 14,
-    color: '#666666',
-  },
-  registerLink: {
-    fontSize: 14,
-    color: '#4A90E2',
-    fontWeight: '600',
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    scrollContent: {
+      paddingTop: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.xxl,
+    },
+    hero: {
+      padding: theme.spacing.lg,
+      marginBottom: theme.spacing.md,
+    },
+    heroTopRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: theme.spacing.md,
+    },
+    heroBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.colors.accentSoft,
+      borderRadius: 999,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 5,
+    },
+    heroBadgeText: {
+      ...theme.type.caption,
+      color: theme.colors.accent,
+      fontWeight: '700',
+    },
+    wordmark: {
+      ...theme.type.brand,
+      color: theme.colors.accent,
+      marginBottom: theme.spacing.sm,
+    },
+    heroTitle: {
+      ...theme.type.title,
+      color: theme.colors.textStrong,
+      marginBottom: theme.spacing.sm,
+    },
+    heroBody: {
+      ...theme.type.body,
+      color: theme.colors.textMuted,
+    },
+    formCard: {
+      marginBottom: theme.spacing.md,
+    },
+    sectionEyebrow: {
+      ...theme.type.label,
+      marginBottom: theme.spacing.xs,
+    },
+    formTitle: {
+      ...theme.type.section,
+      color: theme.colors.textStrong,
+      marginBottom: theme.spacing.lg,
+    },
+    fieldGap: {
+      marginBottom: theme.spacing.md,
+    },
+    inlineRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: theme.spacing.md,
+      marginTop: theme.spacing.lg,
+    },
+    toggle: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: theme.colors.borderStrong,
+      backgroundColor: theme.colors.card,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 2,
+    },
+    toggleOn: {
+      backgroundColor: theme.colors.accent,
+      borderColor: theme.colors.accent,
+    },
+    inlineCopy: {
+      flex: 1,
+    },
+    inlineTitle: {
+      ...theme.type.bodyStrong,
+      color: theme.colors.textStrong,
+      marginBottom: 2,
+    },
+    inlineBody: {
+      ...theme.type.caption,
+      color: theme.colors.textMuted,
+    },
+    buttonGap: {
+      marginTop: theme.spacing.lg,
+    },
+    linkWrap: {
+      marginTop: theme.spacing.lg,
+      alignSelf: 'center',
+    },
+    linkText: {
+      ...theme.type.bodyStrong,
+      color: theme.colors.accent,
+    },
+    bottomRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      flexWrap: 'wrap',
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.lg,
+    },
+    bottomText: {
+      ...theme.type.body,
+      color: theme.colors.textMuted,
+    },
+  });
 
 export default LoginScreen;

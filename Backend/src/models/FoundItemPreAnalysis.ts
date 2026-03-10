@@ -2,6 +2,7 @@ import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IFoundItemPreAnalysis extends Document {
   token: string;
+  taskId?: string | null;
   createdBy?: Types.ObjectId;
   imageCount: number;
   analysisMode?: 'pp1' | 'pp2' | null;
@@ -10,7 +11,20 @@ export interface IFoundItemPreAnalysis extends Document {
   faissIds: number[];
   detectedCategory?: string | null;
   detectedDescription?: string | null;
+  detailedDescription?: string | null;
   detectedColor?: string | null;
+  ocrText?: string | null;
+  ocrTextDisplay?: string | null;
+  categoryDetails?: {
+    features: string[];
+    defects: string[];
+    attachments: string[];
+  } | null;
+  descriptionEvidenceUsed?: {
+    summary: string[];
+    detailed: string[];
+  } | null;
+  descriptionFiltersApplied?: string[];
   vector128: number[];
   searchable: boolean;
   pipelineResponse?: Record<string, unknown> | null;
@@ -26,6 +40,15 @@ const foundItemPreAnalysisSchema = new Schema<IFoundItemPreAnalysis>(
       required: true,
       unique: true,
       index: true,
+      trim: true,
+    },
+    taskId: {
+      type: String,
+      default: null,
+      index: {
+        unique: true,
+        sparse: true,
+      },
       trim: true,
     },
     createdBy: {
@@ -64,9 +87,33 @@ const foundItemPreAnalysisSchema = new Schema<IFoundItemPreAnalysis>(
       type: String,
       default: null,
     },
+    detailedDescription: {
+      type: String,
+      default: null,
+    },
     detectedColor: {
       type: String,
       default: null,
+    },
+    ocrText: {
+      type: String,
+      default: null,
+    },
+    ocrTextDisplay: {
+      type: String,
+      default: null,
+    },
+    categoryDetails: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
+    descriptionEvidenceUsed: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
+    descriptionFiltersApplied: {
+      type: [String],
+      default: [],
     },
     vector128: {
       type: [Number],

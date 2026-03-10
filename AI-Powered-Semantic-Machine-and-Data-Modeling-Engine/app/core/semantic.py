@@ -8,6 +8,7 @@ import pickle
 from datetime import datetime
 from typing import Optional, List, Dict
 import re
+import threading
 from sklearn.metrics.pairwise import cosine_similarity
 
 class SemanticEngine:
@@ -20,6 +21,7 @@ class SemanticEngine:
         return cls._instance
 
     def _initialize(self):
+        self._index_lock = threading.RLock()
         print("Loading Semantic Model...")
         try:
             self.model = SentenceTransformer(settings.MODEL_PATH)
@@ -103,13 +105,14 @@ class SemanticEngine:
         try:
             # Ensure directory exists
             os.makedirs(os.path.dirname(settings.INDEX_PATH), exist_ok=True)
-            
-            # Save FAISS index
-            faiss.write_index(self.index, settings.INDEX_PATH)
-            
-            # Save metadata
-            with open(settings.METADATA_PATH, 'wb') as f:
-                pickle.dump(self.items_metadata, f)
+
+            with self._index_lock:
+                # Save FAISS index
+                faiss.write_index(self.index, settings.INDEX_PATH)
+
+                # Save metadata
+                with open(settings.METADATA_PATH, 'wb') as f:
+                    pickle.dump(self.items_metadata, f)
             
             print(f"Saved index and metadata ({len(self.items_metadata)} items)")
         except Exception as e:
@@ -149,17 +152,19 @@ class SemanticEngine:
         """Add a FOUND item to the vector database and MongoDB"""
         # 1. Vectorize the Description (English/Singlish/Sinhala)
         vector = self.vectorize(item_data['description'])
-        
-        # 2. Add to Vector DB (FAISS Index)
-        self.index.add(np.array([vector], dtype=np.float32))
-        
-        # 3. Store Metadata in memory
-        metadata = {
-            "id": item_data['id'],
-            "description": item_data['description'],
-            "category": item_data['category']
-        }
-        self.items_metadata.append(metadata)
+
+        with self._index_lock:
+            # 2. Add to Vector DB (FAISS Index)
+            self.index.add(np.array([vector], dtype=np.float32))
+
+            # 3. Store Metadata in memory
+            metadata = {
+                "id": item_data['id'],
+                "description": item_data['description'],
+                "category": item_data['category']
+            }
+            self.items_metadata.append(metadata)
+            index_position = len(self.items_metadata) - 1
         
         # 4. Save to MongoDB (if available)
         try:
@@ -173,7 +178,7 @@ class SemanticEngine:
                     "vector": vector.tolist(),  # Store vector for future use
                     "created_at": datetime.utcnow(),
                     "createdAt": datetime.utcnow(),
-                    "index_position": len(self.items_metadata) - 1
+                    "index_position": index_position
                 }
                 await found_items_col.insert_one(document)
                 print(f"Saved to MongoDB: {item_data['id']}")
@@ -208,17 +213,20 @@ class SemanticEngine:
             found_items_col = db[settings.FOUND_ITEMS_COLLECTION]
             cursor = found_items_col.find({"status": {"$ne": "claimed"}}).sort("_id", 1)
             items = await cursor.to_list(length=None)
-            
+
             if not items:
                 print("No items found in MongoDB (empty database)")
+                with self._index_lock:
+                    self.index = faiss.IndexFlatIP(self.dimension)
+                    self.items_metadata = []
+                self._save_to_disk()
                 return 0
-            
+
             print(f"Loading {len(items)} items from MongoDB...")
-            
-            # Clear existing data
-            self.index = faiss.IndexFlatIP(self.dimension)  # FIXED: Use IP for cosine similarity
-            self.items_metadata = []
-            
+
+            new_index = faiss.IndexFlatIP(self.dimension)
+            new_items_metadata = []
+
             # Rebuild index from MongoDB
             for idx, item in enumerate(items):
                 try:
@@ -239,9 +247,9 @@ class SemanticEngine:
                     if norm == 0:
                         continue
                     vector = vector / norm
-                    self.index.add(np.array([vector]))
-                    
-                    self.items_metadata.append({
+                    new_index.add(np.array([vector]))
+
+                    new_items_metadata.append({
                         "id": item_id,
                         "description": description,
                         "category": category
@@ -249,8 +257,11 @@ class SemanticEngine:
                 except Exception as item_error:
                     print(f"Failed to load item {idx}: {item_error}")
                     continue
-            
-            # Save to disk
+
+            with self._index_lock:
+                self.index = new_index
+                self.items_metadata = new_items_metadata
+
             self._save_to_disk()
             print(f"Successfully loaded {len(self.items_metadata)} items from MongoDB")
             return len(self.items_metadata)
@@ -313,77 +324,65 @@ class SemanticEngine:
         """
         import logging
         logger = logging.getLogger(__name__)
-        
-        if len(self.items_metadata) == 0:
-            logger.warning("Search attempted but index is empty")
-            return []
-        
-        logger.info(f"Searching for: '{query_text}' (category: {category_filter or 'any'})")
-        
-        # Vectorize the LOST item description (normalized)
-        query_vec = self.vectorize(query_text, normalize=True)
-        logger.debug(f"Query vector shape: {query_vec.shape}, norm: {np.linalg.norm(query_vec):.4f}")
-        
-        # Search in FAISS index using cosine similarity
-        # With IndexFlatIP and normalized vectors, higher score = more similar
-        k = min(limit * 2, len(self.items_metadata))  # Get more candidates for re-ranking
-        scores, indices = self.index.search(np.array([query_vec], dtype=np.float32), k)
-        
-        logger.info(f"FAISS returned {len(indices[0])} candidates")
-        
-        results = []
-        for i, idx in enumerate(indices[0]):
-            if idx == -1 or idx >= len(self.items_metadata):
-                continue
-            
-            metadata = self.items_metadata[idx]
-            
-            # Apply category filter if provided
-            if category_filter and metadata['category'].lower() != category_filter.lower():
-                continue
-            
-            # RAW COSINE SIMILARITY from FAISS (this is the vector math result)
-            raw_cosine_sim = float(scores[0][i])
-            
-            # Convert to percentage (0-100%) with linear scaling
-            # Cosine similarity ranges from -1 to 1, but typically 0.2 to 1.0 for text
-            # We use linear scaling: (cosine + 1) / 2 * 100
-            # This preserves the mathematical relationships
-            semantic_score = max(0, min(100, ((raw_cosine_sim + 1) / 2) * 100))
-            
-            # Calculate keyword overlap for hybrid ranking
-            keyword_score = self._calculate_keyword_overlap(query_text, metadata['description'])
-            
-            # Check category match
-            category_match = False
-            if category_filter:
-                category_match = metadata['category'].lower() == category_filter.lower()
-            
-            # WEIGHTED HYBRID SCORE: 70% semantic + 30% keyword
-            final_score = self._hybrid_score(semantic_score, keyword_score, category_match)
-            
-            # DETAILED LOGGING: Show raw similarity scores
-            logger.info(
-                f"  Match #{i+1}: {metadata['id'][:20]}... | "
-                f"RAW_COSINE: {raw_cosine_sim:.4f} | "
-                f"VECTOR: {semantic_score:.1f}% | "
-                f"KEYWORD: {keyword_score:.1f}% | "
-                f"FINAL: {final_score:.1f}%"
-            )
-            
-            results.append({
-                "item": metadata,
-                "semantic_score": round(final_score, 2),
-                "raw_cosine_similarity": round(raw_cosine_sim, 4),  # RAW score for debugging
-                "vector_score": round(semantic_score, 2),  # Converted to %
-                "keyword_score": round(keyword_score, 2),
-                "details": {
-                    "semantic": round(semantic_score, 2),
-                    "keyword": round(keyword_score, 2),
-                    "category_boost": category_match,
-                    "formula": f"({semantic_score:.1f} * 0.7) + ({keyword_score:.1f} * 0.3)"
-                }
-            })
+
+        with self._index_lock:
+            if len(self.items_metadata) == 0:
+                logger.warning("Search attempted but index is empty")
+                return []
+
+            logger.info(f"Searching for: '{query_text}' (category: {category_filter or 'any'})")
+
+            # Vectorize the LOST item description (normalized)
+            query_vec = self.vectorize(query_text, normalize=True)
+            logger.debug(f"Query vector shape: {query_vec.shape}, norm: {np.linalg.norm(query_vec):.4f}")
+
+            # Search in FAISS index using cosine similarity
+            k = min(limit * 2, len(self.items_metadata))  # Get more candidates for re-ranking
+            scores, indices = self.index.search(np.array([query_vec], dtype=np.float32), k)
+
+            logger.info(f"FAISS returned {len(indices[0])} candidates")
+
+            results = []
+            for i, idx in enumerate(indices[0]):
+                if idx == -1 or idx >= len(self.items_metadata):
+                    continue
+
+                metadata = self.items_metadata[idx]
+
+                if category_filter and metadata['category'].lower() != category_filter.lower():
+                    continue
+
+                raw_cosine_sim = float(scores[0][i])
+                semantic_score = max(0, min(100, ((raw_cosine_sim + 1) / 2) * 100))
+                keyword_score = self._calculate_keyword_overlap(query_text, metadata['description'])
+
+                category_match = False
+                if category_filter:
+                    category_match = metadata['category'].lower() == category_filter.lower()
+
+                final_score = self._hybrid_score(semantic_score, keyword_score, category_match)
+
+                logger.info(
+                    f"  Match #{i+1}: {metadata['id'][:20]}... | "
+                    f"RAW_COSINE: {raw_cosine_sim:.4f} | "
+                    f"VECTOR: {semantic_score:.1f}% | "
+                    f"KEYWORD: {keyword_score:.1f}% | "
+                    f"FINAL: {final_score:.1f}%"
+                )
+
+                results.append({
+                    "item": metadata,
+                    "semantic_score": round(final_score, 2),
+                    "raw_cosine_similarity": round(raw_cosine_sim, 4),
+                    "vector_score": round(semantic_score, 2),
+                    "keyword_score": round(keyword_score, 2),
+                    "details": {
+                        "semantic": round(semantic_score, 2),
+                        "keyword": round(keyword_score, 2),
+                        "category_boost": category_match,
+                        "formula": f"({semantic_score:.1f} * 0.7) + ({keyword_score:.1f} * 0.3)"
+                    }
+                })
         
         # Sort by hybrid score descending
         results.sort(key=lambda x: x['semantic_score'], reverse=True)

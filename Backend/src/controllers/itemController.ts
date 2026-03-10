@@ -1336,7 +1336,7 @@ export const createLostRequest = async (
       pythonSearchService.searchLostItemWithPython({
         text: description,
         category,
-        limit: 10,
+        limit: 20,
         session_id: req.user.id,
       }),
     ]);

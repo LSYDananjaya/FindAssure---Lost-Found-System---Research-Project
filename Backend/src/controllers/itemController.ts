@@ -5,6 +5,7 @@ import { Types } from 'mongoose';
 import { User } from '../models/User';
 import { FoundItem } from '../models/FoundItem';
 import { FoundItemPreAnalysis } from '../models/FoundItemPreAnalysis';
+import * as founderPrefillFeedbackService from '../services/founderPrefillFeedbackService';
 import * as itemService from '../services/itemService';
 import * as verificationService from '../services/verificationService';
 import * as geminiService from '../services/geminiService';
@@ -18,15 +19,65 @@ const PRE_ANALYSIS_TTL_MS = 24 * 60 * 60 * 1000;
 
 type FoundItemAnalysisSnapshot = {
   analysisMode: 'pp1' | 'pp2' | null;
+  taskId: string | null;
   pythonItemId: string | null;
   faissId: number | null;
   faissIds: number[];
   detectedCategory: string | null;
   detectedDescription: string | null;
+  detailedDescription: string | null;
   detectedColor: string | null;
+  ocrText: string | null;
+  ocrTextDisplay: string | null;
+  categoryDetails: {
+    features: string[];
+    defects: string[];
+    attachments: string[];
+  };
+  descriptionEvidenceUsed: {
+    summary: string[];
+    detailed: string[];
+  };
+  descriptionFiltersApplied: string[];
   vector128: number[];
   pipelineResponse: any;
   searchable: boolean;
+};
+
+type RunningPreAnalysisStatus = 'queued' | 'processing';
+type TerminalPreAnalysisStatus = 'ok' | 'manual_fallback' | 'failed';
+type PreAnalysisStatus = RunningPreAnalysisStatus | TerminalPreAnalysisStatus;
+
+type PreAnalysisResponseBody = {
+  status: PreAnalysisStatus;
+  taskId?: string;
+  preAnalysisToken: string | null;
+  analysisMode: 'pp1' | 'pp2' | null;
+  imageCount: number;
+  analysisPathLabel: string;
+  analysisSummary: string;
+  retryAfterMs?: number;
+  stageKey?: string | null;
+  stageLabel?: string | null;
+  stageMessage?: string | null;
+  detectedCategory: string | null;
+  detectedDescription: string | null;
+  detailedDescription: string | null;
+  detectedColor: string | null;
+  ocrText: string | null;
+  ocrTextDisplay: string | null;
+  categoryDetails: {
+    features: string[];
+    defects: string[];
+    attachments: string[];
+  };
+  descriptionEvidenceUsed: {
+    summary: string[];
+    detailed: string[];
+  };
+  descriptionFiltersApplied: string[];
+  searchable: boolean;
+  message: string;
 };
 
 const parseJsonField = <T>(value: unknown, fieldName: string): T => {
@@ -87,12 +138,26 @@ const sanitizeFoundItemForOwner = (item: any) => itemService.sanitizeFoundItemFo
 
 const buildDefaultAnalysisSnapshot = (): FoundItemAnalysisSnapshot => ({
   analysisMode: null,
+  taskId: null,
   pythonItemId: null,
   faissId: null,
   faissIds: [],
   detectedCategory: null,
   detectedDescription: null,
+  detailedDescription: null,
   detectedColor: null,
+  ocrText: null,
+  ocrTextDisplay: null,
+  categoryDetails: {
+    features: [],
+    defects: [],
+    attachments: [],
+  },
+  descriptionEvidenceUsed: {
+    summary: [],
+    detailed: [],
+  },
+  descriptionFiltersApplied: [],
   vector128: [],
   pipelineResponse: null,
   searchable: false,
@@ -107,16 +172,433 @@ const normalizePreAnalysisToken = (value: unknown): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const normalizeFeedbackText = (value: unknown): string =>
+  typeof value === 'string'
+    ? value.trim().replace(/\s+/g, ' ').toLowerCase()
+    : '';
+
+const trimString = (value: unknown): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+const normalizeStringArray = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => trimString(entry))
+    .filter((entry): entry is string => Boolean(entry));
+};
+
+const normalizeCategoryDetails = (value: unknown): FoundItemAnalysisSnapshot['categoryDetails'] => {
+  const fallback = {
+    features: [],
+    defects: [],
+    attachments: [],
+  };
+
+  if (!value || typeof value !== 'object') {
+    return fallback;
+  }
+
+  const source = value as Record<string, unknown>;
+  return {
+    features: normalizeStringArray(source.features),
+    defects: normalizeStringArray(source.defects),
+    attachments: normalizeStringArray(source.attachments),
+  };
+};
+
+const normalizeDescriptionEvidenceUsed = (
+  value: unknown
+): FoundItemAnalysisSnapshot['descriptionEvidenceUsed'] => {
+  const fallback = {
+    summary: [],
+    detailed: [],
+  };
+
+  if (!value || typeof value !== 'object') {
+    return fallback;
+  }
+
+  const source = value as Record<string, unknown>;
+  return {
+    summary: normalizeStringArray(source.summary),
+    detailed: normalizeStringArray(source.detailed),
+  };
+};
+
+const pickBestText = (...values: unknown[]): string | null => {
+  for (const value of values) {
+    const trimmed = trimString(value);
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  return null;
+};
+
+const buildAnalysisPrefillFields = (analysis: FoundItemAnalysisSnapshot) => ({
+  detectedCategory: analysis.detectedCategory,
+  detectedDescription: pickBestText(
+    analysis.detailedDescription,
+    analysis.detectedDescription
+  ),
+  detailedDescription: analysis.detailedDescription,
+  detectedColor: analysis.detectedColor,
+  ocrText: analysis.ocrText,
+  ocrTextDisplay: analysis.ocrTextDisplay,
+  categoryDetails: analysis.categoryDetails,
+  descriptionEvidenceUsed: analysis.descriptionEvidenceUsed,
+  descriptionFiltersApplied: analysis.descriptionFiltersApplied,
+  searchable: analysis.searchable,
+});
+
+const extractPP1AnalysisDetails = (detection: any) => {
+  const raw = detection?.raw && typeof detection.raw === 'object' ? detection.raw : {};
+
+  return {
+    detectedDescription: pickBestText(detection?.final_description, detection?.message),
+    detailedDescription: pickBestText(
+      detection?.detailed_description,
+      detection?.final_description,
+      detection?.message
+    ),
+    ocrText: pickBestText(detection?.ocr_text),
+    ocrTextDisplay: pickBestText(detection?.ocr_text_display, detection?.ocr_text),
+    categoryDetails: normalizeCategoryDetails(detection?.category_details),
+    descriptionEvidenceUsed: normalizeDescriptionEvidenceUsed(detection?.description_evidence_used),
+    descriptionFiltersApplied: normalizeStringArray(detection?.description_filters_applied),
+    caption: pickBestText(detection?.caption, raw?.caption, raw?.caption_primary),
+  };
+};
+
+const extractPP2AnalysisDetails = (pp2Result: any) => {
+  const fused = pp2Result?.fused && typeof pp2Result.fused === 'object' ? pp2Result.fused : {};
+  const attributes = fused?.attributes && typeof fused.attributes === 'object' ? fused.attributes : {};
+  const mergedOcrTokens = normalizeStringArray(fused?.merged_ocr_tokens);
+  const mergedOcrText = mergedOcrTokens.length > 0 ? mergedOcrTokens.join(' ') : null;
+  const mergedOcrDisplay = mergedOcrTokens.length > 0 ? mergedOcrTokens.join('\n') : null;
+  const preferredDescription = pickBestText(
+    fused?.detailed_description,
+    fused?.caption
+  );
+
+  return {
+    detectedDescription: preferredDescription,
+    detailedDescription: preferredDescription,
+    ocrText: mergedOcrText,
+    ocrTextDisplay: mergedOcrDisplay || mergedOcrText,
+    categoryDetails: normalizeCategoryDetails({
+      features: attributes.features,
+      defects: fused?.defects,
+      attachments: attributes.attachments,
+    }),
+    descriptionEvidenceUsed: normalizeDescriptionEvidenceUsed(fused?.description_evidence_used),
+    descriptionFiltersApplied: normalizeStringArray(fused?.description_filters_applied),
+  };
+};
+
+const buildFounderFeedbackAnalysisEvidence = (
+  analysis: FoundItemAnalysisSnapshot
+): Record<string, unknown> | null => {
+  const response = analysis.pipelineResponse;
+  if (!response) {
+    return null;
+  }
+
+  if (analysis.analysisMode === 'pp2') {
+    const verification = response?.verification;
+    const fused = response?.fused;
+    const perView = Array.isArray(response?.per_view)
+      ? response.per_view.map((view: any) => ({
+          view_index: typeof view?.view_index === 'number' ? view.view_index : null,
+          status: trimString(view?.status),
+          quality_score:
+            typeof view?.quality_score === 'number' ? view.quality_score : null,
+          detection: view?.detection
+            ? {
+                cls_name: trimString(view.detection.cls_name),
+                confidence:
+                  typeof view.detection.confidence === 'number'
+                    ? view.detection.confidence
+                    : null,
+                selected_by: trimString(view.detection.selected_by),
+                outlier_view:
+                  typeof view.detection.outlier_view === 'boolean'
+                    ? view.detection.outlier_view
+                    : null,
+              }
+            : null,
+          extraction: view?.extraction
+            ? {
+                caption: trimString(view.extraction.caption),
+                ocr_text: trimString(view.extraction.ocr_text),
+                grounded_features:
+                  view.extraction.grounded_features &&
+                  typeof view.extraction.grounded_features === 'object'
+                    ? view.extraction.grounded_features
+                    : {},
+              }
+            : null,
+        }))
+      : [];
+
+    return {
+      verification: verification
+        ? {
+            mode: trimString(verification.mode),
+            passed:
+              typeof verification.passed === 'boolean'
+                ? verification.passed
+                : null,
+            failure_reasons: Array.isArray(verification.failure_reasons)
+              ? verification.failure_reasons.map((reason: unknown) => String(reason))
+              : [],
+            used_views: Array.isArray(verification.used_views)
+              ? verification.used_views.filter((value: unknown) => typeof value === 'number')
+              : [],
+            dropped_views: Array.isArray(verification.dropped_views)
+              ? verification.dropped_views
+                  .filter((entry: unknown) => entry && typeof entry === 'object')
+                  .map((entry: any) => ({
+                    view_index:
+                      typeof entry.view_index === 'number' ? entry.view_index : null,
+                    reason: trimString(entry.reason),
+                  }))
+              : [],
+            cosine_sim_matrix: Array.isArray(verification.cosine_sim_matrix)
+              ? verification.cosine_sim_matrix
+              : [],
+            faiss_sim_matrix: Array.isArray(verification.faiss_sim_matrix)
+              ? verification.faiss_sim_matrix
+              : [],
+            geometric_scores:
+              verification.geometric_scores &&
+              typeof verification.geometric_scores === 'object'
+                ? verification.geometric_scores
+                : {},
+          }
+        : null,
+      fused: fused
+        ? {
+            category: trimString(fused.category),
+            color: trimString(fused.color),
+            caption: trimString(fused.caption),
+            detailed_description: trimString(fused.detailed_description),
+            attributes:
+              fused.attributes && typeof fused.attributes === 'object'
+                ? fused.attributes
+                : {},
+            defects: Array.isArray(fused.defects) ? fused.defects : [],
+            description_evidence_used:
+              fused.description_evidence_used &&
+              typeof fused.description_evidence_used === 'object'
+                ? fused.description_evidence_used
+                : {},
+          }
+        : null,
+      per_view: perView,
+    };
+  }
+
+  const accepted = selectAcceptedPP1Detection(response);
+  if (!accepted) {
+    return null;
+  }
+
+  return {
+    pp1: {
+      label: trimString(accepted.label),
+      color: trimString(accepted.color),
+      final_description: trimString(accepted.final_description),
+      detailed_description: trimString(accepted.detailed_description),
+      ocr_text: trimString(accepted.ocr_text),
+      category_details:
+        accepted.category_details && typeof accepted.category_details === 'object'
+          ? accepted.category_details
+          : {},
+      raw:
+        accepted.raw && typeof accepted.raw === 'object'
+          ? accepted.raw
+          : {},
+    },
+  };
+};
+
+const getAnalysisPathLabel = (imageCount: number): string =>
+  imageCount > 1 ? 'Multi-view analysis' : 'Single photo analysis';
+
+const buildPreAnalysisSummary = (status: TerminalPreAnalysisStatus, imageCount: number): string => {
+  if (status === 'ok') {
+    return imageCount > 1
+      ? 'We prefilled what we could from your photo set. Review before continuing.'
+      : 'We prefilled what we could from your photo. Review before continuing.';
+  }
+
+  if (status === 'failed') {
+    return imageCount > 1
+      ? 'We could not finish analyzing this photo set. Continue manually and confirm the details yourself.'
+      : 'We could not finish analyzing this photo. Continue manually and confirm the details yourself.';
+  }
+
+  return imageCount > 1
+    ? 'We could not confidently prefill this item from these photos. Continue manually.'
+    : 'We could not confidently prefill this item from this photo. Continue manually.';
+};
+
+const buildPreAnalysisResponse = ({
+  status,
+  taskId,
+  imageCount,
+  preAnalysisToken = null,
+  analysisMode = null,
+  retryAfterMs,
+  stageKey = null,
+  stageLabel = null,
+  stageMessage = null,
+  detectedCategory = null,
+  detectedDescription = null,
+  detailedDescription = null,
+  detectedColor = null,
+  ocrText = null,
+  ocrTextDisplay = null,
+  categoryDetails = {
+    features: [],
+    defects: [],
+    attachments: [],
+  },
+  descriptionEvidenceUsed = {
+    summary: [],
+    detailed: [],
+  },
+  descriptionFiltersApplied = [],
+  searchable = false,
+}: {
+  status: PreAnalysisStatus;
+  taskId?: string;
+  imageCount: number;
+  preAnalysisToken?: string | null;
+  analysisMode?: 'pp1' | 'pp2' | null;
+  retryAfterMs?: number;
+  stageKey?: string | null;
+  stageLabel?: string | null;
+  stageMessage?: string | null;
+  detectedCategory?: string | null;
+  detectedDescription?: string | null;
+  detailedDescription?: string | null;
+  detectedColor?: string | null;
+  ocrText?: string | null;
+  ocrTextDisplay?: string | null;
+  categoryDetails?: FoundItemAnalysisSnapshot['categoryDetails'];
+  descriptionEvidenceUsed?: FoundItemAnalysisSnapshot['descriptionEvidenceUsed'];
+  descriptionFiltersApplied?: string[];
+  searchable?: boolean;
+}): PreAnalysisResponseBody => {
+  const terminalStatus =
+    status === 'queued' || status === 'processing' ? 'manual_fallback' : status;
+  const analysisSummary = buildPreAnalysisSummary(terminalStatus, imageCount);
+
+  return {
+    status,
+    taskId,
+    preAnalysisToken,
+    analysisMode,
+    imageCount,
+    analysisPathLabel: getAnalysisPathLabel(imageCount),
+    analysisSummary,
+    retryAfterMs,
+    stageKey,
+    stageLabel,
+    stageMessage,
+    detectedCategory,
+    detectedDescription,
+    detailedDescription,
+    detectedColor,
+    ocrText,
+    ocrTextDisplay,
+    categoryDetails,
+    descriptionEvidenceUsed,
+    descriptionFiltersApplied,
+    searchable,
+    message: stageMessage || analysisSummary,
+  };
+};
+
+const normalizeAsyncPreAnalysisStatus = (value: unknown): PreAnalysisStatus => {
+  switch (value) {
+    case 'queued':
+    case 'processing':
+    case 'manual_fallback':
+    case 'failed':
+      return value;
+    case 'completed':
+      return 'ok';
+    default:
+      return 'failed';
+  }
+};
+
+const buildPP1AnalysisSnapshot = (pp1Result: any): FoundItemAnalysisSnapshot | null => {
+  const detection = selectAcceptedPP1Detection(pp1Result);
+  if (!detection) {
+    return null;
+  }
+
+  const analysis = buildDefaultAnalysisSnapshot();
+  analysis.analysisMode = 'pp1';
+  analysis.pythonItemId = detection.item_id ?? null;
+  analysis.detectedCategory = detection.label ?? null;
+  analysis.detectedColor = detection.color ?? null;
+  Object.assign(analysis, extractPP1AnalysisDetails(detection));
+  analysis.vector128 = Array.isArray(detection.embeddings?.vector_128d)
+    ? detection.embeddings.vector_128d
+    : [];
+  analysis.pipelineResponse = pp1Result;
+
+  return analysis;
+};
+
+const buildPP2AnalysisSnapshot = (pp2Result: any): FoundItemAnalysisSnapshot | null => {
+  if (!(pp2Result?.verification?.passed === true && pp2Result?.fused)) {
+    return null;
+  }
+
+  const analysis = buildDefaultAnalysisSnapshot();
+  analysis.analysisMode = 'pp2';
+  analysis.pythonItemId = pp2Result?.item_id ?? null;
+  analysis.detectedCategory = pp2Result.fused.category ?? null;
+  analysis.detectedColor = pp2Result.fused.color ?? null;
+  Object.assign(analysis, extractPP2AnalysisDetails(pp2Result));
+  analysis.faissIds = Array.isArray(pp2Result.faiss_ids)
+    ? pp2Result.faiss_ids.filter((id: unknown) => typeof id === 'number')
+    : [];
+  analysis.faissId = analysis.faissIds[0] ?? null;
+  analysis.pipelineResponse = pp2Result;
+  analysis.searchable = pp2Result.stored === true;
+
+  return analysis;
+};
+
 const storeFoundItemPreAnalysis = async (
   imageCount: number,
   analysis: FoundItemAnalysisSnapshot,
-  createdBy?: string
+  createdBy?: string,
+  taskId?: string | null
 ): Promise<string | null> => {
   try {
     const token = randomUUID();
 
     await FoundItemPreAnalysis.create({
       token,
+      ...(taskId ? { taskId } : {}),
       ...(createdBy ? { createdBy: new Types.ObjectId(createdBy) } : {}),
       imageCount,
       analysisMode: analysis.analysisMode,
@@ -125,7 +607,13 @@ const storeFoundItemPreAnalysis = async (
       faissIds: analysis.faissIds,
       detectedCategory: analysis.detectedCategory,
       detectedDescription: analysis.detectedDescription,
+      detailedDescription: analysis.detailedDescription,
       detectedColor: analysis.detectedColor,
+      ocrText: analysis.ocrText,
+      ocrTextDisplay: analysis.ocrTextDisplay,
+      categoryDetails: analysis.categoryDetails,
+      descriptionEvidenceUsed: analysis.descriptionEvidenceUsed,
+      descriptionFiltersApplied: analysis.descriptionFiltersApplied,
       vector128: analysis.vector128,
       pipelineResponse: analysis.pipelineResponse,
       searchable: analysis.searchable,
@@ -137,6 +625,46 @@ const storeFoundItemPreAnalysis = async (
     console.error('Failed to persist found-item pre-analysis cache:', error);
     return null;
   }
+};
+
+const loadFoundItemPreAnalysisByTaskId = async (
+  taskId: string
+): Promise<{ token: string; analysis: FoundItemAnalysisSnapshot } | null> => {
+  const entry = await FoundItemPreAnalysis.findOne({
+    taskId,
+    expiresAt: { $gt: new Date() },
+  }).lean();
+
+  if (!entry) {
+    return null;
+  }
+
+  return {
+    token: entry.token,
+    analysis: {
+      analysisMode: entry.analysisMode ?? null,
+      taskId: entry.taskId ?? null,
+      pythonItemId: entry.pythonItemId ?? null,
+      faissId: typeof entry.faissId === 'number' ? entry.faissId : null,
+      faissIds: Array.isArray(entry.faissIds)
+        ? entry.faissIds.filter((id: unknown) => typeof id === 'number')
+        : [],
+      detectedCategory: entry.detectedCategory ?? null,
+      detectedDescription: entry.detectedDescription ?? null,
+      detailedDescription: entry.detailedDescription ?? null,
+      detectedColor: entry.detectedColor ?? null,
+      ocrText: entry.ocrText ?? null,
+      ocrTextDisplay: entry.ocrTextDisplay ?? null,
+      categoryDetails: normalizeCategoryDetails(entry.categoryDetails),
+      descriptionEvidenceUsed: normalizeDescriptionEvidenceUsed(entry.descriptionEvidenceUsed),
+      descriptionFiltersApplied: normalizeStringArray(entry.descriptionFiltersApplied),
+      vector128: Array.isArray(entry.vector128)
+        ? entry.vector128.filter((value: unknown) => typeof value === 'number')
+        : [],
+      pipelineResponse: entry.pipelineResponse ?? null,
+      searchable: entry.searchable === true,
+    },
+  };
 };
 
 const loadFoundItemPreAnalysis = async (
@@ -153,6 +681,7 @@ const loadFoundItemPreAnalysis = async (
 
   return {
     analysisMode: entry.analysisMode ?? null,
+    taskId: entry.taskId ?? null,
     pythonItemId: entry.pythonItemId ?? null,
     faissId: typeof entry.faissId === 'number' ? entry.faissId : null,
     faissIds: Array.isArray(entry.faissIds)
@@ -160,7 +689,13 @@ const loadFoundItemPreAnalysis = async (
       : [],
     detectedCategory: entry.detectedCategory ?? null,
     detectedDescription: entry.detectedDescription ?? null,
+    detailedDescription: entry.detailedDescription ?? null,
     detectedColor: entry.detectedColor ?? null,
+    ocrText: entry.ocrText ?? null,
+    ocrTextDisplay: entry.ocrTextDisplay ?? null,
+    categoryDetails: normalizeCategoryDetails(entry.categoryDetails),
+    descriptionEvidenceUsed: normalizeDescriptionEvidenceUsed(entry.descriptionEvidenceUsed),
+    descriptionFiltersApplied: normalizeStringArray(entry.descriptionFiltersApplied),
     vector128: Array.isArray(entry.vector128)
       ? entry.vector128.filter((value: unknown) => typeof value === 'number')
       : [],
@@ -201,16 +736,18 @@ export const preAnalyzeFoundImages = async (
         const detection = selectAcceptedPP1Detection(pp1Result);
 
         if (detection) {
-          const analysis = buildDefaultAnalysisSnapshot();
-          analysis.analysisMode = 'pp1';
-          analysis.pythonItemId = detection.item_id ?? null;
-          analysis.detectedCategory = detection.label ?? null;
-          analysis.detectedDescription = detection.final_description || detection.message || null;
-          analysis.detectedColor = detection.color ?? null;
-          analysis.vector128 = Array.isArray(detection.embeddings?.vector_128d)
-            ? detection.embeddings.vector_128d
-            : [];
-          analysis.pipelineResponse = pp1Result;
+          const analysis = buildPP1AnalysisSnapshot(pp1Result);
+
+          if (!analysis) {
+            const pp1FallbackBody = buildPreAnalysisResponse({
+              status: 'manual_fallback',
+              imageCount: tempImagePaths.length,
+              analysisMode: 'pp1',
+            });
+            console.log('[PRE-ANALYZE] Response (PP1 no detection):', JSON.stringify(pp1FallbackBody, null, 2));
+            res.status(200).json(pp1FallbackBody);
+            return;
+          }
 
           if (analysis.pythonItemId && analysis.vector128.length === 128) {
             try {
@@ -238,46 +775,32 @@ export const preAnalyzeFoundImages = async (
             req.user?.id
           );
 
-          const pp1OkBody = {
+          const pp1OkBody = buildPreAnalysisResponse({
             status: 'ok',
+            imageCount: tempImagePaths.length,
             preAnalysisToken,
             analysisMode: analysis.analysisMode,
-            detectedCategory: analysis.detectedCategory,
-            detectedDescription: analysis.detectedDescription,
-            detectedColor: analysis.detectedColor,
-            searchable: analysis.searchable,
-            message: 'Image analyzed successfully.',
-          };
+            ...buildAnalysisPrefillFields(analysis),
+          });
           console.log('[PRE-ANALYZE] Response (PP1 ok):', JSON.stringify(pp1OkBody, null, 2));
           res.status(200).json(pp1OkBody);
           return;
         }
 
-        const pp1FallbackBody = {
+        const pp1FallbackBody = buildPreAnalysisResponse({
           status: 'manual_fallback',
-          preAnalysisToken: null,
+          imageCount: tempImagePaths.length,
           analysisMode: 'pp1',
-          detectedCategory: null,
-          detectedDescription: null,
-          detectedColor: null,
-          searchable: false,
-          message: 'No reliable item detection found. Please enter details manually.',
-        };
+        });
         console.log('[PRE-ANALYZE] Response (PP1 no detection):', JSON.stringify(pp1FallbackBody, null, 2));
         res.status(200).json(pp1FallbackBody);
         return;
       } catch (pipelineError: any) {
-        const pp1ErrorBody = {
+        const pp1ErrorBody = buildPreAnalysisResponse({
           status: 'manual_fallback',
-          preAnalysisToken: null,
+          imageCount: tempImagePaths.length,
           analysisMode: 'pp1',
-          detectedCategory: null,
-          detectedDescription: null,
-          detectedColor: null,
-          searchable: false,
-          message:
-            pipelineError?.message || 'Image pipeline unavailable. Please enter details manually.',
-        };
+        });
         console.log('[PRE-ANALYZE] Response (PP1 pipeline error):', JSON.stringify(pp1ErrorBody, null, 2));
         res.status(200).json(pp1ErrorBody);
         return;
@@ -288,18 +811,18 @@ export const preAnalyzeFoundImages = async (
       const pp2Result = await imageProcessingService.analyzePP2(tempImagePaths);
 
       if (pp2Result?.verification?.passed === true && pp2Result?.fused) {
-        const analysis = buildDefaultAnalysisSnapshot();
-        analysis.analysisMode = 'pp2';
-        analysis.pythonItemId = pp2Result?.item_id ?? null;
-        analysis.detectedCategory = pp2Result.fused.category ?? null;
-        analysis.detectedDescription = pp2Result.fused.caption ?? null;
-        analysis.detectedColor = pp2Result.fused.color ?? null;
-        analysis.faissIds = Array.isArray(pp2Result.faiss_ids)
-          ? pp2Result.faiss_ids.filter((id: unknown) => typeof id === 'number')
-          : [];
-        analysis.faissId = analysis.faissIds[0] ?? null;
-        analysis.pipelineResponse = pp2Result;
-        analysis.searchable = pp2Result.stored === true;
+        const analysis = buildPP2AnalysisSnapshot(pp2Result);
+
+        if (!analysis) {
+          const pp2FallbackBody = buildPreAnalysisResponse({
+            status: 'manual_fallback',
+            imageCount: tempImagePaths.length,
+            analysisMode: 'pp2',
+          });
+          console.log('[PRE-ANALYZE] Response (PP2 verification failed):', JSON.stringify(pp2FallbackBody, null, 2));
+          res.status(200).json(pp2FallbackBody);
+          return;
+        }
 
         const preAnalysisToken = await storeFoundItemPreAnalysis(
           tempImagePaths.length,
@@ -307,45 +830,31 @@ export const preAnalyzeFoundImages = async (
           req.user?.id
         );
 
-        const pp2OkBody = {
+        const pp2OkBody = buildPreAnalysisResponse({
           status: 'ok',
+          imageCount: tempImagePaths.length,
           preAnalysisToken,
           analysisMode: analysis.analysisMode,
-          detectedCategory: analysis.detectedCategory,
-          detectedDescription: analysis.detectedDescription,
-          detectedColor: analysis.detectedColor,
-          searchable: analysis.searchable,
-          message: 'Images analyzed successfully.',
-        };
+          ...buildAnalysisPrefillFields(analysis),
+        });
         console.log('[PRE-ANALYZE] Response (PP2 ok):', JSON.stringify(pp2OkBody, null, 2));
         res.status(200).json(pp2OkBody);
         return;
       }
 
-      const pp2FallbackBody = {
+      const pp2FallbackBody = buildPreAnalysisResponse({
         status: 'manual_fallback',
-        preAnalysisToken: null,
+        imageCount: tempImagePaths.length,
         analysisMode: 'pp2',
-        detectedCategory: null,
-        detectedDescription: null,
-        detectedColor: null,
-        searchable: false,
-        message: 'Multi-view verification failed. Please enter details manually.',
-      };
+      });
       console.log('[PRE-ANALYZE] Response (PP2 verification failed):', JSON.stringify(pp2FallbackBody, null, 2));
       res.status(200).json(pp2FallbackBody);
     } catch (pipelineError: any) {
-      const pp2ErrorBody = {
+      const pp2ErrorBody = buildPreAnalysisResponse({
         status: 'manual_fallback',
-        preAnalysisToken: null,
+        imageCount: tempImagePaths.length,
         analysisMode: 'pp2',
-        detectedCategory: null,
-        detectedDescription: null,
-        detectedColor: null,
-        searchable: false,
-        message:
-          pipelineError?.message || 'Image pipeline unavailable. Please enter details manually.',
-      };
+      });
       console.log('[PRE-ANALYZE] Response (PP2 pipeline error):', JSON.stringify(pp2ErrorBody, null, 2));
       res.status(200).json(pp2ErrorBody);
     }
@@ -353,6 +862,204 @@ export const preAnalyzeFoundImages = async (
     next(error);
   } finally {
     await cleanupTempFiles(imageFiles);
+  }
+};
+
+/**
+ * Start async founder image pre-analysis
+ * POST /api/items/pre-analyze-found-images/start
+ */
+export const startPreAnalyzeFoundImages = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const imageFiles = (req.files as Express.Multer.File[]) || [];
+
+  try {
+    if (imageFiles.length < 1 || imageFiles.length > 3) {
+      res.status(400).json({ message: 'You must upload between 1 and 3 images' });
+      return;
+    }
+
+    const tempImagePaths = imageFiles.map((file) => file.path);
+    const imageCount = tempImagePaths.length;
+    const pipelineStart =
+      imageCount === 1
+        ? await imageProcessingService.startPP1Analyze(tempImagePaths[0])
+        : await imageProcessingService.startPP2Analyze(tempImagePaths);
+
+    const status = normalizeAsyncPreAnalysisStatus(pipelineStart?.status);
+    const responseBody = buildPreAnalysisResponse({
+      status,
+      taskId: typeof pipelineStart?.taskId === 'string' ? pipelineStart.taskId : undefined,
+      imageCount: typeof pipelineStart?.imageCount === 'number' ? pipelineStart.imageCount : imageCount,
+      analysisMode: pipelineStart?.analysisMode === 'pp2' ? 'pp2' : imageCount > 1 ? 'pp2' : 'pp1',
+      retryAfterMs:
+        typeof pipelineStart?.retryAfterMs === 'number' ? pipelineStart.retryAfterMs : 1000,
+      stageKey: typeof pipelineStart?.stageKey === 'string' ? pipelineStart.stageKey : null,
+      stageLabel: typeof pipelineStart?.stageLabel === 'string' ? pipelineStart.stageLabel : null,
+      stageMessage: typeof pipelineStart?.stageMessage === 'string' ? pipelineStart.stageMessage : null,
+    });
+
+    res.status(202).json(responseBody);
+  } catch (error) {
+    next(error);
+  } finally {
+    await cleanupTempFiles(imageFiles);
+  }
+};
+
+/**
+ * Get async founder image pre-analysis status
+ * GET /api/items/pre-analyze-found-images/status/:taskId
+ */
+export const getPreAnalyzeFoundImagesStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { taskId } = req.params;
+
+    if (!taskId) {
+      res.status(400).json({ message: 'taskId is required' });
+      return;
+    }
+
+    const pipelineStatus = await imageProcessingService.getPreAnalysisJobStatus(taskId);
+    const imageCount =
+      typeof pipelineStatus?.imageCount === 'number' && pipelineStatus.imageCount >= 1
+        ? pipelineStatus.imageCount
+        : 1;
+    const analysisMode: 'pp1' | 'pp2' | null =
+      pipelineStatus?.analysisMode === 'pp2' ? 'pp2' : pipelineStatus?.analysisMode === 'pp1' ? 'pp1' : imageCount > 1 ? 'pp2' : 'pp1';
+    const normalizedStatus = normalizeAsyncPreAnalysisStatus(pipelineStatus?.status);
+
+    if (normalizedStatus === 'queued' || normalizedStatus === 'processing') {
+      res.status(200).json(
+        buildPreAnalysisResponse({
+          status: normalizedStatus,
+          taskId,
+          imageCount,
+          analysisMode,
+          retryAfterMs:
+            typeof pipelineStatus?.retryAfterMs === 'number' ? pipelineStatus.retryAfterMs : 1000,
+          stageKey: typeof pipelineStatus?.stageKey === 'string' ? pipelineStatus.stageKey : null,
+          stageLabel: typeof pipelineStatus?.stageLabel === 'string' ? pipelineStatus.stageLabel : null,
+          stageMessage:
+            typeof pipelineStatus?.stageMessage === 'string' ? pipelineStatus.stageMessage : null,
+        })
+      );
+      return;
+    }
+
+    if (normalizedStatus === 'ok') {
+      const cached = await loadFoundItemPreAnalysisByTaskId(taskId);
+      if (cached) {
+        res.status(200).json(
+          buildPreAnalysisResponse({
+            status: 'ok',
+            taskId,
+            imageCount,
+            preAnalysisToken: cached.token,
+            analysisMode: cached.analysis.analysisMode,
+            retryAfterMs:
+              typeof pipelineStatus?.retryAfterMs === 'number' ? pipelineStatus.retryAfterMs : 1000,
+            ...buildAnalysisPrefillFields(cached.analysis),
+          })
+        );
+        return;
+      }
+
+      const rawResult = pipelineStatus?.result;
+      const analysis =
+        analysisMode === 'pp2'
+          ? buildPP2AnalysisSnapshot(rawResult)
+          : buildPP1AnalysisSnapshot(rawResult);
+
+      if (!analysis) {
+        res.status(200).json(
+          buildPreAnalysisResponse({
+            status: 'manual_fallback',
+            taskId,
+            imageCount,
+            analysisMode,
+            retryAfterMs:
+              typeof pipelineStatus?.retryAfterMs === 'number' ? pipelineStatus.retryAfterMs : 1000,
+          })
+        );
+        return;
+      }
+
+      if (analysis.analysisMode === 'pp1' && analysis.pythonItemId && analysis.vector128.length === 128) {
+        try {
+          const indexResult = await imageProcessingService.indexVector(analysis.vector128, {
+            item_id: analysis.pythonItemId,
+            source: 'pp1_preanalysis',
+            label: analysis.detectedCategory,
+            category: analysis.detectedCategory,
+          });
+
+          analysis.faissId = typeof indexResult?.faiss_id === 'number' ? indexResult.faiss_id : null;
+          analysis.faissIds = analysis.faissId !== null ? [analysis.faissId] : [];
+          analysis.searchable = analysis.faissId !== null;
+        } catch (indexError: any) {
+          console.error(
+            'PP1 async pre-analysis vector indexing failed (non-fatal):',
+            indexError?.message || indexError
+          );
+        }
+      }
+
+      const preAnalysisToken = await storeFoundItemPreAnalysis(
+        imageCount,
+        analysis,
+        req.user?.id,
+        taskId
+      );
+
+      res.status(200).json(
+        buildPreAnalysisResponse({
+          status: 'ok',
+          taskId,
+          imageCount,
+          preAnalysisToken,
+          analysisMode: analysis.analysisMode,
+          retryAfterMs:
+            typeof pipelineStatus?.retryAfterMs === 'number' ? pipelineStatus.retryAfterMs : 1000,
+          ...buildAnalysisPrefillFields(analysis),
+        })
+      );
+      return;
+    }
+
+    if (normalizedStatus === 'manual_fallback') {
+      res.status(200).json(
+        buildPreAnalysisResponse({
+          status: 'manual_fallback',
+          taskId,
+          imageCount,
+          analysisMode,
+          retryAfterMs:
+            typeof pipelineStatus?.retryAfterMs === 'number' ? pipelineStatus.retryAfterMs : 1000,
+        })
+      );
+      return;
+    }
+
+    res.status(200).json(
+      buildPreAnalysisResponse({
+        status: 'failed',
+        taskId,
+        imageCount,
+        analysisMode,
+        retryAfterMs:
+          typeof pipelineStatus?.retryAfterMs === 'number' ? pipelineStatus.retryAfterMs : 1000,
+      })
+    );
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -423,7 +1130,13 @@ export const createFoundItem = async (
         analysisSnapshot.faissIds = cachedAnalysis.faissIds;
         analysisSnapshot.detectedCategory = cachedAnalysis.detectedCategory;
         analysisSnapshot.detectedDescription = cachedAnalysis.detectedDescription;
+        analysisSnapshot.detailedDescription = cachedAnalysis.detailedDescription;
         analysisSnapshot.detectedColor = cachedAnalysis.detectedColor;
+        analysisSnapshot.ocrText = cachedAnalysis.ocrText;
+        analysisSnapshot.ocrTextDisplay = cachedAnalysis.ocrTextDisplay;
+        analysisSnapshot.categoryDetails = cachedAnalysis.categoryDetails;
+        analysisSnapshot.descriptionEvidenceUsed = cachedAnalysis.descriptionEvidenceUsed;
+        analysisSnapshot.descriptionFiltersApplied = cachedAnalysis.descriptionFiltersApplied;
         analysisSnapshot.vector128 = cachedAnalysis.vector128;
         analysisSnapshot.pipelineResponse = cachedAnalysis.pipelineResponse;
         analysisSnapshot.searchable = cachedAnalysis.searchable;
@@ -459,6 +1172,52 @@ export const createFoundItem = async (
       pipelineResponse: analysisSnapshot.pipelineResponse,
       searchable: analysisSnapshot.searchable,
     });
+
+    if (preAnalysisToken && analysisSnapshot.analysisMode) {
+      const normalizedPredictedCategory = normalizeFeedbackText(analysisSnapshot.detectedCategory);
+      const normalizedFinalCategory = normalizeFeedbackText(category);
+      const normalizedPredictedDescription = normalizeFeedbackText(analysisSnapshot.detectedDescription);
+      const normalizedFinalDescription = normalizeFeedbackText(description);
+      const analysisEvidence = buildFounderFeedbackAnalysisEvidence(analysisSnapshot);
+
+      const categoryChanged = normalizedPredictedCategory.length > 0
+        ? normalizedPredictedCategory !== normalizedFinalCategory
+        : false;
+      const descriptionChanged = normalizedPredictedDescription.length > 0
+        ? normalizedPredictedDescription !== normalizedFinalDescription
+        : false;
+
+      try {
+        const feedbackEvent = await founderPrefillFeedbackService.createFounderPrefillFeedback({
+          foundItemId: foundItem._id.toString(),
+          createdBy: req.user?.id || null,
+          preAnalysisToken,
+          taskId: analysisSnapshot.taskId,
+          analysisMode: analysisSnapshot.analysisMode,
+          pythonItemId: analysisSnapshot.pythonItemId,
+          imageCount: imageFiles.length,
+          imageUrls: uploadedImageUrls,
+          predictedCategory: analysisSnapshot.detectedCategory,
+          predictedDescription: analysisSnapshot.detectedDescription,
+          predictedColor: analysisSnapshot.detectedColor,
+          analysisEvidence,
+          finalCategory: category,
+          finalDescription: description,
+          categoryChanged,
+          descriptionChanged,
+          acceptedAsIs: !categoryChanged && !descriptionChanged,
+        });
+
+        void founderPrefillFeedbackService.relayFounderPrefillFeedbackEvent(
+          feedbackEvent._id.toString()
+        );
+      } catch (feedbackError) {
+        console.error(
+          'Founder prefill feedback logging failed (non-blocking):',
+          feedbackError instanceof Error ? feedbackError.message : feedbackError
+        );
+      }
+    }
 
     res.status(201).json(foundItem);
   } catch (error) {
@@ -650,6 +1409,26 @@ export const createLostRequest = async (
             0.5,
             category
           );
+          const rawImageMatches = Array.isArray(imageSearchResult?.matches)
+            ? imageSearchResult.matches.map((match: any) => ({
+                item_id: match?.item_id ?? null,
+                score: typeof match?.score === 'number' ? Number(match.score) : null,
+                vector_hits_count: match?.vector_hits_count ?? null,
+              }))
+            : [];
+
+          console.log(
+            '[IMAGE-MATCH] Raw pipeline matches:',
+            JSON.stringify(
+              {
+                ownerId: req.user.id,
+                category,
+                matches: rawImageMatches,
+              },
+              null,
+              2
+            )
+          );
 
           imageMatchMap = new Map();
           for (const match of imageSearchResult?.matches || []) {
@@ -657,6 +1436,11 @@ export const createLostRequest = async (
               imageMatchMap.set(String(match.item_id), Number(match.score));
             }
           }
+
+          console.log(
+            '[IMAGE-MATCH] Derived image score map:',
+            JSON.stringify(Object.fromEntries(imageMatchMap.entries()), null, 2)
+          );
         } catch (imageSearchError: any) {
           console.error('Image search failed (non-fatal):', imageSearchError?.message || imageSearchError);
         }
@@ -689,6 +1473,19 @@ export const createLostRequest = async (
             imageMatch: imageScore !== null ? { score: imageScore } : null,
           };
         });
+
+      console.log(
+        '[IMAGE-MATCH] Final matched items returned to app:',
+        JSON.stringify(
+          results.map((item: any) => ({
+            foundItemId: String(item._id),
+            category: item.category,
+            imageMatchScore: item.imageMatch?.score ?? null,
+          })),
+          null,
+          2
+        )
+      );
 
       const imageMatchResults = results
         .filter((item) => item.imageMatch)
@@ -922,7 +1719,13 @@ export const generateQuestions = async (
       description,
     });
 
-    res.status(200).json({ questions });
+    const suggestedFounderAnswers = await geminiService.generateSuggestedFounderAnswers({
+      category,
+      description,
+      questions,
+    });
+
+    res.status(200).json({ questions, suggestedFounderAnswers });
   } catch (error) {
     next(error);
   }

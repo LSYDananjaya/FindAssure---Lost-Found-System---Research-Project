@@ -1,104 +1,66 @@
-// ReportFoundSuccessScreen – follow the spec
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../types/models';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { useAppTheme } from '../../context/ThemeContext';
 
 type ReportFoundSuccessNavigationProp = StackNavigationProp<RootStackParamList, 'ReportFoundSuccess'>;
 
 const ReportFoundSuccessScreen = () => {
   const navigation = useNavigation<ReportFoundSuccessNavigationProp>();
-
-  const handleGoHome = () => {
-    navigation.navigate('Home');
-  };
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={theme.gradients.appBackground} style={styles.container}>
       <View style={styles.content}>
-        <View style={styles.iconContainer}>
-          <Text style={styles.icon}>✅</Text>
-        </View>
+        <LinearGradient colors={theme.gradients.success} style={styles.hero}>
+          <Text style={styles.icon}>✓</Text>
+          <Text style={styles.heroTitle}>Thank You !</Text>
+          <Text style={styles.heroTitle}>Report submitted.</Text>
+          <Text style={styles.heroBody}>The item is now ready for owner search and verification.</Text>
+        </LinearGradient>
 
-        <Text style={styles.title}>Success!</Text>
-        <Text style={styles.message}>
-          Found item reported successfully
-        </Text>
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
-            Thank you for helping someone find their lost item! 
-          </Text>
-          <Text style={styles.infoText}>
-            The owner will need to verify their ownership by answering your questions 
-            before they can see your contact information.
-          </Text>
-        </View>
-
-        <PrimaryButton
-          title="Back to Home"
-          onPress={handleGoHome}
-          style={styles.button}
-        />
+        <PrimaryButton title="Back to Home" onPress={() => navigation.navigate('Home')} size="lg" />
       </View>
-    </View>
+    </LinearGradient>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#E8F5E9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  icon: {
-    fontSize: 64,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 12,
-  },
-  message: {
-    fontSize: 18,
-    color: '#666666',
-    textAlign: 'center',
-    marginBottom: 32,
-  },
-  infoBox: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 32,
-    width: '100%',
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#666666',
-    lineHeight: 20,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  button: {
-    width: '100%',
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
+  StyleSheet.create({
+    container: { flex: 1 },
+    content: {
+      flex: 1,
+      justifyContent: 'center',
+      paddingHorizontal: theme.spacing.xl,
+      paddingBottom: theme.spacing.xl,
+    },
+    hero: {
+      borderRadius: theme.radius.xl,
+      padding: theme.spacing.xl,
+      alignItems: 'center',
+      marginBottom: theme.spacing.xl,
+    },
+    icon: {
+      ...theme.type.hero,
+      color: theme.colors.onTint,
+      marginBottom: theme.spacing.sm,
+    },
+    heroTitle: {
+      ...theme.type.hero,
+      color: theme.colors.onTint,
+      textAlign: 'center',
+      marginBottom: theme.spacing.sm,
+    },
+    heroBody: {
+      ...theme.type.body,
+      color: theme.colors.onTintMuted,
+      textAlign: 'center',
+    },
+  });
 
 export default ReportFoundSuccessScreen;

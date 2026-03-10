@@ -1,26 +1,26 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  TouchableOpacity
-} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useAuth } from '../../context/AuthContext';
-import { RootStackParamList } from '../../types/models';
+import React, { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AnimatedHeroIllustration } from '../../components/AnimatedHeroIllustration';
+import { FormInput } from '../../components/FormInput';
+import { GlassCard } from '../../components/GlassCard';
+import { KeyboardAwareFormScreen } from '../../components/KeyboardAwareFormScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { StaggeredEntrance } from '../../components/StaggeredEntrance';
+import { useAuth } from '../../context/AuthContext';
+import { useAppTheme } from '../../context/ThemeContext';
+import { useToast } from '../../context/ToastContext';
+import { RootStackParamList } from '../../types/models';
 
 type ForgotPasswordNavigationProp = StackNavigationProp<RootStackParamList, 'ForgotPassword'>;
 
 const ForgotPasswordScreen = () => {
   const navigation = useNavigation<ForgotPasswordNavigationProp>();
   const { resetPassword } = useAuth();
+  const { theme } = useAppTheme();
+  const { showToast } = useToast();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,14 +28,20 @@ const ForgotPasswordScreen = () => {
 
   const handleResetPassword = async () => {
     if (!email) {
-      Alert.alert('Error', 'Please enter your email address');
+      showToast({
+        title: 'Email required',
+        message: 'Please enter your email address.',
+        variant: 'warning',
+      });
       return;
     }
-
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      showToast({
+        title: 'Invalid email',
+        message: 'Please enter a valid email address.',
+        variant: 'warning',
+      });
       return;
     }
 
@@ -43,181 +49,159 @@ const ForgotPasswordScreen = () => {
       setLoading(true);
       await resetPassword(email);
       setEmailSent(true);
-      Alert.alert(
-        'Email Sent!',
-        'Password reset instructions have been sent to your email address. Please check your inbox (and spam folder).',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack()
-          }
-        ]
-      );
+      showToast({
+        title: 'Reset email sent',
+        message: 'Check your inbox and spam folder for the reset link.',
+        variant: 'success',
+      });
+      navigation.goBack();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to send password reset email');
+      showToast({
+        title: 'Reset failed',
+        message: error.message || 'Failed to send password reset email.',
+        variant: 'error',
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleBackToLogin = () => {
-    navigation.goBack();
-  };
-
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Forgot Password?</Text>
-            <Text style={styles.subtitle}>
-              Enter your email address and we'll send you instructions to reset your password
-            </Text>
-          </View>
-
-          <View style={styles.form}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                editable={!emailSent}
-              />
+    <View style={styles.container}>
+      <KeyboardAwareFormScreen contentContainerStyle={styles.scrollContent}>
+        <StaggeredEntrance delay={20}>
+          <GlassCard style={styles.hero}>
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroBadge}>
+                <Text style={styles.heroBadgeText}>Recovery</Text>
+              </View>
+              <AnimatedHeroIllustration size={112} variant="pending" />
             </View>
+            <Text style={styles.wordmark}>FindAssure</Text>
+            <Text style={styles.heroTitle}>Reset your password.</Text>
+            <Text style={styles.heroBody}>Enter the email tied to your account and we will send you a reset link.</Text>
+          </GlassCard>
+        </StaggeredEntrance>
 
+        <StaggeredEntrance delay={90}>
+          <GlassCard style={styles.formCard}>
+            <Text style={styles.sectionEyebrow}>Recovery</Text>
+            <Text style={styles.formTitle}>Send reset email</Text>
+            <FormInput
+              label="Email"
+              placeholder="name@example.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              editable={!emailSent}
+              leadingIcon="mail-outline"
+            />
             <PrimaryButton
-              title={emailSent ? 'Email Sent!' : 'Send Reset Email'}
+              title={emailSent ? 'Email Sent' : 'Send Reset Email'}
               onPress={handleResetPassword}
               loading={loading}
               disabled={emailSent}
-              style={styles.resetButton}
+              size="lg"
+              style={styles.buttonGap}
             />
+            <Pressable onPress={() => navigation.goBack()} style={styles.backWrap}>
+              <Text style={styles.linkText}>Back to login</Text>
+            </Pressable>
+          </GlassCard>
+        </StaggeredEntrance>
 
-            <View style={styles.backSection}>
-              <TouchableOpacity onPress={handleBackToLogin}>
-                <Text style={styles.backLink}>← Back to Login</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>📧 What happens next?</Text>
-            <Text style={styles.infoText}>
-              1. Check your email inbox{'\n'}
-              2. Click the reset link in the email{'\n'}
-              3. Create a new password{'\n'}
-              4. Log in with your new password
-            </Text>
-            <Text style={styles.infoNote}>
-              💡 Tip: If you don't see the email, check your spam folder
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <StaggeredEntrance delay={140}>
+          <GlassCard>
+            <Text style={styles.sectionEyebrow}>Next steps</Text>
+            <Text style={styles.formTitle}>What happens after sending it</Text>
+            <Text style={styles.tipText}>1. Check your inbox and spam folder.</Text>
+            <Text style={styles.tipText}>2. Open the reset email from Firebase authentication.</Text>
+            <Text style={styles.tipText}>3. Set a new password, then return to the app.</Text>
+            <Text style={styles.tipText}>4. Sign back in with the updated password.</Text>
+          </GlassCard>
+        </StaggeredEntrance>
+      </KeyboardAwareFormScreen>
+    </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-  },
-  header: {
-    marginBottom: 30,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#666666',
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 10,
-  },
-  form: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333333',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#DDDDDD',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#FAFAFA',
-  },
-  resetButton: {
-    marginTop: 10,
-  },
-  backSection: {
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  backLink: {
-    fontSize: 14,
-    color: '#4A90E2',
-    fontWeight: '600',
-  },
-  infoBox: {
-    backgroundColor: '#E3F2FD',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 20,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1976D2',
-    marginBottom: 12,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#424242',
-    lineHeight: 24,
-    marginBottom: 12,
-  },
-  infoNote: {
-    fontSize: 13,
-    color: '#616161',
-    fontStyle: 'italic',
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
+    scrollContent: {
+      paddingTop: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.xxl,
+      gap: theme.spacing.md,
+    },
+    hero: {
+      padding: theme.spacing.lg,
+    },
+    heroTopRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: theme.spacing.md,
+    },
+    heroBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.colors.accentSoft,
+      borderRadius: 999,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: 5,
+    },
+    heroBadgeText: {
+      ...theme.type.caption,
+      color: theme.colors.accent,
+      fontWeight: '700',
+    },
+    wordmark: {
+      ...theme.type.brand,
+      color: theme.colors.accent,
+      marginBottom: theme.spacing.sm,
+    },
+    heroTitle: {
+      ...theme.type.title,
+      color: theme.colors.textStrong,
+      marginBottom: theme.spacing.sm,
+    },
+    heroBody: {
+      ...theme.type.body,
+      color: theme.colors.textMuted,
+    },
+    formCard: {
+      marginTop: 0,
+    },
+    sectionEyebrow: {
+      ...theme.type.label,
+      marginBottom: theme.spacing.xs,
+    },
+    formTitle: {
+      ...theme.type.section,
+      color: theme.colors.textStrong,
+      marginBottom: theme.spacing.lg,
+    },
+    buttonGap: {
+      marginTop: theme.spacing.lg,
+    },
+    backWrap: {
+      marginTop: theme.spacing.lg,
+      alignSelf: 'center',
+    },
+    linkText: {
+      ...theme.type.bodyStrong,
+      color: theme.colors.accent,
+    },
+    tipText: {
+      ...theme.type.body,
+      color: theme.colors.textMuted,
+      marginBottom: theme.spacing.sm,
+    },
+  });
 
 export default ForgotPasswordScreen;

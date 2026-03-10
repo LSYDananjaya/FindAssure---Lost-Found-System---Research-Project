@@ -100,7 +100,7 @@ Do NOT guess. Do NOT invent. If evidence is missing or contradicted by the image
 
 TASK
 1) From the candidate lists, select ONLY items that are clearly supported by the EVIDENCE and VISIBLE in the image.
-2) Produce a short, detailed product-style description (1–2 sentences) using ONLY confirmed details.
+2) Produce a detailed public-listing paragraph (2–4 sentences) using ONLY confirmed details.
 3) Use ONLY the exact phrases from the candidate lists when listing features/defects/attachments.
 
 HOW TO DECIDE (STRICT)
@@ -110,10 +110,12 @@ HOW TO DECIDE (STRICT)
   If a candidate phrase appears verbatim (case-insensitive) in CAPTION or DEFECTS_VQA_TEXT, include it.
 - VISUAL VERIFICATION:
   If the image clearly contradicts any evidence (e.g., evidence says "red" but image is "blue"), REJECT that piece of evidence.
-- COLOR CORRECTION:
-  Cross-check PRIMARY_COLOR against the CAPTION and the image.
-  If the CAPTION mentions a color that differs from PRIMARY_COLOR and the image supports the caption's color, use the caption's color instead.
-  Output the most accurate color in the "color" field. If uncertain, keep PRIMARY_COLOR.
+- COLOR ACCURACY:
+  PRIMARY_COLOR is the authoritative color — it comes from a direct visual question asked about the object.
+  Trust PRIMARY_COLOR. Do NOT override it based on caption text; captions often describe the background,
+  surface, or secondary objects, not the main item.
+  Only output a different color if PRIMARY_COLOR is "Unknown" AND you can clearly and unambiguously
+  see the object's color in the image. If uncertain, use PRIMARY_COLOR exactly as provided.
 - OCR RULE:
   If OCR_TEXT is not "None" and FEATURE_LIST contains "text", include "text".
   Only include "brand name" if OCR_TEXT looks like a brand AND FEATURE_LIST contains "brand name"
@@ -134,10 +136,19 @@ Return exactly one JSON object with these keys:
 RULES
 - Do NOT mention the person, hands, skin tone, background.
 - If none found in a list, return an empty array for that list.
-- Keep description object-only. If OCR_TEXT is provided, include it exactly in the description.
+- Keep description object-only and specific to the item itself.
+- Prefer distinctive visible details over generic wording like "an object" or "an item".
+- If OCR_TEXT is provided and the text is visibly present on the object, include the most relevant exact text verbatim in the description.
+- Mention clearly visible features, wear, attachments, and surface markings when supported by evidence.
 - If you believe the provided LABEL is INCORRECT based on the image and evidence, you may change it.
   In that case, set label_change_reason to a short explanation (e.g. "Image shows earbuds not a wallet").
   If the label is correct, set label_change_reason to null.
+
+CATEGORY-SPECIFIC RULES:
+- SMART PHONE: Identify the BACK COVER color ONLY. The screen/display shows wallpaper/content — do NOT use screen color. Look at the physical back panel, glass, or casing.
+- NIC / NATIONAL ID CARD: Government-issued national identity document. Extract NIC number (9 digits + V or X, e.g. 123456789V), full name, date of birth, issuing authority from OCR.
+- STUDENT ID: Institution-issued student card. Extract institution name, student name, student ID number from OCR.
+- ALL ITEMS — COLOR ACCURACY: Report the dominant PHYSICAL surface color. Do NOT report screen backlight glow, flash hotspots, reflected glare, or background colors.
 
 EVIDENCE (authoritative)
 LABEL: {LABEL}
@@ -184,6 +195,11 @@ ALLOWED LABELS (Preferred):
 {{ALLOWED_LABELS_LIST}}
 
 STEP-BY-STEP:
+0) CATEGORY-SPECIFIC RULES (apply throughout):
+   - SMART PHONE: Use the BACK COVER color ONLY. Do NOT use screen color or wallpaper color.
+   - NIC / NATIONAL ID CARD: Extract NIC number (9 digits + V or X), full name, date of birth from OCR evidence.
+   - STUDENT ID: Extract institution name, student name, student ID number from OCR evidence.
+   - ALL ITEMS: combined_color must be the dominant PHYSICAL surface color. Reject screen glow, glare, and reflections.
 1) Inspect EVIDENCE_BUNDLE.per_image[].phase1_output.label and ensure all labels match.
    - If any mismatch -> status="rejected" with message and stop.
 2) Decide if images show the same physical object:
@@ -192,8 +208,13 @@ STEP-BY-STEP:
 3) Merge details:
    - combined_color: choose the most specific non-conflicting color phrase from evidence.color_vqa.
      If conflicts (e.g., "black" vs "white") -> rejected.
-   - combined_features/defects/attachments: union of evidence-backed items (de-dup).
-4) Write final_description: 1–2 sentences, only confirmed details.
+    - combined_features/defects/attachments: union of evidence-backed items from per_image[].phase1_output.category_details (de-dup).
+    - Use per_image[].phase1_output.detailed_description as the preferred prose evidence for each view.
+4) Write final_description: 3–5 sentences.
+    - Sentence 1 must open with the item color and label if known.
+    - Include every confirmed feature, attachment, and defect at least once.
+    - If OCR text is confirmed on the item, include the most relevant exact text verbatim.
+    - Keep the wording object-only and do not mention the background.
 5) Produce final JSON in the exact schema below.
 
 OUTPUT FORMAT:
@@ -488,6 +509,7 @@ class GeminiReasoner:
                 },
                 "key_count": data.get("key_count"),
                 "final_description": data.get("description"),
+                "detailed_description": data.get("description"),
                 "label_change_reason": data.get("label_change_reason"),
             }
             
@@ -544,7 +566,7 @@ class GeminiReasoner:
         try:
             data = json.loads(cleaned)
         except json.JSONDecodeError:
-             return {
+            return {
                 "status": "rejected",
                 "message": "Gemini returned invalid JSON in Phase 2",
                 "label": None

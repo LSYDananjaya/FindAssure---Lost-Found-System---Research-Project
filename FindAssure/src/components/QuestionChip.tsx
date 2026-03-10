@@ -1,5 +1,8 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { Text, StyleSheet, View, Pressable } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import { GlassCard } from './GlassCard';
+import { useAppTheme } from '../context/ThemeContext';
 
 interface QuestionChipProps {
   question: string;
@@ -7,73 +10,80 @@ interface QuestionChipProps {
   onPress: () => void;
 }
 
-export const QuestionChip: React.FC<QuestionChipProps> = ({
-  question,
-  selected,
-  onPress,
-}) => {
+export const QuestionChip: React.FC<QuestionChipProps> = ({ question, selected, onPress }) => {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
-    <TouchableOpacity
-      style={[styles.chip, selected && styles.chipSelected]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.checkboxContainer}>
-        <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-          {selected && <Text style={styles.checkmark}>✓</Text>}
-        </View>
-      </View>
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-        {question}
-      </Text>
-    </TouchableOpacity>
+    <Animated.View style={animatedStyle}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => {
+          scale.value = withSpring(0.985, theme.motion.springSoft);
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, theme.motion.spring);
+        }}
+      >
+        <GlassCard style={[styles.chip, selected && styles.chipSelected]}>
+          <View style={styles.row}>
+            <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
+              {selected ? <Text style={styles.checkmark}>✓</Text> : null}
+            </View>
+            <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{question}</Text>
+          </View>
+        </GlassCard>
+      </Pressable>
+    </Animated.View>
   );
 };
 
-const styles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  chipSelected: {
-    backgroundColor: '#E3F2FD',
-    borderColor: '#4A90E2',
-  },
-  checkboxContainer: {
-    marginRight: 12,
-  },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#B0B0B0',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxSelected: {
-    backgroundColor: '#4A90E2',
-    borderColor: '#4A90E2',
-  },
-  checkmark: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  chipText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#333333',
-  },
-  chipTextSelected: {
-    color: '#1565C0',
-    fontWeight: '500',
-  },
-});
+const createStyles = (theme: ReturnType<typeof useAppTheme>['theme']) =>
+  StyleSheet.create({
+    chip: {
+      borderRadius: theme.radius.md,
+      marginBottom: 10,
+    },
+    chipSelected: {
+      borderColor: theme.colors.borderStrong,
+      backgroundColor: theme.colors.accentSoft,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.md,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxSelected: {
+      backgroundColor: theme.colors.accent,
+      borderColor: theme.colors.accent,
+    },
+    checkmark: {
+      color: theme.colors.onTint,
+      fontSize: 13,
+      fontWeight: '900',
+    },
+    chipText: {
+      flex: 1,
+      ...theme.type.body,
+      color: theme.colors.textStrong,
+    },
+    chipTextSelected: {
+      color: theme.colors.textStrong,
+      fontWeight: '700',
+    },
+  });

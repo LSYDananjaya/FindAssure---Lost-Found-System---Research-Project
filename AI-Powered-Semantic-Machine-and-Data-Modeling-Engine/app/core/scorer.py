@@ -165,7 +165,9 @@ def expand_with_synonyms(tokens: list[str]) -> set[str]:
 def synonym_keyword_boost(query_tokens: list[str], found_tokens: list[str]) -> float:
     """
     Compute synonym-aware keyword overlap ratio.
-    Returns fraction of query tokens (or their synonyms) found in the document.
+    Returns fraction of expanded query terms (originals + synonyms) found in the
+    document.  Divides by the *expanded* set size so the ratio stays in [0, 1]
+    and actually discriminates between partial and full matches.
     Returns -1.0 if no query tokens.
     """
     if not query_tokens:
@@ -175,7 +177,9 @@ def synonym_keyword_boost(query_tokens: list[str], found_tokens: list[str]) -> f
     if not f_set:
         return 0.0
     matched = len(q_expanded & f_set)
-    return round(min(1.0, matched / max(1, len(query_tokens))), 4)
+    # BUG-FIX: divide by expanded size, not original token count.
+    # Old code used len(query_tokens) which could give ratios > 1.0.
+    return round(matched / max(1, len(q_expanded)), 4)
 
 # ---------------------------------------------------------------------------
 # Category-Specific Feature Weights
@@ -556,49 +560,79 @@ def compute_final_score(
 ) -> float:
     """
     Rule-based final score in [0.0, 1.0].
-    Base weights: semantic=0.35, keyword=0.15, attribute=0.20, identifier=0.10,
-                  cross_encoder=0.10, synonym=0.05, category_attr=0.05.
-    When available, new features contribute additive bonuses / adjustments.
+
+    BUG-FIX: The original formula was *additive* — when Gemini features were
+    active, bonuses pushed the raw score above 1.0, compressing rankings.
+    Now every feature sits inside a weight budget that totals 1.0.
+
+    When cross-encoder IS available (all Gemini features active):
+        0.43 semantic + 0.12 keyword + 0.15 attr + 0.07 id_bonus
+      + 0.10 cross_enc + 0.05 syn_boost + 0.05 cat_weight + 0.03 time_decay
+      = 1.00
+
+    When cross-encoder is NOT available (fallback path):
+        0.55 semantic + 0.20 keyword + 0.25 attr
+      = 1.00  (id handled by must-match rule + penalty)
+
+    Numeric / money matching contribute a tiny tie-breaker (capped at +0.02).
+    Penalties (id_penalty, contradiction) are still subtractive.
     """
-    # --- Base score with cross-encoder integration ---
-    ce_component = 0.0
-    if cross_enc >= 0:
-        ce_component = 0.10 * cross_enc
-        # Reduce semantic weight to make room
+    # --- Count how many optional features are available ---
+    has_ce = cross_enc >= 0
+    has_syn = syn_boost >= 0
+    has_cat = cat_weight >= 0
+    has_td = time_decay >= 0
+
+    if has_ce:
+        # ---- Full feature set (Gemini active) ----
+        # Start with core weights that leave room for optional features.
+        w_sem = 0.43
+        w_kw  = 0.12
+        w_att = 0.15
+        w_id  = 0.07
+        w_ce  = 0.10
+        w_syn = 0.05 if has_syn else 0.0
+        w_cat = 0.05 if has_cat else 0.0
+        w_td  = 0.03 if has_td  else 0.0
+
+        # Redistribute weight of any N/A optional features back to semantic
+        spare = 0.0
+        if not has_syn: spare += 0.05
+        if not has_cat: spare += 0.05
+        if not has_td:  spare += 0.03
+        w_sem += spare
+
         score = (
-            0.30 * semantic +
-            0.15 * keyword +
-            0.20 * attr +
-            0.10 * id_bonus +
-            ce_component
+            w_sem * semantic +
+            w_kw  * keyword +
+            w_att * attr +
+            w_id  * id_bonus +
+            w_ce  * cross_enc +
+            w_syn * (syn_boost if has_syn else 0.0) +
+            w_cat * (cat_weight if has_cat else 0.0) +
+            w_td  * (time_decay if has_td  else 0.0)
         )
     else:
+        # ---- Fallback: no cross-encoder ----
         score = (
-            0.40 * semantic +
+            0.55 * semantic +
             0.20 * keyword +
-            0.25 * attr +
-            0.15 * id_bonus
+            0.25 * attr
         )
+        # Small additive boosts from whatever optional features are available
+        # These only reallocate from the id_bonus slot (0.0 base in fallback)
+        if has_syn:
+            score += 0.00  # Already captured by keyword overlap in this branch
+        if has_cat:
+            score += 0.00  # Already captured by attr in this branch
 
-    # --- Numeric bonus (only when values exist, i.e. >= 0) ---
+    # --- Numeric/money tie-breaker (tiny, capped so it can't distort) ---
     num_bonus = 0.0
     if numeric_match >= 0:
-        num_bonus += 0.05 * numeric_match
+        num_bonus += 0.01 * numeric_match
     if money_match >= 0:
-        num_bonus += 0.05 * money_match
-    score += num_bonus
-
-    # --- Synonym keyword boost (additive up to +0.05) ---
-    if syn_boost >= 0:
-        score += 0.05 * syn_boost
-
-    # --- Category-weighted attribute score (replaces generic attr partially) ---
-    if cat_weight >= 0:
-        score += 0.05 * cat_weight
-
-    # --- Time-decay (slight freshness bonus up to +0.03) ---
-    if time_decay >= 0:
-        score += 0.03 * time_decay
+        num_bonus += 0.01 * money_match
+    score += min(0.02, num_bonus)
 
     score = max(0.0, score - id_penalty - contradiction)
     return round(min(1.0, score), 4)
@@ -645,8 +679,10 @@ def compute_features(lost_attrs: dict, found_item: dict) -> dict:
     # --- NEW: Time-decay score ---
     td_score = time_decay_score(found_item)
 
-    # --- NEW: Synonym-aware keyword boost ---
-    query_keywords = lost_attrs.get("keywords") or []
+    # --- Synonym-aware keyword boost ---
+    # BUG-FIX: Use original (pre-expansion) keywords when available so that
+    # Gemini query-expansion doesn't inflate the synonym overlap score.
+    query_keywords = lost_attrs.get("_original_keywords") or lost_attrs.get("keywords") or []
     found_desc_tokens = found_text_desc.lower().split()
     syn_boost = synonym_keyword_boost(query_keywords, found_desc_tokens)
 
@@ -686,7 +722,8 @@ def compute_features(lost_attrs: dict, found_item: dict) -> dict:
         "f_contradiction_score":     contradiction,
         "f_initial_rank":            0,  # filled by score_and_rank_candidates
         "f_candidate_pool_size":     0,  # filled by score_and_rank_candidates
-        "f_query_n_tokens":          len((lost_attrs.get("keywords") or [])),
+        # BUG-FIX: Use original keywords for token count, not expansion-inflated list
+        "f_query_n_tokens":          len((lost_attrs.get("_original_keywords") or lost_attrs.get("keywords") or [])),
         "f_found_n_tokens":          len(found_item.get("description", "").split()),
         "f_query_missing_fields":    len(lost_attrs.get("missing_fields") or []),
         "f_len_ratio": (
@@ -926,11 +963,20 @@ async def inference_rerank(
 
     # Step 1b: Query expansion via Gemini (extra keywords boost recall)
     clean_text = lost_attrs.get("clean_description") or raw_lost_text
+
+    # BUG-FIX: Preserve original keywords before expansion.  The expanded
+    # set is great for *retrieval* (broader candidate pool), but the original
+    # tokens must be used for *scoring* features (synonym_keyword_boost,
+    # f_query_n_tokens) so that expansion doesn't inflate every candidate's
+    # overlap score equally and destroy ranking discrimination.
+    original_keywords = list(lost_attrs.get("keywords") or [])
+    lost_attrs["_original_keywords"] = original_keywords
+
     try:
         expansion = await normalizer.expand_query(db, clean_text, category)
         extra_kw = expansion.get("extra_keywords") or []
         existing_kw = lost_attrs.get("keywords") or []
-        # Merge extra keywords (deduplicated)
+        # Merge extra keywords (deduplicated) — used for retrieval only
         merged_kw = list(dict.fromkeys(existing_kw + [k.lower() for k in extra_kw]))
         lost_attrs["keywords"] = merged_kw
         logger.info(f"Query expanded: +{len(extra_kw)} extra keywords → {len(merged_kw)} total")

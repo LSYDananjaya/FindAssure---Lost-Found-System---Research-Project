@@ -182,6 +182,7 @@ The service uses environment-backed settings from `app/config/settings.py` and `
 ### Important behavior defaults
 
 - PP2 Gemini enrichment is disabled by default.
+- PP2 multiview verification is enabled by default; disable it only in local or dev `.env` files with `PP2_DISABLE_MULTIVIEW_VERIFICATION=true`.
 - Async pre-analysis jobs use Redis when available and fall back to in-memory storage when Redis is unavailable.
 - The pipeline can run with SQLite locally, but production-like flows should use a proper database and stable Redis.
 
@@ -206,6 +207,9 @@ PORT=8002
 DATABASE_URL=sqlite:///./data/app.db
 REDIS_URL=redis://localhost:6379/0
 PP2_ENABLE_GEMINI=false
+PP2_DISABLE_MULTIVIEW_VERIFICATION=false
+PP2_GEMINI_TIMEOUT_S=4
+PP2_PHASE2_TIMEOUT_S=4
 GOOGLE_API_KEY=
 ```
 

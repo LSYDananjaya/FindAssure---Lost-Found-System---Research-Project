@@ -20,6 +20,9 @@ class IndexVectorResponse(BaseModel):
 
 class SearchMatch(BaseModel):
     score: float
+    canonical_score: float
+    best_hit_score: float
+    score_source: str
     faiss_id: int
     item_id: str | None = None
     metadata: Dict[str, Any] = Field(default_factory=dict)

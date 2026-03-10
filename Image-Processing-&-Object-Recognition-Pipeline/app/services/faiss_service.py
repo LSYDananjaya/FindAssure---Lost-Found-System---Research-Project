@@ -183,6 +183,24 @@ class FaissService:
         """Backward-compatible alias for legacy callers."""
         return self.pair_similarity(vec_a, vec_b)
 
+    def get_vector(self, faiss_id: int) -> np.ndarray:
+        """
+        Reconstruct a stored vector by FAISS id.
+
+        Args:
+            faiss_id: Internal FAISS vector id.
+
+        Returns:
+            The stored vector as a float32 numpy array.
+        """
+        with self.lock:
+            if self.index is None:
+                raise RuntimeError("Index not initialized. Call load_or_create() first.")
+            if faiss_id < 0 or faiss_id >= self.index.ntotal:
+                raise KeyError(f"Unknown faiss_id: {faiss_id}")
+
+            return np.array(self.index.reconstruct(int(faiss_id)), dtype=np.float32)
+
     def save(self) -> None:
         """Save index and mapping to disk atomically (write-then-rename)."""
         with self.lock:

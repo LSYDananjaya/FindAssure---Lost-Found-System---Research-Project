@@ -3,7 +3,12 @@ import sys
 import warnings
 import uvicorn
 
-# 1. Suppress pkg_resources UserWarnings
+# 1. Suppress known third-party startup noise from Ultralytics/setuptools.
+warnings.filterwarnings(
+    "ignore",
+    message=r"pkg_resources is deprecated as an API\..*",
+    category=UserWarning,
+)
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
 # 2. Ensure the script adds the current directory to sys.path

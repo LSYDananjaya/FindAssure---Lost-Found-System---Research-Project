@@ -2,6 +2,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from io import BytesIO
 from PIL import Image
 import numpy as np
+from typing import Any
 
 from app.schemas.search_schemas import IndexVectorRequest, IndexVectorResponse, SearchByImageResponse, SearchMatch
 from app.domain.bbox_utils import clip_bbox
@@ -10,6 +11,18 @@ from app.domain.category_specs import canonicalize_label
 router = APIRouter()
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def _is_fused_hit(entry: dict[str, Any]) -> bool:
+    payload = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else entry
+    return bool(payload.get("fused_embedding_id")) or ("view_index" in payload and payload.get("view_index") is None)
+
+
+def _pick_canonical_hit(hits: list[dict[str, Any]]) -> tuple[dict[str, Any], str]:
+    fused_hits = [hit for hit in hits if _is_fused_hit(hit)]
+    if fused_hits:
+        return min(fused_hits, key=lambda hit: int(hit["faiss_id"])), "canonical_full_vs_fused"
+    return min(hits, key=lambda hit: int(hit["faiss_id"])), "canonical_full_vs_fallback"
 
 
 @router.post("/index_vector", response_model=IndexVectorResponse)
@@ -60,7 +73,7 @@ async def search_by_image(
 
     try:
         # Multi-crop strategy: generate embeddings from multiple views
-        crops = []
+        crops: list[tuple[str, Image.Image]] = []
 
         # 1. YOLO crop (highest priority)
         detections = pipeline.yolo.detect_objects(image)
@@ -70,7 +83,7 @@ async def search_by_image(
             w, h = image.size
             x1, y1, x2, y2 = clip_bbox((x1, y1, x2, y2), w, h)
             if x2 > x1 and y2 > y1:
-                crops.append(image.crop((x1, y1, x2, y2)))
+                crops.append(("yolo", image.crop((x1, y1, x2, y2))))
 
         # 2. Center crop (70% of image — captures the main subject)
         w, h = image.size
@@ -81,17 +94,21 @@ async def search_by_image(
         cc_x2 = min(w, int(cx + cw / 2))
         cc_y2 = min(h, int(cy + ch / 2))
         if cc_x2 > cc_x1 and cc_y2 > cc_y1:
-            crops.append(image.crop((cc_x1, cc_y1, cc_x2, cc_y2)))
+            crops.append(("center", image.crop((cc_x1, cc_y1, cc_x2, cc_y2))))
 
         # 3. Full image fallback
-        crops.append(image)
+        crops.append(("full", image))
 
         # Search with each crop vector, aggregate results
         all_results = []
         candidate_k = min(200, max(top_k * 8, 40))
-        for crop_img in crops:
+        full_query_vec_128 = pipeline.dino.embed_128(image)
+
+        for query_view, crop_img in crops:
             vec_128 = pipeline.dino.embed_128(crop_img)
             results = pipeline.faiss.search(vec_128, top_k=candidate_k)
+            for entry in results:
+                entry["query_view"] = query_view
             all_results.extend(results)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Search pipeline failed: {exc}")
@@ -149,6 +166,21 @@ async def search_by_image(
     matches: list[SearchMatch] = []
     for item_id, hits in per_item_hits.items():
         best_hit = max(hits, key=lambda hit: float(hit["score"]))
+        canonical_hit, score_source = _pick_canonical_hit(hits)
+
+        try:
+            canonical_vec = pipeline.faiss.get_vector(int(canonical_hit["faiss_id"]))
+            canonical_score = float(pipeline.faiss.compute_similarity(full_query_vec_128, canonical_vec))
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Canonical scoring failed: {exc}")
+
+        if canonical_score < min_score:
+            continue
+
+        canonical_metadata = dict(canonical_hit["metadata"])
+        canonical_metadata["canonical_from_faiss_id"] = int(canonical_hit["faiss_id"])
+        canonical_metadata["canonical_query_view"] = "full"
+
         vector_hits = [
             {
                 "score": float(hit["score"]),
@@ -160,16 +192,19 @@ async def search_by_image(
 
         matches.append(
             SearchMatch(
-                score=float(best_hit["score"]),
-                faiss_id=int(best_hit["faiss_id"]),
+                score=canonical_score,
+                canonical_score=canonical_score,
+                best_hit_score=float(best_hit["score"]),
+                score_source=score_source,
+                faiss_id=int(canonical_hit["faiss_id"]),
                 item_id=item_id,
-                metadata=dict(best_hit["metadata"]),
+                metadata=canonical_metadata,
                 vector_hits=vector_hits,
                 vector_hits_count=len(vector_hits),
             )
         )
 
-    matches.sort(key=lambda item: float(item.score), reverse=True)
+    matches.sort(key=lambda item: (float(item.score), float(item.best_hit_score)), reverse=True)
     matches = matches[:top_k]
 
     return SearchByImageResponse(top_k=top_k, min_score=min_score, category_filter=category_filter, matches=matches)

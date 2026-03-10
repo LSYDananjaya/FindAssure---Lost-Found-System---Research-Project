@@ -252,6 +252,35 @@ class MultiViewPipeline:
         verification_payload["mode"] = mode_value
         return PP2VerificationResult(**verification_payload)
 
+    @staticmethod
+    def _multiview_verification_disabled() -> bool:
+        return bool(getattr(settings, "PP2_DISABLE_MULTIVIEW_VERIFICATION", False))
+
+    def _bypass_verification_result(
+        self,
+        verification: PP2VerificationResult,
+        *,
+        used_views: List[int],
+        decision_indices: List[int],
+        dropped_views: List[Dict[str, Any]],
+    ) -> PP2VerificationResult:
+        verification_payload = verification.model_dump()
+        verification_payload["passed"] = True
+        verification_payload["failure_reasons"] = []
+        verification_payload["used_views"] = used_views if len(used_views) == 2 else []
+        verification_payload["dropped_views"] = dropped_views
+
+        mode_value = str(verification_payload.get("mode", "") or "").strip().lower()
+        if mode_value not in {"two_view", "three_view"}:
+            if len(verification_payload["used_views"]) == 2:
+                mode_value = "two_view"
+            elif len(decision_indices) == 3:
+                mode_value = "three_view"
+            else:
+                mode_value = "unsupported"
+        verification_payload["mode"] = mode_value
+        return PP2VerificationResult(**verification_payload)
+
     def _verification_pair_meta(
         self,
         verification: PP2VerificationResult,
@@ -598,6 +627,121 @@ class MultiViewPipeline:
                 item_id,
             )
             return {"status": "error"}
+
+    @staticmethod
+    def _set_phase2_gemini_meta(
+        fused: Any,
+        *,
+        status: str,
+        applied: bool,
+        timeout_s: Optional[float] = None,
+        message: Optional[str] = None,
+    ) -> None:
+        attributes = getattr(fused, "attributes", {}) if isinstance(getattr(fused, "attributes", {}), dict) else {}
+        attributes = dict(attributes)
+        meta: Dict[str, Any] = {
+            "status": str(status or "unknown"),
+            "applied": bool(applied),
+        }
+        if not applied:
+            meta["fallback"] = "pp2_native_fused"
+        if timeout_s is not None:
+            meta["timeout_s"] = float(timeout_s)
+        if message:
+            meta["message"] = str(message)
+        attributes["phase2_gemini"] = meta
+        fused.attributes = attributes
+
+    def _apply_phase2_gemini_result_to_fused(
+        self,
+        *,
+        fused: Any,
+        phase2_result: Any,
+        timeout_s: Optional[float] = None,
+    ) -> bool:
+        if not isinstance(phase2_result, dict):
+            self._set_phase2_gemini_meta(
+                fused,
+                status="invalid_result",
+                applied=False,
+                timeout_s=timeout_s,
+            )
+            return False
+
+        status = str(phase2_result.get("status", "unknown") or "unknown").strip().lower()
+        if status != "accepted":
+            self._set_phase2_gemini_meta(
+                fused,
+                status=status,
+                applied=False,
+                timeout_s=timeout_s,
+                message=str(phase2_result.get("message", "") or "").strip() or None,
+            )
+            return False
+
+        phase2_description = str(phase2_result.get("final_description") or "").strip()
+        if not phase2_description:
+            self._set_phase2_gemini_meta(
+                fused,
+                status="empty_description",
+                applied=False,
+                timeout_s=timeout_s,
+            )
+            return False
+
+        fused_attributes = getattr(fused, "attributes", {}) if isinstance(getattr(fused, "attributes", {}), dict) else {}
+        fused_features = self._normalize_string_list(fused_attributes.get("features"))
+        fused_defects = self._normalize_string_list(getattr(fused, "defects", []))
+        fused_attachments = self._normalize_string_list(fused_attributes.get("attachments"))
+        fused_ocr_text = " ".join(getattr(fused, "merged_ocr_tokens", [])[:2])
+
+        if not self._should_prefer_phase2_description(
+            getattr(fused, "detailed_description", None),
+            phase2_description,
+            features=fused_features,
+            defects=fused_defects,
+            attachments=fused_attachments,
+            ocr_text=fused_ocr_text,
+        ):
+            if phase2_result.get("color"):
+                fused.color = str(phase2_result["color"])
+            self._set_phase2_gemini_meta(
+                fused,
+                status="accepted_no_change",
+                applied=False,
+                timeout_s=timeout_s,
+            )
+            return False
+
+        fused.detailed_description = phase2_description
+        fused.detailed_description_source = "phase2_gemini_enriched"
+        word_count = len(phase2_description.split())
+        fused.description_word_count = {
+            "final_description": word_count,
+            "detailed_description": word_count,
+        }
+        evidence = fused.description_evidence_used if isinstance(getattr(fused, "description_evidence_used", None), dict) else {"summary": [], "detailed": []}
+        evidence = dict(evidence)
+        evidence["summary"] = self._normalize_string_list(evidence.get("summary"))
+        evidence["detailed"] = self._normalize_string_list(evidence.get("detailed"))
+        if "phase2_gemini" not in evidence["summary"]:
+            evidence["summary"].append("phase2_gemini")
+        if "phase2_gemini" not in evidence["detailed"]:
+            evidence["detailed"].append("phase2_gemini")
+        fused.description_evidence_used = evidence
+        filters = self._normalize_string_list(getattr(fused, "description_filters_applied", []))
+        if "phase2_gemini_enriched" not in filters:
+            filters.append("phase2_gemini_enriched")
+        fused.description_filters_applied = filters
+        if phase2_result.get("color"):
+            fused.color = str(phase2_result["color"])
+        self._set_phase2_gemini_meta(
+            fused,
+            status="accepted",
+            applied=True,
+            timeout_s=timeout_s,
+        )
+        return True
 
     @staticmethod
     def _normalize_string_list(value: Any) -> List[str]:
@@ -1762,6 +1906,9 @@ class MultiViewPipeline:
         item_id: str,
         decision_label: Optional[str],
     ) -> Tuple[bool, Optional[PP2VerificationResult]]:
+        if self._multiview_verification_disabled():
+            return False, None
+
         local_vectors: List[np.ndarray] = []
         local_crops: List[Image.Image] = []
         local_per_view: List[PP2PerViewResult] = []
@@ -2425,6 +2572,20 @@ class MultiViewPipeline:
             decision_indices=decision_indices,
             dropped_views=dropped_views,
         )
+        if self._multiview_verification_disabled():
+            verification = self._bypass_verification_result(
+                verification,
+                used_views=used_views,
+                decision_indices=decision_indices,
+                dropped_views=dropped_views,
+            )
+            logger.info(
+                "PP2_VERIFICATION_DISABLED request_id=%s item_id=%s used_views=%s dropped_views=%s",
+                trace_request_id,
+                item_id,
+                used_views,
+                dropped_views,
+            )
         verify_ms = (time.perf_counter() - verify_start) * 1000.0
         detail_already_applied = False
         if not verification.passed:
@@ -2609,54 +2770,46 @@ class MultiViewPipeline:
 
             # Apply Phase2 Gemini fusion result (overlapped with Florence enrichment)
             if _pp2_phase2_future is not None:
+                phase2_timeout = max(
+                    1.0,
+                    float(getattr(settings, "PP2_PHASE2_TIMEOUT_S", getattr(settings, "PP2_GEMINI_TIMEOUT_S", 4))),
+                )
                 try:
-                    phase2_timeout = float(getattr(settings, "PP2_PHASE2_TIMEOUT_S", 15))
                     phase2_result = _pp2_phase2_future.result(timeout=phase2_timeout)
-                    if isinstance(phase2_result, dict) and phase2_result.get("status") == "accepted":
-                        phase2_description = str(phase2_result.get("final_description") or "").strip()
-                        fused_attributes = getattr(fused, "attributes", {}) if isinstance(getattr(fused, "attributes", {}), dict) else {}
-                        fused_features = self._normalize_string_list(fused_attributes.get("features"))
-                        fused_defects = self._normalize_string_list(getattr(fused, "defects", []))
-                        fused_attachments = self._normalize_string_list(fused_attributes.get("attachments"))
-                        fused_ocr_text = " ".join(getattr(fused, "merged_ocr_tokens", [])[:2])
-
-                        if self._should_prefer_phase2_description(
-                            getattr(fused, "detailed_description", None),
-                            phase2_description,
-                            features=fused_features,
-                            defects=fused_defects,
-                            attachments=fused_attachments,
-                            ocr_text=fused_ocr_text,
-                        ):
-                            fused.detailed_description = phase2_description
-                            fused.detailed_description_source = "phase2_gemini_enriched"
-                            word_count = len(phase2_description.split())
-                            fused.description_word_count = {
-                                "final_description": word_count,
-                                "detailed_description": word_count,
-                            }
-                            evidence = fused.description_evidence_used if isinstance(getattr(fused, "description_evidence_used", None), dict) else {"summary": [], "detailed": []}
-                            evidence = dict(evidence)
-                            evidence["summary"] = self._normalize_string_list(evidence.get("summary"))
-                            evidence["detailed"] = self._normalize_string_list(evidence.get("detailed"))
-                            if "phase2_gemini" not in evidence["summary"]:
-                                evidence["summary"].append("phase2_gemini")
-                            if "phase2_gemini" not in evidence["detailed"]:
-                                evidence["detailed"].append("phase2_gemini")
-                            fused.description_evidence_used = evidence
-                            filters = self._normalize_string_list(getattr(fused, "description_filters_applied", []))
-                            if "phase2_gemini_enriched" not in filters:
-                                filters.append("phase2_gemini_enriched")
-                            fused.description_filters_applied = filters
-                        if phase2_result.get("color"):
-                            fused.color = str(phase2_result["color"])
+                    applied = self._apply_phase2_gemini_result_to_fused(
+                        fused=fused,
+                        phase2_result=phase2_result,
+                        timeout_s=phase2_timeout,
+                    )
+                    if applied:
                         logger.debug(
                             "PP2_PHASE2_GEMINI_APPLIED request_id=%s item_id=%s",
                             trace_request_id,
                             item_id,
                         )
                     _pp2_phase2_future = None
+                except FutureTimeoutError:
+                    _pp2_phase2_future.cancel()
+                    self._set_phase2_gemini_meta(
+                        fused,
+                        status="timeout",
+                        applied=False,
+                        timeout_s=phase2_timeout,
+                    )
+                    logger.warning(
+                        "PP2_PHASE2_GEMINI_TIMEOUT request_id=%s item_id=%s timeout_s=%.2f",
+                        trace_request_id,
+                        item_id,
+                        phase2_timeout,
+                    )
                 except Exception as _exc:
+                    self._set_phase2_gemini_meta(
+                        fused,
+                        status="error",
+                        applied=False,
+                        timeout_s=phase2_timeout,
+                        message=str(_exc),
+                    )
                     logger.warning(
                         "PP2_PHASE2_COLLECT_FAILED request_id=%s item_id=%s: %s",
                         trace_request_id,

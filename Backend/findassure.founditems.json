@@ -1,0 +1,5759 @@
+[{
+  "_id": {
+    "$oid": "69af9ff9a33f630ab70e2d7e"
+  },
+  "imageUrl": "https://res.cloudinary.com/dnbdsdnrq/image/upload/v1773117440/findassure/found-items/lg0hnf0cr6syolf1mayh.jpg",
+  "category": "Wallet",
+  "description": "This brown leather wallet features a snap button on a flap closure. It includes visible stitching along the edges and the brand name baellerry printed on the front. It has logo, texture, button clasp. The text \"bnellerry\" is visible on the surface.",
+  "questions": [
+    "What is the main color of the wallet?",
+    "What is the primary material of the wallet?",
+    "What is the total count of plastic cards inside?",
+    "How many clear ID window slots are there?",
+    "How many separate bill compartments does it have?"
+  ],
+  "founderAnswers": [
+    "brown color",
+    "leather material",
+    "Three",
+    "Four slots",
+    "Three slots"
+  ],
+  "founderContact": {
+    "name": "Pawara S",
+    "email": "pawara@gmail.com",
+    "phone": "+94 77 521 1771"
+  },
+  "found_location": [
+    {
+      "location": "basement_canteen",
+      "floor_id": null,
+      "hall_name": null
+    }
+  ],
+  "status": "pending_verification",
+  "createdBy": {
+    "$oid": "69a957a7d7de11b12806f058"
+  },
+  "analysisMode": "pp1",
+  "pythonItemId": "0c2aa167-d9dc-478f-a8ef-bf81bb378a02",
+  "faissId": 84,
+  "faissIds": [
+    84
+  ],
+  "detectedCategory": "Wallet",
+  "detectedDescription": "This brown leather wallet features a snap button on a flap closure. It includes visible stitching along the edges and the brand name baellerry printed on the front. It has logo, texture, button clasp. The text \"bnellerry\" is visible on the surface.",
+  "detectedColor": "brown",
+  "vector128": [
+    0.9250246286392212,
+    4.031013488769531,
+    -2.2352347373962402,
+    -0.8720972537994385,
+    -1.6690460443496704,
+    -0.6375054121017456,
+    -2.565168619155884,
+    -0.918217658996582,
+    1.1905779838562012,
+    1.7697991132736206,
+    -0.09795984625816345,
+    -2.7071774005889893,
+    1.3114097118377686,
+    1.9063361883163452,
+    -0.6746431589126587,
+    4.2261810302734375,
+    -0.7710955142974854,
+    1.9369038343429565,
+    0.43008339405059814,
+    -1.47024405002594,
+    -0.8638222217559814,
+    -2.1443936824798584,
+    -0.16722989082336426,
+    -0.22305159270763397,
+    -2.795117139816284,
+    -0.6598286628723145,
+    0.6305015087127686,
+    -0.7242076992988586,
+    0.7443634867668152,
+    0.9580988883972168,
+    -1.9214435815811157,
+    -0.4339230954647064,
+    2.685443162918091,
+    -1.0208927392959595,
+    -1.3660392761230469,
+    0.4081011414527893,
+    0.45428428053855896,
+    -3.052934169769287,
+    -0.5105661153793335,
+    0.47217410802841187,
+    -1.965002179145813,
+    -0.8749001026153564,
+    3.0782454013824463,
+    3.2500126361846924,
+    -2.158169984817505,
+    5.9110941886901855,
+    -0.6853237152099609,
+    2.7280330657958984,
+    -2.7184550762176514,
+    -0.621301531791687,
+    1.8119429349899292,
+    1.3630491495132446,
+    0.9334405660629272,
+    -1.645748496055603,
+    -5.025881290435791,
+    1.3463448286056519,
+    -1.6449220180511475,
+    -0.12402728199958801,
+    0.25224369764328003,
+    0.8849090337753296,
+    0.5836219787597656,
+    0.04583776742219925,
+    -5.147289276123047,
+    0.05911761522293091,
+    -0.02171650528907776,
+    -1.3818175792694092,
+    -0.6584678292274475,
+    0.7339969277381897,
+    -2.970973014831543,
+    -0.008296281099319458,
+    -1.8868699073791504,
+    1.9483121633529663,
+    1.1747510433197021,
+    2.5674991607666016,
+    0.6902909278869629,
+    1.2014338970184326,
+    -2.123422622680664,
+    -1.4181020259857178,
+    0.9729173183441162,
+    -2.662161111831665,
+    -2.632711887359619,
+    -0.5179417729377747,
+    -5.026323318481445,
+    -0.44399625062942505,
+    -0.6223940849304199,
+    -0.5811222791671753,
+    4.1218366622924805,
+    -1.295247197151184,
+    2.4888081550598145,
+    3.3677682876586914,
+    0.3591955900192261,
+    -4.6335906982421875,
+    -1.5355316400527954,
+    2.3050451278686523,
+    -6.932687759399414,
+    2.1449928283691406,
+    -0.17945441603660583,
+    -3.2690658569335938,
+    -1.0365536212921143,
+    -2.045053243637085,
+    2.7575604915618896,
+    2.9932215213775635,
+    -3.426414966583252,
+    1.236929178237915,
+    1.9887757301330566,
+    3.3907017707824707,
+    0.013735204935073853,
+    -2.7382125854492188,
+    1.3533775806427002,
+    5.083420753479004,
+    3.5434658527374268,
+    1.5962079763412476,
+    0.2969086766242981,
+    -3.3260738849639893,
+    -0.04453665018081665,
+    -4.130290985107422,
+    2.451549530029297,
+    -1.1006104946136475,
+    1.4080370664596558,
+    -3.300966262817383,
+    -3.0306684970855713,
+    -0.29001396894454956,
+    -0.05408397316932678,
+    3.672546148300171,
+    0.39536356925964355,
+    1.7418200969696045,
+    -0.20888128876686096,
+    -0.027603521943092346
+  ],
+  "searchable": true,
+  "pipelineResponse": [
+    {
+      "status": "accepted",
+      "message": "Extracted successfully",
+      "item_id": "0c2aa167-d9dc-478f-a8ef-bf81bb378a02",
+      "image": {
+        "image_id": "e4aeb90a-41cd-43ef-8bfc-5ac8fab20ea9",
+        "filename": "1d3a815f-3ff3-4bbf-889e-70b84b989b65.jpg"
+      },
+      "label": "Wallet",
+      "confidence": 0.2891489565372467,
+      "bbox": [
+        262,
+        339,
+        793,
+        1025
+      ],
+      "color": "brown",
+      "ocr_text": "bnellerry",
+      "ocr_text_display": "bnellerry",
+      "ocr_lines": [
+        {
+          "text": "bnellerry",
+          "bbox": [
+            237.62,
+            514.78,
+            420.29,
+            574.37
+          ],
+          "block_index": 0
+        }
+      ],
+      "ocr_layout_source": "ocr_with_region",
+      "final_description": "This brown leather wallet features a snap button on a flap closure. It includes visible stitching along the edges and the brand name baellerry printed on the front. It has logo, texture, button clasp. The text \"bnellerry\" is visible on the surface.",
+      "detailed_description": "This brown leather wallet features a snap button on a flap closure. It includes visible stitching along the edges and the brand name baellerry printed on the front. It has logo, texture, button clasp. The text \"bnellerry\" is visible on the surface.",
+      "description_source": "gemini_evidence_locked",
+      "detailed_description_source": "gemini_evidence_locked",
+      "description_evidence_used": {
+        "summary": [
+          "gemini_description",
+          "grounded_features",
+          "ocr_text"
+        ],
+        "detailed": [
+          "gemini_description",
+          "grounded_features",
+          "ocr_text"
+        ]
+      },
+      "description_filters_applied": [
+        "gemini_evidence_locked"
+      ],
+      "description_word_count": {
+        "final_description": 42,
+        "detailed_description": 42
+      },
+      "category_details": {
+        "features": [
+          "logo",
+          "brand name",
+          "texture",
+          "stitching",
+          "flap closure",
+          "snap button",
+          "button clasp"
+        ],
+        "defects": [],
+        "attachments": []
+      },
+      "key_count": null,
+      "tags": [],
+      "embeddings": {
+        "vector_128d": [
+          0.9250246286392212,
+          4.031013488769531,
+          -2.2352347373962402,
+          -0.8720972537994385,
+          -1.6690460443496704,
+          -0.6375054121017456,
+          -2.565168619155884,
+          -0.918217658996582,
+          1.1905779838562012,
+          1.7697991132736206,
+          -0.09795984625816345,
+          -2.7071774005889893,
+          1.3114097118377686,
+          1.9063361883163452,
+          -0.6746431589126587,
+          4.2261810302734375,
+          -0.7710955142974854,
+          1.9369038343429565,
+          0.43008339405059814,
+          -1.47024405002594,
+          -0.8638222217559814,
+          -2.1443936824798584,
+          -0.16722989082336426,
+          -0.22305159270763397,
+          -2.795117139816284,
+          -0.6598286628723145,
+          0.6305015087127686,
+          -0.7242076992988586,
+          0.7443634867668152,
+          0.9580988883972168,
+          -1.9214435815811157,
+          -0.4339230954647064,
+          2.685443162918091,
+          -1.0208927392959595,
+          -1.3660392761230469,
+          0.4081011414527893,
+          0.45428428053855896,
+          -3.052934169769287,
+          -0.5105661153793335,
+          0.47217410802841187,
+          -1.965002179145813,
+          -0.8749001026153564,
+          3.0782454013824463,
+          3.2500126361846924,
+          -2.158169984817505,
+          5.9110941886901855,
+          -0.6853237152099609,
+          2.7280330657958984,
+          -2.7184550762176514,
+          -0.621301531791687,
+          1.8119429349899292,
+          1.3630491495132446,
+          0.9334405660629272,
+          -1.645748496055603,
+          -5.025881290435791,
+          1.3463448286056519,
+          -1.6449220180511475,
+          -0.12402728199958801,
+          0.25224369764328003,
+          0.8849090337753296,
+          0.5836219787597656,
+          0.04583776742219925,
+          -5.147289276123047,
+          0.05911761522293091,
+          -0.02171650528907776,
+          -1.3818175792694092,
+          -0.6584678292274475,
+          0.7339969277381897,
+          -2.970973014831543,
+          -0.008296281099319458,
+          -1.8868699073791504,
+          1.9483121633529663,
+          1.1747510433197021,
+          2.5674991607666016,
+          0.6902909278869629,
+          1.2014338970184326,
+          -2.123422622680664,
+          -1.4181020259857178,
+          0.9729173183441162,
+          -2.662161111831665,
+          -2.632711887359619,
+          -0.5179417729377747,
+          -5.026323318481445,
+          -0.44399625062942505,
+          -0.6223940849304199,
+          -0.5811222791671753,
+          4.1218366622924805,
+          -1.295247197151184,
+          2.4888081550598145,
+          3.3677682876586914,
+          0.3591955900192261,
+          -4.6335906982421875,
+          -1.5355316400527954,
+          2.3050451278686523,
+          -6.932687759399414,
+          2.1449928283691406,
+          -0.17945441603660583,
+          -3.2690658569335938,
+          -1.0365536212921143,
+          -2.045053243637085,
+          2.7575604915618896,
+          2.9932215213775635,
+          -3.426414966583252,
+          1.236929178237915,
+          1.9887757301330566,
+          3.3907017707824707,
+          0.013735204935073853,
+          -2.7382125854492188,
+          1.3533775806427002,
+          5.083420753479004,
+          3.5434658527374268,
+          1.5962079763412476,
+          0.2969086766242981,
+          -3.3260738849639893,
+          -0.04453665018081665,
+          -4.130290985107422,
+          2.451549530029297,
+          -1.1006104946136475,
+          1.4080370664596558,
+          -3.300966262817383,
+          -3.0306684970855713,
+          -0.29001396894454956,
+          -0.05408397316932678,
+          3.672546148300171,
+          0.39536356925964355,
+          1.7418200969696045,
+          -0.20888128876686096,
+          -0.027603521943092346
+        ],
+        "vector_dinov2": [
+          3.0035221576690674,
+          -1.8790498971939087,
+          -1.260009765625,
+          5.140285491943359,
+          -4.001567840576172,
+          -0.005387142766267061,
+          0.10103330761194229,
+          -2.808964967727661,
+          -2.8161280155181885,
+          0.2230318784713745,
+          0.4379839301109314,
+          -0.7100643515586853,
+          -3.0717339515686035,
+          0.14150775969028473,
+          -3.687692403793335,
+          -3.3920207023620605,
+          -0.545128583908081,
+          3.118985414505005,
+          1.851584792137146,
+          -3.623897075653076,
+          -0.4917025864124298,
+          -6.896015167236328,
+          4.274669647216797,
+          1.0079928636550903,
+          4.9347734451293945,
+          1.1661440134048462,
+          0.09309946000576019,
+          -0.676363468170166,
+          0.05039343237876892,
+          -1.5463505983352661,
+          -0.4063827097415924,
+          0.30315110087394714,
+          -1.8588331937789917,
+          -1.9278011322021484,
+          -1.4115153551101685,
+          -2.794600486755371,
+          -0.18493233621120453,
+          2.6538288593292236,
+          -4.1265130043029785,
+          0.4069698750972748,
+          -1.5912913084030151,
+          0.39622706174850464,
+          1.3271452188491821,
+          -5.656130313873291,
+          0.5703997611999512,
+          0.7778873443603516,
+          0.2339029759168625,
+          -0.03507654741406441,
+          0.5110375285148621,
+          0.9678462743759155,
+          -4.2786970138549805,
+          0.7578868269920349,
+          -0.776616632938385,
+          -0.3502424359321594,
+          1.0168647766113281,
+          1.7450255155563354,
+          -2.929621696472168,
+          3.0480358600616455,
+          3.4029366970062256,
+          4.8506293296813965,
+          2.623166561126709,
+          0.45717161893844604,
+          -0.872977077960968,
+          0.3331892788410187,
+          1.1397618055343628,
+          -2.5413267612457275,
+          0.20061591267585754,
+          -2.7820515632629395,
+          0.6690731644630432,
+          -1.3667761087417603,
+          2.25439453125,
+          0.9879366159439087,
+          1.239790439605713,
+          0.7228782176971436,
+          0.7005653977394104,
+          1.6878360509872437,
+          2.4838523864746094,
+          -1.8683838844299316,
+          -2.175783157348633,
+          -0.618658721446991,
+          1.2109836339950562,
+          0.08312908560037613,
+          6.062589168548584,
+          3.434021234512329,
+          -0.7921531200408936,
+          3.30108904838562,
+          0.26674431562423706,
+          -0.8678843975067139,
+          3.537970542907715,
+          -4.519819736480713,
+          0.13646797835826874,
+          0.9789356589317322,
+          -1.610731601715088,
+          -0.5194745659828186,
+          -0.4084823429584503,
+          3.472222328186035,
+          2.6248841285705566,
+          2.929107189178467,
+          2.190662145614624,
+          0.33698412775993347,
+          2.3660888671875,
+          -4.548852443695068,
+          2.7237865924835205,
+          3.1670453548431396,
+          -3.283189058303833,
+          -0.5556739568710327,
+          -3.7416679859161377,
+          2.641979217529297,
+          -0.5521330833435059,
+          3.360280990600586,
+          2.657193183898926,
+          4.388643741607666,
+          1.1227118968963623,
+          2.352489948272705,
+          2.532874345779419,
+          0.6288703680038452,
+          3.66372013092041,
+          4.840722560882568,
+          -3.363454580307007,
+          -1.4786373376846313,
+          -2.0182948112487793,
+          1.920629620552063,
+          -1.77158522605896,
+          -0.7124677896499634,
+          -3.028214931488037,
+          -2.4428634643554688,
+          2.434662342071533,
+          1.7178294658660889,
+          0.4362483322620392,
+          3.1790249347686768,
+          2.7732880115509033,
+          -1.2297390699386597,
+          -0.22661125659942627,
+          1.083206295967102,
+          1.0524377822875977,
+          0.4317457377910614,
+          -1.0758646726608276,
+          -4.147580146789551,
+          0.5168558359146118,
+          0.5462151169776917,
+          -1.2353976964950562,
+          -1.4283699989318848,
+          -0.7230895757675171,
+          1.3145434856414795,
+          5.217739105224609,
+          -1.9907852411270142,
+          -4.770870685577393,
+          1.969187617301941,
+          -1.4113565683364868,
+          -1.1442039012908936,
+          -0.17192257940769196,
+          0.18517570197582245,
+          1.1839758157730103,
+          -2.0040650367736816,
+          -1.4876248836517334,
+          -1.7958958148956299,
+          -0.38944053649902344,
+          -1.6772180795669556,
+          3.4195854663848877,
+          2.238049268722534,
+          -1.5067288875579834,
+          -0.683590829372406,
+          -0.3019627034664154,
+          -3.042008638381958,
+          -1.4176777601242065,
+          -1.1395084857940674,
+          4.65452766418457,
+          -0.1760357916355133,
+          -1.0070643424987793,
+          0.2842785716056824,
+          -1.3068275451660156,
+          2.607257843017578,
+          0.3986334800720215,
+          -0.0877913162112236,
+          0.32840561866760254,
+          -6.3037109375,
+          -2.4467320442199707,
+          0.14416435360908508,
+          -3.9536821842193604,
+          3.258073091506958,
+          -2.056317090988159,
+          0.8961857557296753,
+          -0.588642954826355,
+          -2.007619857788086,
+          -3.407106876373291,
+          2.2616467475891113,
+          2.652510643005371,
+          4.65130615234375,
+          -1.109775185585022,
+          2.0421149730682373,
+          2.3600504398345947,
+          0.5295807719230652,
+          -1.9418888092041016,
+          0.507074773311615,
+          1.4683458805084229,
+          1.791672945022583,
+          -0.9127153158187866,
+          2.647179126739502,
+          0.3506787419319153,
+          -2.1507387161254883,
+          1.7431235313415527,
+          -1.7686034440994263,
+          2.217715263366699,
+          2.478424072265625,
+          -1.9437108039855957,
+          -1.845352292060852,
+          -1.689854621887207,
+          -0.19076357781887054,
+          -3.3978328704833984,
+          -1.4883240461349487,
+          -0.24916037917137146,
+          -1.8467692136764526,
+          -1.6965208053588867,
+          1.1277893781661987,
+          3.4053845405578613,
+          5.705739974975586,
+          1.4619570970535278,
+          1.8808009624481201,
+          -0.7504479885101318,
+          -1.9668562412261963,
+          -0.4626203775405884,
+          2.1002492904663086,
+          1.1199994087219238,
+          0.2497234344482422,
+          -5.686829566955566,
+          -0.4585787355899811,
+          0.29425981640815735,
+          -0.7402781248092651,
+          2.0419461727142334,
+          2.842548131942749,
+          -2.3799550533294678,
+          -0.5623688101768494,
+          -2.3596653938293457,
+          0.033942993730306625,
+          -2.0235116481781006,
+          -1.2436456680297852,
+          0.4125819504261017,
+          -1.496759057044983,
+          -6.036840438842773,
+          1.4024930000305176,
+          -0.6549098491668701,
+          -3.051879644393921,
+          -0.8190909028053284,
+          -3.951235771179199,
+          2.0398499965667725,
+          0.059947941452264786,
+          4.415947437286377,
+          1.0608376264572144,
+          1.2173240184783936,
+          -2.29183292388916,
+          -3.2971065044403076,
+          -0.22395505011081696,
+          -0.6199073195457458,
+          0.045319218188524246,
+          -1.3388698101043701,
+          0.3882300555706024,
+          4.853400707244873,
+          0.37708789110183716,
+          -1.3483482599258423,
+          -2.6592605113983154,
+          0.1617630422115326,
+          -1.7909855842590332,
+          1.888078212738037,
+          -2.460465669631958,
+          0.6666960716247559,
+          -0.390951007604599,
+          1.873082160949707,
+          4.166607856750488,
+          2.9566328525543213,
+          -2.963047981262207,
+          0.12423360347747803,
+          -5.593328475952148,
+          2.622849464416504,
+          0.6821528077125549,
+          2.7534167766571045,
+          0.6388728618621826,
+          3.119537591934204,
+          -1.6531821489334106,
+          -0.8832638263702393,
+          0.8710865378379822,
+          4.490625858306885,
+          3.8053712844848633,
+          -1.5139418840408325,
+          2.673859119415283,
+          3.270702600479126,
+          -0.4445665776729584,
+          -0.35987868905067444,
+          -2.88899302482605,
+          -1.910604476928711,
+          -2.441394329071045,
+          -0.03383224457502365,
+          -1.4860076904296875,
+          1.3387891054153442,
+          -0.5362568497657776,
+          -0.9861361980438232,
+          -5.350316524505615,
+          1.6311825513839722,
+          2.1502535343170166,
+          2.0826423168182373,
+          0.8145955204963684,
+          -2.188932418823242,
+          4.645500183105469,
+          6.018193244934082,
+          3.747012138366699,
+          -3.3445286750793457,
+          -2.80029034614563,
+          -1.7761183977127075,
+          1.349045991897583,
+          -1.3256778717041016,
+          -4.267004489898682,
+          -5.096202850341797,
+          2.53690767288208,
+          0.21165402233600616,
+          -5.991511821746826,
+          2.532259225845337,
+          0.3733823299407959,
+          0.09709881246089935,
+          -1.6614902019500732,
+          -3.1577024459838867,
+          -0.752903401851654,
+          1.827016830444336,
+          -3.089526891708374,
+          -0.9284985661506653,
+          -0.23115436732769012,
+          -1.766113042831421,
+          -1.1144253015518188,
+          1.6549421548843384,
+          -0.6245176196098328,
+          -0.9727174639701843,
+          3.3563032150268555,
+          -0.16272403299808502,
+          4.766720771789551,
+          -0.9948895573616028,
+          3.494840145111084,
+          -3.0656542778015137,
+          0.3833733797073364,
+          -3.429015874862671,
+          -0.6543046236038208,
+          1.5159214735031128,
+          -0.6996432542800903,
+          -1.8548164367675781,
+          -2.625101089477539,
+          -3.8285844326019287,
+          0.8848713636398315,
+          -1.6070235967636108,
+          3.4662249088287354,
+          1.1178902387619019,
+          4.3756513595581055,
+          -0.748215913772583,
+          4.016429424285889,
+          -0.6445327997207642,
+          -5.323914527893066,
+          -3.0810768604278564,
+          4.789552211761475,
+          -0.7598594427108765,
+          0.6119251251220703,
+          2.3630716800689697,
+          2.0221893787384033,
+          0.09376087039709091,
+          -3.0039608478546143,
+          -1.9620803594589233,
+          -2.735180377960205,
+          2.8914852142333984,
+          -0.07114817202091217,
+          -0.9918757081031799,
+          -1.7800562381744385,
+          -0.6226565837860107,
+          0.866911768913269,
+          -0.6657202243804932,
+          -1.9779294729232788,
+          0.9351017475128174,
+          0.6198594570159912,
+          1.17682945728302,
+          2.7496440410614014,
+          1.24103844165802,
+          0.2272855043411255,
+          -1.9061808586120605,
+          -2.167924165725708,
+          2.394191265106201,
+          -0.3529726564884186,
+          -3.7846667766571045,
+          -1.0866832733154297,
+          -0.11632461845874786,
+          -1.5855203866958618
+        ]
+      },
+      "processing_time": 39367.54,
+      "raw": {
+        "detection_source": "yolo",
+        "yolo": {
+          "label": "Smart Phone",
+          "confidence": 0.42040354013442993,
+          "bbox": [
+            262,
+            339,
+            793,
+            1024
+          ]
+        },
+        "florence": {
+          "caption": "a brown leather wallet. a silver button on the front of the wallet. The name on the wallet is written in white.",
+          "grounded_description": "a brown leather wallet. a silver button on the front of the wallet. The name on the wallet is written in white. It has logo. It shows cracked screen, screen scratches. The text \"bnellerry\" is visible on the surface.",
+          "final_description": "a brown leather wallet. a silver button on the front of the wallet. The name on the wallet is written in white. It has logo. It shows cracked screen, screen scratches. The text \"bnellerry\" is visible on the surface.",
+          "detailed_description": "a brown leather wallet. a silver button on the front of the wallet. The name on the wallet is written in white. It has logo. It shows cracked screen, screen scratches. The text \"bnellerry\" is visible on the surface.",
+          "description_source": "florence_direct",
+          "detailed_description_source": "florence_direct",
+          "description_evidence_used": {
+            "summary": [
+              "florence_caption",
+              "grounded_features",
+              "grounded_defects",
+              "ocr_text"
+            ],
+            "detailed": [
+              "florence_caption",
+              "grounded_features",
+              "grounded_defects",
+              "ocr_text"
+            ]
+          },
+          "description_filters_applied": [
+            "florence_direct"
+          ],
+          "description_word_count": {
+            "final_description": 39,
+            "detailed_description": 39
+          },
+          "ocr_text": "bnellerry",
+          "ocr_text_display": "bnellerry",
+          "ocr_lines": [
+            {
+              "text": "bnellerry",
+              "bbox": [
+                237.62,
+                514.78,
+                420.29,
+                574.37
+              ],
+              "block_index": 0
+            }
+          ],
+          "ocr_layout_source": "ocr_with_region",
+          "color_vqa": "brown",
+          "grounded_features": [
+            "logo"
+          ],
+          "grounded_defects": [
+            "cracked screen",
+            "screen scratches"
+          ],
+          "grounded_attachments": [],
+          "key_count": null,
+          "raw": {
+            "caption": "a brown leather wallet. a silver button on the front of the wallet. The name on the wallet is written in white.",
+            "caption_primary": "A hand is holding a brown leather wallet. There is a silver button on the front of the wallet. The name on the wallet is written in white.",
+            "caption_guided": "leather",
+            "caption_source": "detailed_caption",
+            "caption_is_generic": false,
+            "description_source": "florence_direct",
+            "detailed_description_source": "florence_direct",
+            "description_evidence_used": {
+              "summary": [
+                "florence_caption",
+                "grounded_features",
+                "grounded_defects",
+                "ocr_text"
+              ],
+              "detailed": [
+                "florence_caption",
+                "grounded_features",
+                "grounded_defects",
+                "ocr_text"
+              ]
+            },
+            "description_filters_applied": [
+              "florence_direct"
+            ],
+            "description_word_count": {
+              "final_description": 39,
+              "detailed_description": 39
+            },
+            "ocr": "bnellerry",
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "bnellerry",
+                  "bbox": [
+                    237.62,
+                    514.78,
+                    420.29,
+                    574.37
+                  ],
+                  "block_index": 0
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "bnellerry",
+                  "bbox": [
+                    237.62,
+                    514.78,
+                    420.29,
+                    574.37
+                  ]
+                }
+              ]
+            },
+            "color_vqa": "brown",
+            "defects_vqa": "unanswerable",
+            "grounding_raw": {
+              "labels": [
+                "logo",
+                "cracked screen",
+                "screen scratches",
+                "button",
+                "phone case",
+                "cable"
+              ]
+            },
+            "attachment_vqa_checks": []
+          }
+        },
+        "florence_od_fallback": {
+          "triggered": true,
+          "reason": "always",
+          "winner_source": "yolo",
+          "florence_detections": [
+            {
+              "label": "Laptop",
+              "confidence": 0.5,
+              "bbox": [
+                376,
+                0,
+                1108,
+                425
+              ],
+              "caption": "A person is holding a wallet in front of a laptop. The laptop is black and is sitting on a wooden table. The screen of the laptop is turned on and there are colorful lights on the screen. The person's thumb is sticking out of the wallet.",
+              "ocr_text": "٠١٠"
+            },
+            {
+              "label": "Laptop",
+              "confidence": 0.5,
+              "bbox": [
+                1035,
+                582,
+                1123,
+                801
+              ],
+              "caption": "The image is blurry. The object on the table is not clear. The table is made up of wood. The wood is a light brown color. There is a yellow line going down the middle of the object. The yellow line is very bright. There are black lines going down both sides of the yellow line. The objects in the image are not clear in the photo.",
+              "ocr_text": "A"
+            },
+            {
+              "label": "Laptop",
+              "confidence": 0.5,
+              "bbox": [
+                261,
+                0,
+                1123,
+                609
+              ],
+              "caption": "A person is holding a brown wallet in front of a laptop. The laptop is black and is sitting on top of a wooden table. There is a sticker on the side of the laptop.",
+              "ocr_text": "٠١٠ ٠٢٠"
+            },
+            {
+              "label": "Smart Phone",
+              "confidence": 0.5,
+              "bbox": [
+                263,
+                344,
+                793,
+                1025
+              ],
+              "caption": "A person is holding a brown leather wallet. There is a silver button on the front of the wallet. The name on the wallet is written in white.",
+              "ocr_text": "knellerry"
+            }
+          ],
+          "arbiter_metadata": {
+            "match_type": "no_iou_match",
+            "iou": 0.0561,
+            "florence_evidence_score": 0.1111,
+            "yolo_evidence_score": 0
+          }
+        },
+        "label_rerank": {
+          "enabled": true,
+          "applied": true,
+          "initial_label": "Smart Phone",
+          "final_label": "Wallet",
+          "topk_candidates": [
+            {
+              "label": "Smart Phone",
+              "confidence": 0.42040354013442993,
+              "bbox": [
+                262,
+                339,
+                793,
+                1024
+              ]
+            },
+            {
+              "label": "Wallet",
+              "confidence": 0.2891489565372467,
+              "bbox": [
+                262,
+                339,
+                793,
+                1025
+              ]
+            }
+          ],
+          "scores_by_label": {
+            "Smart Phone": {
+              "score": 2,
+              "matched_keywords": {
+                "caption": [],
+                "ocr": [],
+                "grounding": [
+                  "phone",
+                  "screen"
+                ]
+              }
+            },
+            "Wallet": {
+              "score": 6,
+              "matched_keywords": {
+                "caption": [
+                  "wallet",
+                  "leather wallet",
+                  "leather"
+                ],
+                "ocr": [],
+                "grounding": []
+              }
+            }
+          },
+          "winner_label": "Wallet",
+          "winner_score": 6,
+          "top1_score": 2,
+          "selected_bbox_source": "label_best_conf",
+          "reason": "canonical_lock_florence_strong",
+          "canonical_lock_applied": true
+        },
+        "gemini": {
+          "status": "accepted",
+          "message": "Extracted successfully",
+          "label": "Wallet",
+          "color": "brown",
+          "category_details": {
+            "features": [
+              "logo",
+              "brand name",
+              "texture",
+              "stitching",
+              "flap closure",
+              "snap button",
+              "button clasp"
+            ],
+            "defects": [],
+            "attachments": []
+          },
+          "key_count": null,
+          "final_description": "This brown leather wallet features a snap button on a flap closure. It includes visible stitching along the edges and the brand name baellerry printed on the front. It has logo, texture, button clasp. The text \"bnellerry\" is visible on the surface.",
+          "detailed_description": "This brown leather wallet features a snap button on a flap closure. It includes visible stitching along the edges and the brand name baellerry printed on the front.",
+          "label_change_reason": null
+        },
+        "gemini_warnings": [],
+        "timings": {
+          "detect_ms": 343.54,
+          "florence_ms": 7640.59,
+          "florence_od_ms": 16084.11,
+          "label_rerank_ms": 10.65,
+          "gemini_ms": 15627.01,
+          "embeddings_ms": 0.4,
+          "total_ms": 39367.54
+        },
+        "description_debug": {
+          "final_description": "This brown leather wallet features a snap button on a flap closure. It includes visible stitching along the edges and the brand name baellerry printed on the front. It has logo, texture, button clasp. The text \"bnellerry\" is visible on the surface.",
+          "detailed_description": "This brown leather wallet features a snap button on a flap closure. It includes visible stitching along the edges and the brand name baellerry printed on the front. It has logo, texture, button clasp. The text \"bnellerry\" is visible on the surface.",
+          "description_source": "gemini_evidence_locked",
+          "detailed_description_source": "gemini_evidence_locked",
+          "description_evidence_used": {
+            "summary": [
+              "gemini_description",
+              "grounded_features",
+              "ocr_text"
+            ],
+            "detailed": [
+              "gemini_description",
+              "grounded_features",
+              "ocr_text"
+            ]
+          },
+          "description_filters_applied": [
+            "gemini_evidence_locked"
+          ],
+          "description_word_count": {
+            "final_description": 42,
+            "detailed_description": 42
+          }
+        }
+      }
+    }
+  ],
+  "createdAt": {
+    "$date": "2026-03-10T04:37:18.117Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-10T14:24:29.124Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69afc363cb4a7754e6223b61"
+  },
+  "imageUrl": "https://res.cloudinary.com/dnbdsdnrq/image/upload/v1773126521/findassure/found-items/mrb7o9iiiqsdlohsiqp3.heic",
+  "category": "Helmet",
+  "description": "a black helmet. a clear visor on the side of the helmet. Has a logo with CS marked",
+  "questions": [
+    "What is the helmet's primary base color?",
+    "What color is the main front visor?",
+    "Where exactly is the 'CS' logo located?",
+    "What specific color are the helmet's interior cheek pads?",
+    "How does the clear side visor operate?"
+  ],
+  "founderAnswers": [
+    "black",
+    "Clear",
+    "Top of the front",
+    "black",
+    "It goes up and down"
+  ],
+  "founderContact": {
+    "name": "Yehara Dananjaya",
+    "email": "theultimatesyd@gmail.com",
+    "phone": "0702249246"
+  },
+  "found_location": [
+    {
+      "location": "new_building",
+      "floor_id": "6",
+      "hall_name": "G605"
+    }
+  ],
+  "status": "available",
+  "createdBy": {
+    "$oid": "69afc27ccb4a7754e6223b53"
+  },
+  "analysisMode": "pp2",
+  "pythonItemId": "0bf8bbe5-0824-4318-97c0-e78b0bfffbba",
+  "faissId": null,
+  "faissIds": [],
+  "detectedCategory": "Helmet",
+  "detectedDescription": "a black helmet. a clear visor on the side of the helmet.",
+  "detectedColor": "black",
+  "vector128": [],
+  "searchable": true,
+  "pipelineResponse": {
+    "item_id": "0bf8bbe5-0824-4318-97c0-e78b0bfffbba",
+    "per_view": [
+      {
+        "view_index": 0,
+        "filename": "1773126285574-555063971.jpg",
+        "detection": {
+          "bbox": [
+            0,
+            0,
+            3024,
+            4032
+          ],
+          "cls_name": "Helmet",
+          "confidence": 0,
+          "selected_by": "hint_rescue",
+          "outlier_view": false,
+          "candidates": []
+        },
+        "extraction": {
+          "caption": "a helmet on their head. The helmet is black and has a red logo on it.",
+          "detailed_description": null,
+          "ocr_text": "832",
+          "ocr_text_display": null,
+          "ocr_lines": null,
+          "ocr_layout_source": null,
+          "extraction_confidence": 0.7,
+          "raw": {
+            "caption_source": "ocr_first",
+            "timings": {
+              "ocr_ms": 11386.77,
+              "caption_ms": 2749.36,
+              "guided_vqa_ms": 2260.21,
+              "total_ms": 16463.91,
+              "ocr_first_ms": 16464.32
+            },
+            "ocr_first": {
+              "status": "success",
+              "fast": true,
+              "ran_caption": true,
+              "ran_color_vqa": false,
+              "ran_grounding": false,
+              "needs_detail": true,
+              "detail_trigger": [
+                "canonical_label_missing"
+              ],
+              "ocr_input_wh": [
+                3024,
+                4032
+              ],
+              "ocr_resized_wh": [
+                576,
+                768
+              ],
+              "detail_input_wh": [
+                3024,
+                4032
+              ],
+              "detail_resized_wh": [
+                576,
+                768
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "caption_source": "detailed_caption",
+              "guided_vqa_len": 13,
+              "caption_len": 69,
+              "ocr_len": 3,
+              "reason": "ok_nonempty",
+              "stage1_nonempty": true
+            },
+            "florence": {
+              "status": "success",
+              "reason": "ok",
+              "stage": "all",
+              "attempts": [
+                {
+                  "source": "primary_ocr",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 11386.76
+                },
+                {
+                  "source": "primary_caption",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 2749.34
+                },
+                {
+                  "source": "guided_vqa",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 2260.19
+                }
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "recovery_attempted": false,
+              "recovery_succeeded": false,
+              "caption_len": 69,
+              "ocr_len": 3
+            },
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "832",
+                  "bbox": [
+                    273.89,
+                    232.32,
+                    310.75,
+                    244.61
+                  ],
+                  "block_index": 0
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "832",
+                  "bbox": [
+                    273.89,
+                    232.32,
+                    310.75,
+                    244.61
+                  ]
+                }
+              ]
+            },
+            "florence_od_fallback": {
+              "triggered": true,
+              "reason": "always",
+              "winner_source": "yolo",
+              "florence_detections": [
+                {
+                  "label": "Helmet",
+                  "confidence": 0.5,
+                  "bbox": [
+                    204,
+                    389,
+                    2825,
+                    3400
+                  ],
+                  "caption": "Someone is holding a helmet. The helmet is black and has a logo on it. The logo is red and white. The letters CS are on the logo. The person holding the helmet is wearing brown pants.",
+                  "ocr_text": "832"
+                }
+              ],
+              "arbiter_metadata": {
+                "match_type": "no_iou_match",
+                "iou": 0,
+                "florence_evidence_score": 0.0667,
+                "yolo_evidence_score": 0
+              },
+              "florence_od_ms": 8634.14
+            },
+            "detection_source": "none"
+          }
+        },
+        "embedding": {
+          "dim": 128,
+          "vector_preview": [
+            -0.15933018922805786,
+            -2.357372999191284,
+            -2.4773786067962646,
+            -3.634622812271118,
+            1.1221089363098145,
+            -2.242553234100342,
+            -1.0524224042892456,
+            1.3379987478256226
+          ],
+          "vector_id": "0bf8bbe5-0824-4318-97c0-e78b0bfffbba_view_0"
+        },
+        "quality_score": 216.79758656933177,
+        "status": "processed"
+      },
+      {
+        "view_index": 1,
+        "filename": "1773126285795-629730132.jpg",
+        "detection": {
+          "bbox": [
+            33,
+            846,
+            3024,
+            3551
+          ],
+          "cls_name": "Helmet",
+          "confidence": 0.942406177520752,
+          "selected_by": "consensus_match",
+          "outlier_view": false,
+          "candidates": [
+            {
+              "raw_label": "Helmet",
+              "canonical_label": "Helmet",
+              "confidence": 0.942406177520752,
+              "bbox": [
+                33,
+                846,
+                3024,
+                3551
+              ]
+            },
+            {
+              "raw_label": "Earbuds - Earbuds case",
+              "canonical_label": "Earbuds - Earbuds case",
+              "confidence": 0.942406177520752,
+              "bbox": [
+                33,
+                846,
+                3024,
+                3551
+              ]
+            }
+          ]
+        },
+        "extraction": {
+          "caption": "A person is holding a black helmet. There is a clear visor on the side of the helmet. The person is standing in front of a white tile floor.",
+          "detailed_description": null,
+          "ocr_text": "RX",
+          "ocr_text_display": null,
+          "ocr_lines": null,
+          "ocr_layout_source": null,
+          "extraction_confidence": 0.7,
+          "raw": {
+            "caption_source": "ocr_first",
+            "timings": {
+              "ocr_ms": 3257,
+              "total_ms": 3318.71,
+              "ocr_first_ms": 3318.88
+            },
+            "ocr_first": {
+              "status": "success",
+              "fast": true,
+              "ran_caption": false,
+              "ran_color_vqa": false,
+              "ran_grounding": false,
+              "needs_detail": false,
+              "detail_trigger": [],
+              "ocr_input_wh": [
+                3024,
+                3727
+              ],
+              "ocr_resized_wh": [
+                623,
+                768
+              ],
+              "detail_input_wh": [
+                3024,
+                3727
+              ],
+              "detail_resized_wh": [
+                623,
+                768
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "caption_len": 0,
+              "ocr_len": 2,
+              "reason": "ok_empty_caption",
+              "stage1_nonempty": true
+            },
+            "florence": {
+              "status": "success",
+              "reason": "ok",
+              "stage": "all",
+              "attempts": [
+                {
+                  "source": "primary_ocr",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 3256.99
+                }
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "recovery_attempted": false,
+              "recovery_succeeded": false,
+              "caption_len": 0,
+              "ocr_len": 2
+            },
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "RX",
+                  "bbox": [
+                    268.2,
+                    528,
+                    278.79,
+                    534.91
+                  ],
+                  "block_index": 0
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "RX",
+                  "bbox": [
+                    268.2,
+                    528,
+                    278.79,
+                    534.91
+                  ]
+                }
+              ]
+            },
+            "florence_od_fallback": {
+              "triggered": true,
+              "reason": "always",
+              "winner_source": "florence",
+              "florence_detections": [
+                {
+                  "label": "Helmet",
+                  "confidence": 0.5,
+                  "bbox": [
+                    55,
+                    913,
+                    3019,
+                    3550
+                  ],
+                  "caption": "A person is holding a black helmet. There is a clear visor on the side of the helmet. The person is standing in front of a white tile floor.",
+                  "ocr_text": "٠١٠.٠"
+                }
+              ],
+              "arbiter_metadata": {
+                "match_type": "iou_matched",
+                "iou": 0.9661,
+                "florence_evidence_score": 0.1333,
+                "yolo_evidence_score": 0,
+                "yolo_label": "Earbuds - Earbuds case",
+                "florence_label": "Helmet"
+              },
+              "florence_od_ms": 8126.79
+            },
+            "detection_source": "florence_override",
+            "od_caption_adopted": true
+          }
+        },
+        "embedding": {
+          "dim": 128,
+          "vector_preview": [
+            -2.038512945175171,
+            -0.31660622358322144,
+            -0.6625709533691406,
+            -4.397619247436523,
+            -0.4335474371910095,
+            -0.6043632626533508,
+            1.9102457761764526,
+            0.11258357763290405
+          ],
+          "vector_id": "0bf8bbe5-0824-4318-97c0-e78b0bfffbba_view_1"
+        },
+        "quality_score": 219.3877244514891,
+        "status": "processed"
+      },
+      {
+        "view_index": 2,
+        "filename": "1773126286117-764511.jpg",
+        "detection": {
+          "bbox": [
+            0,
+            0,
+            3024,
+            4032
+          ],
+          "cls_name": "unknown",
+          "confidence": 0,
+          "selected_by": "fallback_top1",
+          "outlier_view": true,
+          "candidates": []
+        },
+        "extraction": {
+          "caption": "a black object. a wooden cabinet behind the object.",
+          "detailed_description": null,
+          "ocr_text": "www.dgdfgdf.co.uk",
+          "ocr_text_display": null,
+          "ocr_lines": null,
+          "ocr_layout_source": null,
+          "extraction_confidence": 0.7,
+          "raw": {
+            "caption_source": "ocr_first",
+            "timings": {
+              "ocr_ms": 11651.52,
+              "caption_ms": 2989.53,
+              "guided_vqa_ms": 1733.44,
+              "total_ms": 16482.38,
+              "ocr_first_ms": 16482.6
+            },
+            "ocr_first": {
+              "status": "success",
+              "fast": true,
+              "ran_caption": true,
+              "ran_color_vqa": false,
+              "ran_grounding": false,
+              "needs_detail": true,
+              "detail_trigger": [
+                "canonical_label_missing"
+              ],
+              "ocr_input_wh": [
+                3024,
+                4032
+              ],
+              "ocr_resized_wh": [
+                576,
+                768
+              ],
+              "detail_input_wh": [
+                3024,
+                4032
+              ],
+              "detail_resized_wh": [
+                576,
+                768
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "caption_source": "detailed_caption",
+              "guided_vqa_len": 13,
+              "caption_len": 51,
+              "ocr_len": 17,
+              "reason": "ok_nonempty",
+              "stage1_nonempty": true
+            },
+            "florence": {
+              "status": "success",
+              "reason": "ok",
+              "stage": "all",
+              "attempts": [
+                {
+                  "source": "primary_ocr",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 11651.51
+                },
+                {
+                  "source": "primary_caption",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 2989.52
+                },
+                {
+                  "source": "guided_vqa",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 1733.43
+                }
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "recovery_attempted": false,
+              "recovery_succeeded": false,
+              "caption_len": 51,
+              "ocr_len": 17
+            },
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "www.dgdfgdf.co.uk",
+                  "bbox": [
+                    0.29,
+                    0.38,
+                    69.98,
+                    767.62
+                  ],
+                  "block_index": 0
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "www.dgdfgdf.co.uk",
+                  "bbox": [
+                    0.29,
+                    0.38,
+                    69.98,
+                    767.62
+                  ]
+                }
+              ]
+            },
+            "florence_od_fallback": {
+              "triggered": true,
+              "reason": "always",
+              "winner_source": "yolo",
+              "florence_detections": [
+                {
+                  "label": "Helmet",
+                  "confidence": 0.5,
+                  "bbox": [
+                    231,
+                    1292,
+                    2901,
+                    3679
+                  ],
+                  "caption": "A hand is holding a black helmet. There is a piece of clear glass on the side of the helmet. The floor under the helmet is white tile.",
+                  "ocr_text": "٠١٢٠"
+                }
+              ],
+              "arbiter_metadata": {
+                "match_type": "no_iou_match",
+                "iou": 0,
+                "florence_evidence_score": 0.0667,
+                "yolo_evidence_score": 0
+              },
+              "florence_od_ms": 9019.51
+            },
+            "detection_source": "none"
+          }
+        },
+        "embedding": {
+          "dim": 128,
+          "vector_preview": [
+            -4.507472038269043,
+            -3.005729913711548,
+            -0.3718804717063904,
+            -1.2428576946258545,
+            -1.8352441787719727,
+            0.5768470168113708,
+            -0.7959402799606323,
+            -2.178143262863159
+          ],
+          "vector_id": "0bf8bbe5-0824-4318-97c0-e78b0bfffbba_view_2"
+        },
+        "quality_score": 161.45719420855363,
+        "status": "processed"
+      }
+    ],
+    "verification": {
+      "mode": "two_view",
+      "cosine_sim_matrix": [
+        [
+          1,
+          0.6740760803222656,
+          0.39705777168273926
+        ],
+        [
+          0.6740760803222656,
+          1,
+          0.6262807846069336
+        ],
+        [
+          0.39705777168273926,
+          0.6262807846069336,
+          1
+        ]
+      ],
+      "faiss_sim_matrix": [
+        [
+          1,
+          0.6740759611129761,
+          0.39705774188041687
+        ],
+        [
+          0.6740759611129761,
+          1,
+          0.6262807846069336
+        ],
+        [
+          0.39705774188041687,
+          0.6262807846069336,
+          1
+        ]
+      ],
+      "geometric_scores": {
+        "0-1": {
+          "num_keypoints_a": 2000,
+          "num_keypoints_b": 2000,
+          "num_matches": 2000,
+          "num_good_matches": 10,
+          "num_inliers": 5,
+          "inlier_ratio": 0.5,
+          "passed": false,
+          "best_similarity_path": "full/full",
+          "multi_crop_helped": false,
+          "selected_cosine": 0.6740760803222656,
+          "selected_faiss": 0.6740759611129761,
+          "full_full_cosine": 0.6740760803222656,
+          "full_full_faiss": 0.6740759611129761,
+          "pair_strength": "strong",
+          "ocr_overlap_tokens": [],
+          "strong_overlap": false,
+          "ocr_rescue_eligible": false,
+          "ocr_rescue_applied": false,
+          "smartphone_front_back_candidate": false,
+          "smartphone_front_back_evidence_ready": false,
+          "smartphone_front_back_retryable": false,
+          "smartphone_front_back_complementary": false,
+          "smartphone_front_back_brand_conflict": false,
+          "smartphone_front_back_color_conflict": false,
+          "smartphone_front_back_floor": 0
+        },
+        "0-2": {
+          "skipped": true,
+          "reason": "non_eligible_pair",
+          "passed": false,
+          "best_similarity_path": "full/full",
+          "multi_crop_helped": false,
+          "selected_cosine": 0.39705777168273926,
+          "selected_faiss": 0.39705774188041687,
+          "full_full_cosine": 0.39705777168273926,
+          "full_full_faiss": 0.39705774188041687,
+          "pair_strength": "weak",
+          "ocr_overlap_tokens": [],
+          "strong_overlap": false,
+          "ocr_rescue_eligible": false,
+          "ocr_rescue_applied": false,
+          "smartphone_front_back_candidate": false,
+          "smartphone_front_back_evidence_ready": false,
+          "smartphone_front_back_retryable": false,
+          "smartphone_front_back_complementary": false,
+          "smartphone_front_back_brand_conflict": false,
+          "smartphone_front_back_color_conflict": false,
+          "smartphone_front_back_floor": 0
+        },
+        "1-2": {
+          "skipped": true,
+          "reason": "non_eligible_pair",
+          "passed": false,
+          "best_similarity_path": "center/full",
+          "multi_crop_helped": true,
+          "selected_cosine": 0.6262807846069336,
+          "selected_faiss": 0.6262807846069336,
+          "full_full_cosine": 0.6064077019691467,
+          "full_full_faiss": 0.6064077615737915,
+          "pair_strength": "strong",
+          "ocr_overlap_tokens": [],
+          "strong_overlap": false,
+          "ocr_rescue_eligible": false,
+          "ocr_rescue_applied": false,
+          "smartphone_front_back_candidate": false,
+          "smartphone_front_back_evidence_ready": false,
+          "smartphone_front_back_retryable": false,
+          "smartphone_front_back_complementary": false,
+          "smartphone_front_back_brand_conflict": false,
+          "smartphone_front_back_color_conflict": false,
+          "smartphone_front_back_floor": 0
+        }
+      },
+      "passed": true,
+      "failure_reasons": [],
+      "used_views": [
+        0,
+        1
+      ],
+      "dropped_views": [
+        {
+          "view_index": 2,
+          "reason": "outlier_view=true; label_mismatch_vs_consensus(selected=unknown, consensus=Helmet)"
+        }
+      ]
+    },
+    "fused": {
+      "category": "Helmet",
+      "brand": null,
+      "color": "black",
+      "caption": "This black helmet.",
+      "detailed_description": "a black helmet. a clear visor on the side of the helmet.",
+      "description_source": "consensus_conservative_caption",
+      "detailed_description_source": "best_view_evidence_composer",
+      "description_evidence_used": {
+        "summary": [
+          "best_view_description"
+        ],
+        "detailed": [
+          "best_view_description"
+        ]
+      },
+      "description_filters_applied": [
+        "consensus_only",
+        "best_view_evidence_composer"
+      ],
+      "description_word_count": {
+        "final_description": 12,
+        "detailed_description": 12
+      },
+      "merged_ocr_tokens": [],
+      "attributes": {
+        "conflicts": {
+          "category_specific_exclusions": "Excluded category-specific fields from views [0, 2] due to outlier/label mismatch (0:outlier/label_mismatch, 2:outlier/label_mismatch)."
+        },
+        "captions": {
+          "view_0": "a helmet on their head. The helmet is black and has a red logo on it.",
+          "view_1": "A person is holding a black helmet. There is a clear visor on the side of the helmet. The person is standing in front of a white tile floor.",
+          "view_2": "a black object. a wooden cabinet behind the object."
+        },
+        "ocr_rejected": [
+          "832",
+          "RX",
+          "WWW.DGDFGDF.CO.UK"
+        ],
+        "caption_enrichment_mode": "conservative_only",
+        "caption_snippets_used": [],
+        "multi_angle_phrases_used": [],
+        "description_scope_view_indices": [
+          1
+        ]
+      },
+      "defects": [],
+      "best_view_index": 1,
+      "fused_embedding_id": "0bf8bbe5-0824-4318-97c0-e78b0bfffbba_fused"
+    },
+    "faiss_ids": null,
+    "resolved_label": null,
+    "stored": true,
+    "cache_key": "item:0bf8bbe5-0824-4318-97c0-e78b0bfffbba"
+  },
+  "createdAt": {
+    "$date": "2026-03-10T07:08:41.046Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-10T12:44:21.728Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69afc580cb4a7754e6223bc6"
+  },
+  "imageUrl": "https://res.cloudinary.com/dnbdsdnrq/image/upload/v1773127048/findassure/found-items/ihfwtrhpq5mfvy795vfq.jpg",
+  "category": "Backpack",
+  "description": "This black backpack features a front pocket with multiple visible zippers and a top handle. A logo patch displaying the brand name DMAX is centered on the upper front panel. A strap tear is present on one of the straps. It has shoulder straps.",
+  "questions": [
+    "What brand is on the bag?",
+    "What color are the zips?",
+    "Any name label visible?",
+    "Any tear or scratch visible?",
+    "What is the backpack color?"
+  ],
+  "founderAnswers": [
+    "dmax",
+    "black",
+    "Yes",
+    "strap tear",
+    "black"
+  ],
+  "founderContact": {
+    "name": "Yehara Dananjaya",
+    "email": "theultimatesyd@gmail.com",
+    "phone": "0702249246"
+  },
+  "found_location": [
+    {
+      "location": "new_building",
+      "floor_id": "4",
+      "hall_name": "G4_Reading_Room"
+    }
+  ],
+  "status": "available",
+  "createdBy": {
+    "$oid": "69afc27ccb4a7754e6223b53"
+  },
+  "analysisMode": "pp2",
+  "pythonItemId": "afd75a80-da97-453c-9c65-b465a63471e5",
+  "faissId": null,
+  "faissIds": [],
+  "detectedCategory": "Backpack",
+  "detectedDescription": "A black backpack. The blanket has red flowers and green leaves on it. a white zipper on the front of the backpack.",
+  "detectedColor": "black",
+  "vector128": [],
+  "searchable": true,
+  "pipelineResponse": {
+    "item_id": "afd75a80-da97-453c-9c65-b465a63471e5",
+    "per_view": [
+      {
+        "view_index": 0,
+        "filename": "1773126891316-206933756.jpg",
+        "detection": {
+          "bbox": [
+            104,
+            34,
+            564,
+            680
+          ],
+          "cls_name": "Backpack",
+          "confidence": 0.5,
+          "selected_by": "consensus_match",
+          "outlier_view": false,
+          "candidates": [
+            {
+              "raw_label": "Backpack",
+              "canonical_label": "Backpack",
+              "confidence": 0.5,
+              "bbox": [
+                104,
+                34,
+                564,
+                680
+              ]
+            },
+            {
+              "raw_label": "Earbuds - Earbuds case",
+              "canonical_label": "Earbuds - Earbuds case",
+              "confidence": 0.35320496559143066,
+              "bbox": [
+                104,
+                34,
+                564,
+                680
+              ]
+            }
+          ]
+        },
+        "extraction": {
+          "caption": "A black backpack is sitting on top of a blanket. The blanket has red flowers and green leaves on it. There is a white zipper on the front of the backpack.",
+          "detailed_description": null,
+          "ocr_text": "DIMAK",
+          "ocr_text_display": null,
+          "ocr_lines": null,
+          "ocr_layout_source": null,
+          "extraction_confidence": 0.7,
+          "raw": {
+            "caption_source": "ocr_first",
+            "timings": {
+              "ocr_ms": 1237.65,
+              "total_ms": 1237.67,
+              "ocr_first_ms": 1237.69
+            },
+            "ocr_first": {
+              "status": "success",
+              "fast": true,
+              "ran_caption": false,
+              "ran_color_vqa": false,
+              "ran_grounding": false,
+              "needs_detail": false,
+              "detail_trigger": [],
+              "ocr_input_wh": [
+                644,
+                750
+              ],
+              "ocr_resized_wh": [
+                644,
+                750
+              ],
+              "detail_input_wh": [
+                644,
+                750
+              ],
+              "detail_resized_wh": [
+                644,
+                750
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "caption_len": 0,
+              "ocr_len": 5,
+              "reason": "ok_empty_caption",
+              "stage1_nonempty": true
+            },
+            "florence": {
+              "status": "success",
+              "reason": "ok",
+              "stage": "all",
+              "attempts": [
+                {
+                  "source": "primary_ocr",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 1237.64
+                }
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "recovery_attempted": false,
+              "recovery_succeeded": false,
+              "caption_len": 0,
+              "ocr_len": 5
+            },
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "DIMAK",
+                  "bbox": [
+                    277.24,
+                    215.62,
+                    329.41,
+                    227.62
+                  ],
+                  "block_index": 0
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "DIMAK",
+                  "bbox": [
+                    277.24,
+                    215.62,
+                    329.41,
+                    227.62
+                  ]
+                }
+              ]
+            },
+            "florence_od_fallback": {
+              "triggered": true,
+              "reason": "always",
+              "winner_source": "florence",
+              "florence_detections": [
+                {
+                  "label": "Backpack",
+                  "confidence": 0.5,
+                  "bbox": [
+                    51,
+                    40,
+                    626,
+                    748
+                  ],
+                  "caption": "A black backpack is sitting on top of a blanket. The blanket has red flowers and green leaves on it. There is a white zipper on the front of the backpack.",
+                  "ocr_text": "DIMAX"
+                }
+              ],
+              "arbiter_metadata": {
+                "match_type": "iou_matched",
+                "iou": 0.7183,
+                "florence_evidence_score": 0.1667,
+                "yolo_evidence_score": 0,
+                "yolo_label": "Earbuds - Earbuds case",
+                "florence_label": "Backpack"
+              },
+              "florence_od_ms": 5408.69
+            },
+            "detection_source": "florence_override",
+            "od_caption_adopted": true
+          }
+        },
+        "embedding": {
+          "dim": 128,
+          "vector_preview": [
+            2.513251304626465,
+            -2.25,
+            0.3342272639274597,
+            -0.653812050819397,
+            0.504736065864563,
+            -1.4217159748077393,
+            0.927831768989563,
+            -1.1964631080627441
+          ],
+          "vector_id": "afd75a80-da97-453c-9c65-b465a63471e5_view_0"
+        },
+        "quality_score": 343.99822421710786,
+        "status": "processed"
+      },
+      {
+        "view_index": 1,
+        "filename": "1773126891324-472851874.jpg",
+        "detection": {
+          "bbox": [
+            0,
+            0,
+            750,
+            750
+          ],
+          "cls_name": "Backpack",
+          "confidence": 0,
+          "selected_by": "hint_rescue",
+          "outlier_view": false,
+          "candidates": []
+        },
+        "extraction": {
+          "caption": "A blue backpack. The blanket has red flowers and green leaves on it. a red strawberry on the blanket.",
+          "detailed_description": null,
+          "ocr_text": "٠١٢٠",
+          "ocr_text_display": null,
+          "ocr_lines": null,
+          "ocr_layout_source": null,
+          "extraction_confidence": 0.7,
+          "raw": {
+            "caption_source": "ocr_first",
+            "timings": {
+              "ocr_ms": 1641.74,
+              "caption_ms": 1693.77,
+              "guided_vqa_ms": 1883.6,
+              "total_ms": 5219.15,
+              "ocr_first_ms": 5219.16
+            },
+            "ocr_first": {
+              "status": "success",
+              "fast": true,
+              "ran_caption": true,
+              "ran_color_vqa": false,
+              "ran_grounding": false,
+              "needs_detail": true,
+              "detail_trigger": [
+                "canonical_label_missing"
+              ],
+              "ocr_input_wh": [
+                750,
+                750
+              ],
+              "ocr_resized_wh": [
+                750,
+                750
+              ],
+              "detail_input_wh": [
+                750,
+                750
+              ],
+              "detail_resized_wh": [
+                750,
+                750
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "caption_source": "detailed_caption",
+              "guided_vqa_len": 13,
+              "caption_len": 101,
+              "ocr_len": 4,
+              "reason": "ok_nonempty",
+              "stage1_nonempty": true
+            },
+            "florence": {
+              "status": "success",
+              "reason": "ok",
+              "stage": "all",
+              "attempts": [
+                {
+                  "source": "primary_ocr",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 1641.74
+                },
+                {
+                  "source": "primary_caption",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 1693.76
+                },
+                {
+                  "source": "guided_vqa",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 1883.58
+                }
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "recovery_attempted": false,
+              "recovery_succeeded": false,
+              "caption_len": 101,
+              "ocr_len": 4
+            },
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "٠١٢٠",
+                  "bbox": [
+                    0.38,
+                    748.88,
+                    2.62,
+                    749.62
+                  ],
+                  "block_index": 0
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "٠١٢٠",
+                  "bbox": [
+                    0.38,
+                    748.88,
+                    2.62,
+                    749.62
+                  ]
+                }
+              ]
+            },
+            "florence_od_fallback": {
+              "triggered": true,
+              "reason": "always",
+              "winner_source": "yolo",
+              "florence_detections": [
+                {
+                  "label": "Backpack",
+                  "confidence": 0.5,
+                  "bbox": [
+                    0,
+                    43,
+                    559,
+                    748
+                  ],
+                  "caption": "A blue backpack is sitting on top of a bedspread. The bedspread has a floral print on it. There are red and white flowers with green leaves on them. There is a strawberry on the top of the bag. The straps of the backpack are black.",
+                  "ocr_text": "٠١٢٠ ٠٠.٠"
+                }
+              ],
+              "arbiter_metadata": {
+                "match_type": "no_iou_match",
+                "iou": 0,
+                "florence_evidence_score": 0.1667,
+                "yolo_evidence_score": 0
+              },
+              "florence_od_ms": 4701.34
+            },
+            "detection_source": "none"
+          }
+        },
+        "embedding": {
+          "dim": 128,
+          "vector_preview": [
+            2.01883864402771,
+            -2.6407675743103027,
+            -0.014088928699493408,
+            -1.2993723154067993,
+            -1.289717435836792,
+            -2.416893243789673,
+            1.2832980155944824,
+            0.2323702573776245
+          ],
+          "vector_id": "afd75a80-da97-453c-9c65-b465a63471e5_view_1"
+        },
+        "quality_score": 494.5212737039802,
+        "status": "processed"
+      }
+    ],
+    "verification": {
+      "mode": "two_view",
+      "cosine_sim_matrix": [
+        [
+          1,
+          0.7794178128242493
+        ],
+        [
+          0.7794178128242493,
+          1
+        ]
+      ],
+      "faiss_sim_matrix": [
+        [
+          1,
+          0.7794177532196045
+        ],
+        [
+          0.7794177532196045,
+          1
+        ]
+      ],
+      "geometric_scores": {
+        "0-1": {
+          "num_keypoints_a": 1160,
+          "num_keypoints_b": 2000,
+          "num_matches": 1160,
+          "num_good_matches": 25,
+          "num_inliers": 15,
+          "inlier_ratio": 0.6,
+          "passed": false,
+          "best_similarity_path": "full/full",
+          "multi_crop_helped": false,
+          "selected_cosine": 0.7794178128242493,
+          "selected_faiss": 0.7794177532196045,
+          "full_full_cosine": 0.7794178128242493,
+          "full_full_faiss": 0.7794177532196045,
+          "pair_strength": "strong",
+          "ocr_overlap_tokens": [],
+          "strong_overlap": false,
+          "ocr_rescue_eligible": false,
+          "ocr_rescue_applied": false,
+          "smartphone_front_back_candidate": false,
+          "smartphone_front_back_evidence_ready": false,
+          "smartphone_front_back_retryable": false,
+          "smartphone_front_back_complementary": false,
+          "smartphone_front_back_brand_conflict": false,
+          "smartphone_front_back_color_conflict": false,
+          "smartphone_front_back_floor": 0
+        }
+      },
+      "passed": true,
+      "failure_reasons": [],
+      "used_views": [
+        0,
+        1
+      ],
+      "dropped_views": []
+    },
+    "fused": {
+      "category": "Backpack",
+      "brand": null,
+      "color": "black",
+      "caption": "This black backpack. It has the text \"DIMAK\".",
+      "detailed_description": "A black backpack. The blanket has red flowers and green leaves on it. a white zipper on the front of the backpack.",
+      "description_source": "consensus_conservative_caption",
+      "detailed_description_source": "best_view_evidence_composer",
+      "description_evidence_used": {
+        "summary": [
+          "best_view_description"
+        ],
+        "detailed": [
+          "best_view_description"
+        ]
+      },
+      "description_filters_applied": [
+        "consensus_only",
+        "best_view_evidence_composer"
+      ],
+      "description_word_count": {
+        "final_description": 22,
+        "detailed_description": 22
+      },
+      "merged_ocr_tokens": [],
+      "attributes": {
+        "conflicts": {
+          "category_specific_exclusions": "Excluded category-specific fields from views [1] due to outlier/label mismatch (1:outlier/label_mismatch)."
+        },
+        "captions": {
+          "view_0": "A black backpack is sitting on top of a blanket. The blanket has red flowers and green leaves on it. There is a white zipper on the front of the backpack.",
+          "view_1": "A blue backpack. The blanket has red flowers and green leaves on it. a red strawberry on the blanket."
+        },
+        "ocr_rejected": [
+          "٠١٢٠"
+        ],
+        "caption_enrichment_mode": "conservative_only",
+        "caption_snippets_used": [],
+        "multi_angle_phrases_used": [],
+        "description_scope_view_indices": [
+          0
+        ]
+      },
+      "defects": [],
+      "best_view_index": 1,
+      "fused_embedding_id": "afd75a80-da97-453c-9c65-b465a63471e5_fused"
+    },
+    "faiss_ids": null,
+    "resolved_label": null,
+    "stored": true,
+    "cache_key": "item:afd75a80-da97-453c-9c65-b465a63471e5"
+  },
+  "createdAt": {
+    "$date": "2026-03-10T07:17:26.202Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-10T07:17:26.202Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69afc711cb4a7754e6223bea"
+  },
+  "imageUrl": "https://res.cloudinary.com/dnbdsdnrq/image/upload/v1773127455/findassure/found-items/sirk1idhlxolvhlxfxys.heic",
+  "category": "Key",
+  "description": "A single black and silver key featuring a plastic head cover embossed with the TVS logo and a visible teeth pattern. The item includes a metal key ring attached and a small metal tag attached. Visible surface corrosion and scratches are present on the metal blade.",
+  "questions": [
+    "What is the total number of keys attached?",
+    "What are the two main colors of the key's head?",
+    "Which specific logo is embossed on the key's plastic head?",
+    "What visible marks are on the key's metal blade?",
+    "What is the exact shape of the small metal tag?"
+  ],
+  "founderAnswers": [
+    "one key",
+    "black and silver",
+    "tvs",
+    "scratches",
+    "Round"
+  ],
+  "founderContact": {
+    "name": "Yehara Dananjaya",
+    "email": "theultimatesyd@gmail.com",
+    "phone": "0702249246"
+  },
+  "found_location": [
+    {
+      "location": "basement_canteen",
+      "floor_id": null,
+      "hall_name": null
+    }
+  ],
+  "status": "available",
+  "createdBy": {
+    "$oid": "69afc27ccb4a7754e6223b53"
+  },
+  "analysisMode": "pp1",
+  "pythonItemId": "3e9508cd-aa6e-4925-bc60-6eb31c685d4a",
+  "faissId": 93,
+  "faissIds": [
+    93
+  ],
+  "detectedCategory": "Key",
+  "detectedDescription": "A single brown key featuring a plastic head cover embossed with the TVS logo and a visible teeth pattern. The item includes a metal key ring attached and a small metal tag attached. Visible surface corrosion and scratches are present on the metal blade. It has text. It shows bent key. The text \"1LVS\" is visible on the surface.",
+  "detectedColor": "brown",
+  "vector128": [
+    2.4082703590393066,
+    0.7757126092910767,
+    2.728593349456787,
+    1.780665397644043,
+    1.8214408159255981,
+    0.7085525393486023,
+    -4.971524238586426,
+    -1.9837249517440796,
+    -0.5601119995117188,
+    -2.731769561767578,
+    -3.510938882827759,
+    -2.1214239597320557,
+    -0.3864066004753113,
+    2.8400685787200928,
+    1.5094759464263916,
+    -0.008438974618911743,
+    2.135925769805908,
+    -2.251735210418701,
+    0.12480750679969788,
+    1.5412828922271729,
+    -0.23447385430335999,
+    -1.733827829360962,
+    -1.9261436462402344,
+    2.209294557571411,
+    -0.37706258893013,
+    1.1816848516464233,
+    -2.2286159992218018,
+    2.52329158782959,
+    1.7857937812805176,
+    -3.7425315380096436,
+    -4.619093894958496,
+    1.4411083459854126,
+    0.5506401062011719,
+    -1.9921226501464844,
+    -0.8308557271957397,
+    1.8680360317230225,
+    1.6205092668533325,
+    -2.6705524921417236,
+    1.9631205797195435,
+    5.119180202484131,
+    1.2368748188018799,
+    -1.238646388053894,
+    -2.184560775756836,
+    2.556334972381592,
+    -1.102799892425537,
+    -1.1184910535812378,
+    2.603196382522583,
+    -1.45664644241333,
+    -1.873106598854065,
+    2.819901943206787,
+    -2.5400543212890625,
+    5.289856910705566,
+    -2.572460651397705,
+    -0.21261081099510193,
+    -0.041121553629636765,
+    -0.051135510206222534,
+    -0.7516508102416992,
+    -0.3441286087036133,
+    -1.7805835008621216,
+    3.396754741668701,
+    1.140523910522461,
+    0.17242664098739624,
+    -3.8687820434570312,
+    0.3080222010612488,
+    -1.5314676761627197,
+    -0.43617600202560425,
+    -3.0472326278686523,
+    -0.9179568290710449,
+    2.676617383956909,
+    -0.29413092136383057,
+    0.4937683641910553,
+    1.433036208152771,
+    1.9495797157287598,
+    0.6926570534706116,
+    2.422211170196533,
+    1.2763396501541138,
+    -7.694880485534668,
+    -0.9424074292182922,
+    3.6863741874694824,
+    -3.362046718597412,
+    1.3208720684051514,
+    0.6314615607261658,
+    -2.0453333854675293,
+    -0.8113871216773987,
+    0.22073370218276978,
+    -1.180114984512329,
+    -1.0475375652313232,
+    0.9136144518852234,
+    5.697423934936523,
+    2.588582992553711,
+    2.1768627166748047,
+    -0.6594399809837341,
+    1.300358533859253,
+    3.85901141166687,
+    5.584001541137695,
+    -5.8187575340271,
+    -1.2903673648834229,
+    1.0791873931884766,
+    1.9736462831497192,
+    0.5414260029792786,
+    -2.5455892086029053,
+    -3.251795530319214,
+    2.903021812438965,
+    2.84802508354187,
+    0.9276992082595825,
+    -5.405847549438477,
+    1.85396409034729,
+    0.6288896799087524,
+    -0.7376675605773926,
+    3.1619462966918945,
+    0.6477782726287842,
+    3.1693356037139893,
+    0.11034655570983887,
+    -1.9964510202407837,
+    -5.405462741851807,
+    -0.3398507237434387,
+    2.1160805225372314,
+    2.847510814666748,
+    -2.151323080062866,
+    -2.809788703918457,
+    -1.6856144666671753,
+    1.045408010482788,
+    -0.61397784948349,
+    -0.29390937089920044,
+    -0.11324352025985718,
+    -1.0669901371002197,
+    2.842527389526367,
+    -0.29537153244018555
+  ],
+  "searchable": true,
+  "pipelineResponse": [
+    {
+      "status": "accepted",
+      "message": "Extracted successfully",
+      "item_id": "3e9508cd-aa6e-4925-bc60-6eb31c685d4a",
+      "image": {
+        "image_id": "e1e4c348-0ef8-4fd5-8df9-b750d920a8c2",
+        "filename": "a8e3d8eb-fa2d-4c09-929f-83489f622339_converted.jpg"
+      },
+      "label": "Key",
+      "confidence": 0.8372316360473633,
+      "bbox": [
+        921,
+        489,
+        1900,
+        3238
+      ],
+      "color": "brown",
+      "ocr_text": "1LVS",
+      "ocr_text_display": "1LVS",
+      "ocr_lines": [
+        {
+          "text": "1LVS",
+          "bbox": [
+            173.77,
+            1235.68,
+            824.81,
+            1455.6
+          ],
+          "block_index": 0
+        }
+      ],
+      "ocr_layout_source": "ocr_with_region",
+      "final_description": "A single brown key featuring a plastic head cover embossed with the TVS logo and a visible teeth pattern. The item includes a metal key ring attached and a small metal tag attached. Visible surface corrosion and scratches are present on the metal blade. It has text. It shows bent key. The text \"1LVS\" is visible on the surface.",
+      "detailed_description": "A single brown key featuring a plastic head cover embossed with the TVS logo and a visible teeth pattern. The item includes a metal key ring attached and a small metal tag attached. Visible surface corrosion and scratches are present on the metal blade. It has text. It shows bent key. The text \"1LVS\" is visible on the surface.",
+      "description_source": "gemini_evidence_locked",
+      "detailed_description_source": "gemini_evidence_locked",
+      "description_evidence_used": {
+        "summary": [
+          "gemini_description",
+          "grounded_features",
+          "grounded_defects",
+          "grounded_attachments",
+          "ocr_text"
+        ],
+        "detailed": [
+          "gemini_description",
+          "grounded_features",
+          "grounded_defects",
+          "grounded_attachments",
+          "ocr_text"
+        ]
+      },
+      "description_filters_applied": [
+        "gemini_evidence_locked"
+      ],
+      "description_word_count": {
+        "final_description": 59,
+        "detailed_description": 59
+      },
+      "category_details": {
+        "features": [
+          "logo",
+          "text",
+          "teeth pattern",
+          "plastic head cover"
+        ],
+        "defects": [
+          "bent key",
+          "scratches",
+          "surface corrosion"
+        ],
+        "attachments": [
+          "metal key ring attached",
+          "tag attached"
+        ]
+      },
+      "key_count": 1,
+      "tags": [],
+      "embeddings": {
+        "vector_128d": [
+          2.4082703590393066,
+          0.7757126092910767,
+          2.728593349456787,
+          1.780665397644043,
+          1.8214408159255981,
+          0.7085525393486023,
+          -4.971524238586426,
+          -1.9837249517440796,
+          -0.5601119995117188,
+          -2.731769561767578,
+          -3.510938882827759,
+          -2.1214239597320557,
+          -0.3864066004753113,
+          2.8400685787200928,
+          1.5094759464263916,
+          -0.008438974618911743,
+          2.135925769805908,
+          -2.251735210418701,
+          0.12480750679969788,
+          1.5412828922271729,
+          -0.23447385430335999,
+          -1.733827829360962,
+          -1.9261436462402344,
+          2.209294557571411,
+          -0.37706258893013,
+          1.1816848516464233,
+          -2.2286159992218018,
+          2.52329158782959,
+          1.7857937812805176,
+          -3.7425315380096436,
+          -4.619093894958496,
+          1.4411083459854126,
+          0.5506401062011719,
+          -1.9921226501464844,
+          -0.8308557271957397,
+          1.8680360317230225,
+          1.6205092668533325,
+          -2.6705524921417236,
+          1.9631205797195435,
+          5.119180202484131,
+          1.2368748188018799,
+          -1.238646388053894,
+          -2.184560775756836,
+          2.556334972381592,
+          -1.102799892425537,
+          -1.1184910535812378,
+          2.603196382522583,
+          -1.45664644241333,
+          -1.873106598854065,
+          2.819901943206787,
+          -2.5400543212890625,
+          5.289856910705566,
+          -2.572460651397705,
+          -0.21261081099510193,
+          -0.041121553629636765,
+          -0.051135510206222534,
+          -0.7516508102416992,
+          -0.3441286087036133,
+          -1.7805835008621216,
+          3.396754741668701,
+          1.140523910522461,
+          0.17242664098739624,
+          -3.8687820434570312,
+          0.3080222010612488,
+          -1.5314676761627197,
+          -0.43617600202560425,
+          -3.0472326278686523,
+          -0.9179568290710449,
+          2.676617383956909,
+          -0.29413092136383057,
+          0.4937683641910553,
+          1.433036208152771,
+          1.9495797157287598,
+          0.6926570534706116,
+          2.422211170196533,
+          1.2763396501541138,
+          -7.694880485534668,
+          -0.9424074292182922,
+          3.6863741874694824,
+          -3.362046718597412,
+          1.3208720684051514,
+          0.6314615607261658,
+          -2.0453333854675293,
+          -0.8113871216773987,
+          0.22073370218276978,
+          -1.180114984512329,
+          -1.0475375652313232,
+          0.9136144518852234,
+          5.697423934936523,
+          2.588582992553711,
+          2.1768627166748047,
+          -0.6594399809837341,
+          1.300358533859253,
+          3.85901141166687,
+          5.584001541137695,
+          -5.8187575340271,
+          -1.2903673648834229,
+          1.0791873931884766,
+          1.9736462831497192,
+          0.5414260029792786,
+          -2.5455892086029053,
+          -3.251795530319214,
+          2.903021812438965,
+          2.84802508354187,
+          0.9276992082595825,
+          -5.405847549438477,
+          1.85396409034729,
+          0.6288896799087524,
+          -0.7376675605773926,
+          3.1619462966918945,
+          0.6477782726287842,
+          3.1693356037139893,
+          0.11034655570983887,
+          -1.9964510202407837,
+          -5.405462741851807,
+          -0.3398507237434387,
+          2.1160805225372314,
+          2.847510814666748,
+          -2.151323080062866,
+          -2.809788703918457,
+          -1.6856144666671753,
+          1.045408010482788,
+          -0.61397784948349,
+          -0.29390937089920044,
+          -0.11324352025985718,
+          -1.0669901371002197,
+          2.842527389526367,
+          -0.29537153244018555
+        ],
+        "vector_dinov2": [
+          1.3335208892822266,
+          -1.284507393836975,
+          4.078591346740723,
+          -0.6629180312156677,
+          -2.985542058944702,
+          -1.2718218564987183,
+          -1.8451602458953857,
+          -1.1189782619476318,
+          -0.8583866357803345,
+          5.664742946624756,
+          -1.9842348098754883,
+          2.0978033542633057,
+          1.6173756122589111,
+          0.2509557604789734,
+          -0.7748997807502747,
+          1.8703371286392212,
+          2.8961164951324463,
+          2.2011477947235107,
+          1.5340440273284912,
+          -1.8323293924331665,
+          1.395155668258667,
+          -3.526353120803833,
+          2.910076379776001,
+          -0.98291015625,
+          -0.25137701630592346,
+          -3.138561964035034,
+          2.4773871898651123,
+          -2.2607438564300537,
+          -1.1014304161071777,
+          -3.1365394592285156,
+          2.1028268337249756,
+          2.0631103515625,
+          4.843168258666992,
+          1.432844638824463,
+          1.645896553993225,
+          0.6898301839828491,
+          0.11637204140424728,
+          -0.12578684091567993,
+          -2.56307053565979,
+          -2.780837297439575,
+          -2.5554847717285156,
+          0.8655867576599121,
+          -0.6094769835472107,
+          -4.249456882476807,
+          1.0845519304275513,
+          -1.197534441947937,
+          2.1157422065734863,
+          2.8211236000061035,
+          -5.942875385284424,
+          0.5706998109817505,
+          0.8360742926597595,
+          0.8301664590835571,
+          -0.5184203386306763,
+          -1.3124626874923706,
+          0.3773551285266876,
+          -0.06233358755707741,
+          -1.6849888563156128,
+          -0.21779972314834595,
+          -0.1363515406847,
+          -1.3522803783416748,
+          -4.9917826652526855,
+          -0.7569507956504822,
+          -2.870518684387207,
+          2.5951387882232666,
+          -1.025952696800232,
+          -0.04173886775970459,
+          0.8629437685012817,
+          -0.9174811840057373,
+          -1.519803524017334,
+          1.9991575479507446,
+          3.7506728172302246,
+          -3.576085090637207,
+          0.6334807276725769,
+          -1.3380218744277954,
+          -1.578309416770935,
+          -1.1657118797302246,
+          0.8792834877967834,
+          -0.6840488910675049,
+          -1.650282621383667,
+          -0.3867136836051941,
+          0.5880402326583862,
+          -4.172271251678467,
+          2.2448065280914307,
+          1.8983471393585205,
+          -1.571355938911438,
+          3.726466655731201,
+          3.136168956756592,
+          0.956999659538269,
+          -1.8481872081756592,
+          -1.7363651990890503,
+          -0.17703989148139954,
+          -2.08290958404541,
+          5.479211330413818,
+          0.3267965316772461,
+          -1.7888619899749756,
+          -2.4699864387512207,
+          5.221223831176758,
+          -2.3199384212493896,
+          5.304513931274414,
+          -2.031852960586548,
+          -0.7212874293327332,
+          -2.384342670440674,
+          -0.5435490012168884,
+          4.648623943328857,
+          -3.734618902206421,
+          -1.9684484004974365,
+          4.126330375671387,
+          -1.9128223657608032,
+          -2.0852010250091553,
+          -1.17372727394104,
+          2.098433017730713,
+          2.631545305252075,
+          -2.14202618598938,
+          -1.3909120559692383,
+          4.499683380126953,
+          1.5352784395217896,
+          -3.7790122032165527,
+          4.395939826965332,
+          2.8868696689605713,
+          2.3880457878112793,
+          -0.3957763910293579,
+          2.633021116256714,
+          -0.6523277759552002,
+          -1.2635176181793213,
+          -0.25156107544898987,
+          0.4863278269767761,
+          1.7768946886062622,
+          -1.1812978982925415,
+          3.959049940109253,
+          -2.898038148880005,
+          1.686479091644287,
+          -3.7570130825042725,
+          -4.478645324707031,
+          -1.92568039894104,
+          1.6916190385818481,
+          6.70651388168335,
+          0.40804874897003174,
+          -4.1460394859313965,
+          1.537540316581726,
+          3.027247428894043,
+          0.7877857089042664,
+          -0.1869860142469406,
+          -1.4994845390319824,
+          -1.1913257837295532,
+          3.693361759185791,
+          -0.6627008318901062,
+          -0.6709567904472351,
+          -3.269862174987793,
+          0.7059910297393799,
+          -5.184932708740234,
+          1.5058790445327759,
+          2.844165086746216,
+          1.6413516998291016,
+          4.260523319244385,
+          2.923997163772583,
+          0.109104223549366,
+          0.03672804683446884,
+          -3.3932392597198486,
+          -4.584590911865234,
+          2.012613296508789,
+          -0.4350501000881195,
+          -1.5498847961425781,
+          0.3903866112232208,
+          -2.0678188800811768,
+          -0.727908194065094,
+          -0.29539138078689575,
+          3.7688941955566406,
+          2.321814775466919,
+          -0.19679301977157593,
+          1.374322772026062,
+          -0.3191748559474945,
+          1.393768548965454,
+          2.3055100440979004,
+          -1.988077998161316,
+          -5.958920955657959,
+          0.16584725677967072,
+          -0.7876284718513489,
+          -1.2778445482254028,
+          -1.9364326000213623,
+          -1.4189825057983398,
+          4.322858810424805,
+          1.2204221487045288,
+          -3.968066930770874,
+          0.13111189007759094,
+          4.963984966278076,
+          -1.162447452545166,
+          1.097426414489746,
+          1.6490626335144043,
+          -0.2500058114528656,
+          1.8536182641983032,
+          3.065558910369873,
+          -1.1929484605789185,
+          -0.5738269686698914,
+          -4.775974750518799,
+          1.3300461769104004,
+          1.6385691165924072,
+          -0.2626941502094269,
+          -4.006327152252197,
+          -1.9690417051315308,
+          -1.3119111061096191,
+          -1.3493541479110718,
+          -1.1718106269836426,
+          0.7209213376045227,
+          -0.26914045214653015,
+          0.24813809990882874,
+          -1.2237600088119507,
+          2.1223933696746826,
+          0.8577256798744202,
+          -0.10731808841228485,
+          1.8491730690002441,
+          -1.578869342803955,
+          1.7154510021209717,
+          -1.0361132621765137,
+          0.8869971036911011,
+          0.7303399443626404,
+          -4.2509331703186035,
+          1.4177981615066528,
+          4.546406269073486,
+          0.09357281029224396,
+          4.391323089599609,
+          -2.267186403274536,
+          7.199888229370117,
+          2.1654155254364014,
+          -1.876992106437683,
+          -1.7691599130630493,
+          1.5233738422393799,
+          0.8516715168952942,
+          0.12320233881473541,
+          -5.542171001434326,
+          2.5982956886291504,
+          0.20690132677555084,
+          3.6702096462249756,
+          -0.19277477264404297,
+          -1.527425765991211,
+          -3.6650445461273193,
+          -1.6510006189346313,
+          2.1569454669952393,
+          -3.1682095527648926,
+          -8.4636812210083,
+          0.4653604030609131,
+          -3.504974365234375,
+          -0.40400224924087524,
+          -0.07606594264507294,
+          1.0546751022338867,
+          -2.755871295928955,
+          -2.4486186504364014,
+          3.1908833980560303,
+          -1.476418137550354,
+          0.003851742949336767,
+          4.959139823913574,
+          -0.6300165057182312,
+          0.6185014843940735,
+          -0.7596043944358826,
+          -1.4449124336242676,
+          1.8813889026641846,
+          -1.6525336503982544,
+          5.659820556640625,
+          2.731266975402832,
+          1.768035888671875,
+          -0.3056848347187042,
+          -0.7994117736816406,
+          4.403717994689941,
+          -2.1061949729919434,
+          -0.3328308165073395,
+          1.6720696687698364,
+          -0.7168229222297668,
+          -2.349961519241333,
+          -0.5411111116409302,
+          1.4882227182388306,
+          -3.9456627368927,
+          -0.149974524974823,
+          0.7044953107833862,
+          -2.07554292678833,
+          -1.5728014707565308,
+          -0.8717718124389648,
+          2.63686466217041,
+          3.7777152061462402,
+          -2.1228857040405273,
+          -0.2503405809402466,
+          2.89603590965271,
+          1.531864881515503,
+          0.6742093563079834,
+          -1.9288195371627808,
+          1.809472918510437,
+          2.585892915725708,
+          4.4702935218811035,
+          0.024059327319264412,
+          0.3107106387615204,
+          0.11206719279289246,
+          3.909156084060669,
+          3.0513341426849365,
+          1.0456329584121704,
+          -1.0620014667510986,
+          2.411436080932617,
+          -0.8150691986083984,
+          -2.142700433731079,
+          0.6231470704078674,
+          -3.6514101028442383,
+          1.5496058464050293,
+          -0.09662910550832748,
+          -2.2776529788970947,
+          0.23721612989902496,
+          3.772214412689209,
+          -2.3996381759643555,
+          1.938422441482544,
+          -1.1355040073394775,
+          -3.5133488178253174,
+          2.5392565727233887,
+          -1.0985954999923706,
+          -0.7638528943061829,
+          0.8301820158958435,
+          2.349860668182373,
+          -2.4504644870758057,
+          -3.199009895324707,
+          -1.983361840248108,
+          -0.9496840238571167,
+          -1.3168675899505615,
+          -2.1501097679138184,
+          -1.851544737815857,
+          0.5660626888275146,
+          3.3286025524139404,
+          -1.6043068170547485,
+          -2.1551334857940674,
+          -0.010453016497194767,
+          -0.13638417422771454,
+          -0.26639124751091003,
+          2.7617173194885254,
+          -1.134600281715393,
+          0.07383203506469727,
+          0.7653623223304749,
+          3.86523699760437,
+          1.4945659637451172,
+          2.3814570903778076,
+          2.8646721839904785,
+          0.9140729308128357,
+          -1.271721363067627,
+          1.5998451709747314,
+          0.8129929900169373,
+          -0.09319553524255753,
+          0.8982231616973877,
+          -0.6664875745773315,
+          0.44437915086746216,
+          -1.036393404006958,
+          0.5419756174087524,
+          -0.018575334921479225,
+          -1.4990755319595337,
+          -2.2957863807678223,
+          4.364253997802734,
+          -0.31004855036735535,
+          0.9673306941986084,
+          -0.3305266499519348,
+          -3.1644318103790283,
+          -2.2710933685302734,
+          0.27360275387763977,
+          -5.672363758087158,
+          -3.0540850162506104,
+          -0.15195465087890625,
+          -0.10106237232685089,
+          -2.0376977920532227,
+          -1.8396275043487549,
+          0.006567906588315964,
+          0.12000126391649246,
+          1.9603688716888428,
+          -2.440532684326172,
+          -3.36490797996521,
+          -1.3266876935958862,
+          0.059155963361263275,
+          -4.277328968048096,
+          -0.02099672704935074,
+          1.4873887300491333,
+          1.2332900762557983,
+          -1.051363229751587,
+          0.5498599410057068,
+          1.2036651372909546,
+          0.636147141456604,
+          1.7074085474014282,
+          -0.4539271295070648,
+          -2.7222328186035156,
+          2.376974582672119,
+          0.8547928929328918,
+          -3.745347499847412,
+          3.5119242668151855,
+          -1.4602726697921753,
+          -1.342267632484436
+        ]
+      },
+      "processing_time": 26246.2,
+      "raw": {
+        "detection_source": "yolo",
+        "yolo": {
+          "label": "Key",
+          "confidence": 0.8372316360473633,
+          "bbox": [
+            921,
+            489,
+            1900,
+            3238
+          ]
+        },
+        "florence": {
+          "caption": "A key. The keychain is silver and has a metal ring on it. a silver key on top of the key.",
+          "grounded_description": "A key. The keychain is silver and has a metal ring on it. a silver key on top of the key. It has logo, plastic head cover. It shows surface corrosion, scratches, bent key. The text \"1LVS\" is visible on the surface.",
+          "final_description": "A key. The keychain is silver and has a metal ring on it. a silver key on top of the key. It has logo, plastic head cover. It shows surface corrosion, scratches, bent key. The text \"1LVS\" is visible on the surface.",
+          "detailed_description": "A key. The keychain is silver and has a metal ring on it. a silver key on top of the key. It has logo, plastic head cover. It shows surface corrosion, scratches, bent key. The text \"1LVS\" is visible on the surface.",
+          "description_source": "florence_direct",
+          "detailed_description_source": "florence_direct",
+          "description_evidence_used": {
+            "summary": [
+              "florence_caption",
+              "grounded_features",
+              "grounded_defects",
+              "ocr_text"
+            ],
+            "detailed": [
+              "florence_caption",
+              "grounded_features",
+              "grounded_defects",
+              "ocr_text"
+            ]
+          },
+          "description_filters_applied": [
+            "florence_direct"
+          ],
+          "description_word_count": {
+            "final_description": 42,
+            "detailed_description": 42
+          },
+          "ocr_text": "1LVS",
+          "ocr_text_display": "1LVS",
+          "ocr_lines": [
+            {
+              "text": "1LVS",
+              "bbox": [
+                173.77,
+                1235.68,
+                824.81,
+                1455.6
+              ],
+              "block_index": 0
+            }
+          ],
+          "ocr_layout_source": "ocr_with_region",
+          "color_vqa": "brown",
+          "grounded_features": [
+            "logo",
+            "plastic head cover"
+          ],
+          "grounded_defects": [
+            "surface corrosion",
+            "scratches",
+            "bent key"
+          ],
+          "grounded_attachments": [],
+          "key_count": 1,
+          "raw": {
+            "caption": "A key. The keychain is silver and has a metal ring on it. a silver key on top of the key.",
+            "caption_primary": "A key is sitting on a keychain. The keychain is silver and has a metal ring on it. There is a silver key on top of the key.",
+            "caption_guided": "unanswerable",
+            "caption_source": "detailed_caption",
+            "caption_is_generic": false,
+            "description_source": "florence_direct",
+            "detailed_description_source": "florence_direct",
+            "description_evidence_used": {
+              "summary": [
+                "florence_caption",
+                "grounded_features",
+                "grounded_defects",
+                "ocr_text"
+              ],
+              "detailed": [
+                "florence_caption",
+                "grounded_features",
+                "grounded_defects",
+                "ocr_text"
+              ]
+            },
+            "description_filters_applied": [
+              "florence_direct"
+            ],
+            "description_word_count": {
+              "final_description": 42,
+              "detailed_description": 42
+            },
+            "ocr": "1LVS",
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "1LVS",
+                  "bbox": [
+                    173.77,
+                    1235.68,
+                    824.81,
+                    1455.6
+                  ],
+                  "block_index": 0
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "1LVS",
+                  "bbox": [
+                    173.77,
+                    1235.68,
+                    824.81,
+                    1455.6
+                  ]
+                }
+              ]
+            },
+            "color_vqa": "brown",
+            "defects_vqa": "vQA> List any visible wear or damage on the object using short phrases",
+            "grounding_raw": {
+              "labels": [
+                "logo",
+                "logo",
+                "logo logo",
+                "logo name",
+                "plastic head cover",
+                "plastic head cover",
+                "bent key",
+                "key head",
+                "teeth",
+                "scratches",
+                "keyring",
+                "surface corrosion",
+                "metal key ring",
+                "lanyard",
+                "tag",
+                "remote key fob",
+                "carabiner",
+                "hook"
+              ]
+            },
+            "attachment_vqa_checks": []
+          }
+        },
+        "florence_od_fallback": {
+          "triggered": true,
+          "reason": "always",
+          "winner_source": "yolo",
+          "florence_detections": [
+            {
+              "label": "Handbag",
+              "confidence": 0.5,
+              "bbox": [
+                1,
+                2,
+                3019,
+                4025
+              ],
+              "caption": "A key is sitting on top of a black surface. The key has a silver ring on it. There is writing on the key that is black.",
+              "ocr_text": "TVS"
+            }
+          ],
+          "arbiter_metadata": {
+            "match_type": "no_iou_match",
+            "iou": 0.2217,
+            "florence_evidence_score": 0,
+            "yolo_evidence_score": 0.1429
+          }
+        },
+        "label_rerank": {
+          "enabled": true,
+          "applied": false,
+          "initial_label": "Key",
+          "final_label": "Key",
+          "topk_candidates": [
+            {
+              "label": "Key",
+              "confidence": 0.8372316360473633,
+              "bbox": [
+                921,
+                489,
+                1900,
+                3238
+              ]
+            },
+            {
+              "label": "Key",
+              "confidence": 0.7560162544250488,
+              "bbox": [
+                916,
+                482,
+                2786,
+                3284
+              ]
+            },
+            {
+              "label": "Key",
+              "confidence": 0.3564431667327881,
+              "bbox": [
+                923,
+                1333,
+                1907,
+                3206
+              ]
+            }
+          ],
+          "scores_by_label": {
+            "Key": {
+              "score": 9,
+              "matched_keywords": {
+                "caption": [
+                  "key",
+                  "keychain"
+                ],
+                "ocr": [],
+                "grounding": [
+                  "key",
+                  "key ring",
+                  "fob",
+                  "key fob",
+                  "metal key"
+                ]
+              }
+            }
+          },
+          "winner_label": "Key",
+          "winner_score": 9,
+          "top1_score": 9,
+          "selected_bbox_source": "top1",
+          "reason": "top1_best_score",
+          "canonical_lock_applied": false
+        },
+        "gemini": {
+          "status": "accepted",
+          "message": "Extracted successfully",
+          "label": "Key",
+          "color": "brown",
+          "category_details": {
+            "features": [
+              "logo",
+              "text",
+              "teeth pattern",
+              "plastic head cover"
+            ],
+            "defects": [
+              "bent key",
+              "scratches",
+              "surface corrosion"
+            ],
+            "attachments": [
+              "metal key ring attached",
+              "tag attached"
+            ]
+          },
+          "key_count": 1,
+          "final_description": "A single brown key featuring a plastic head cover embossed with the TVS logo and a visible teeth pattern. The item includes a metal key ring attached and a small metal tag attached. Visible surface corrosion and scratches are present on the metal blade. It has text. It shows bent key. The text \"1LVS\" is visible on the surface.",
+          "detailed_description": "A single brown key featuring a plastic head cover embossed with the TVS logo and a visible teeth pattern. The item includes a metal key ring attached and a small metal tag attached. Visible surface corrosion and scratches are present on the metal blade.",
+          "label_change_reason": null
+        },
+        "gemini_warnings": [],
+        "timings": {
+          "detect_ms": 520.58,
+          "florence_ms": 12112.54,
+          "florence_od_ms": 3284.61,
+          "label_rerank_ms": 6.94,
+          "gemini_ms": 10837.2,
+          "embeddings_ms": 0.22,
+          "total_ms": 26246.2
+        },
+        "description_debug": {
+          "final_description": "A single brown key featuring a plastic head cover embossed with the TVS logo and a visible teeth pattern. The item includes a metal key ring attached and a small metal tag attached. Visible surface corrosion and scratches are present on the metal blade. It has text. It shows bent key. The text \"1LVS\" is visible on the surface.",
+          "detailed_description": "A single brown key featuring a plastic head cover embossed with the TVS logo and a visible teeth pattern. The item includes a metal key ring attached and a small metal tag attached. Visible surface corrosion and scratches are present on the metal blade. It has text. It shows bent key. The text \"1LVS\" is visible on the surface.",
+          "description_source": "gemini_evidence_locked",
+          "detailed_description_source": "gemini_evidence_locked",
+          "description_evidence_used": {
+            "summary": [
+              "gemini_description",
+              "grounded_features",
+              "grounded_defects",
+              "grounded_attachments",
+              "ocr_text"
+            ],
+            "detailed": [
+              "gemini_description",
+              "grounded_features",
+              "grounded_defects",
+              "grounded_attachments",
+              "ocr_text"
+            ]
+          },
+          "description_filters_applied": [
+            "gemini_evidence_locked"
+          ],
+          "description_word_count": {
+            "final_description": 59,
+            "detailed_description": 59
+          }
+        }
+      }
+    }
+  ],
+  "createdAt": {
+    "$date": "2026-03-10T07:24:14.052Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-10T07:24:14.052Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69afc91dcb4a7754e6223c37"
+  },
+  "imageUrl": "https://res.cloudinary.com/dnbdsdnrq/image/upload/v1773127972/findassure/found-items/yijdt9t1iw0psiinkkdu.jpg",
+  "category": "Laptop",
+  "description": "The blue Acer Aspire 3 laptop is shown. The device is equipped with a keyboard, trackpad, logo, and brand name.",
+  "questions": [
+    "What is the laptop's brand name?",
+    "What is the laptop's dominant external color?",
+    "What is the laptop's specific model series?",
+    "What main input device is located below the keyboard?",
+    "What is the total number of USB ports?"
+  ],
+  "founderAnswers": [
+    "acer",
+    "blue",
+    "aspire 3",
+    "trackpad",
+    "3"
+  ],
+  "founderContact": {
+    "name": "Yehara Dananjaya",
+    "email": "theultimatesyd@gmail.com",
+    "phone": "0702249246"
+  },
+  "found_location": [
+    {
+      "location": "new_building",
+      "floor_id": "12",
+      "hall_name": "G1204"
+    }
+  ],
+  "status": "available",
+  "createdBy": {
+    "$oid": "69afc27ccb4a7754e6223b53"
+  },
+  "analysisMode": "pp1",
+  "pythonItemId": "b9a23447-d3aa-4d25-ad71-77108542a2ae",
+  "faissId": 94,
+  "faissIds": [
+    94
+  ],
+  "detectedCategory": "Laptop",
+  "detectedDescription": "The blue Acer Aspire 3 laptop is shown open and powered on, with the screen displaying 12:57 Tuesday 10 March. The device is equipped with a keyboard, trackpad, logo, and brand name. Damage is evident in the form of a cracked screen, screen scratches, and a scratch. The text \"12:57 Tuesday 10 March 29 H 1080 acer A D\" is visible on the surface.",
+  "detectedColor": "blue",
+  "vector128": [
+    1.0534296035766602,
+    2.6293272972106934,
+    -3.3895578384399414,
+    0.16697990894317627,
+    2.045426845550537,
+    1.3324222564697266,
+    0.8602023124694824,
+    0.7608450651168823,
+    1.684680700302124,
+    -3.6421737670898438,
+    -0.12186112999916077,
+    -1.7805429697036743,
+    1.6671425104141235,
+    0.7467699646949768,
+    -1.1451407670974731,
+    2.5210342407226562,
+    8.951849937438965,
+    4.827878952026367,
+    -0.23020169138908386,
+    -1.6464879512786865,
+    4.106854438781738,
+    -5.02339506149292,
+    -2.1087217330932617,
+    0.6765519380569458,
+    3.5554373264312744,
+    0.8893759250640869,
+    0.43345171213150024,
+    -0.2786356210708618,
+    0.31768733263015747,
+    0.6958098411560059,
+    2.1046977043151855,
+    2.4784774780273438,
+    -6.58336067199707,
+    -1.1942015886306763,
+    -1.5681650638580322,
+    0.7967686057090759,
+    -1.6629422903060913,
+    0.1064329743385315,
+    3.0094306468963623,
+    6.93196964263916,
+    0.5375202894210815,
+    -0.586799681186676,
+    4.062605857849121,
+    1.2670296430587769,
+    4.1961140632629395,
+    -0.739096462726593,
+    2.5064024925231934,
+    2.2037997245788574,
+    2.1429495811462402,
+    0.7253649234771729,
+    -0.7464663982391357,
+    -2.4505648612976074,
+    4.669096946716309,
+    1.2970730066299438,
+    1.5323044061660767,
+    -1.3202288150787354,
+    -2.800539255142212,
+    1.940868616104126,
+    0.9778825640678406,
+    -4.187197208404541,
+    -0.1468103528022766,
+    -0.5126006603240967,
+    -1.2724703550338745,
+    -2.0530202388763428,
+    -1.634488821029663,
+    -2.03849196434021,
+    0.9241341352462769,
+    -0.8388502597808838,
+    0.03126591444015503,
+    1.2800569534301758,
+    -3.2559454441070557,
+    5.549948692321777,
+    1.1786669492721558,
+    4.429771900177002,
+    2.179544448852539,
+    -4.905940532684326,
+    0.173824280500412,
+    6.051433086395264,
+    2.3743107318878174,
+    3.7142674922943115,
+    6.196861267089844,
+    -0.8716698884963989,
+    -0.7350051403045654,
+    0.818474531173706,
+    -1.618206262588501,
+    4.808905124664307,
+    3.1896376609802246,
+    -0.10699829459190369,
+    -0.34606248140335083,
+    -0.3522526025772095,
+    -0.23897722363471985,
+    -1.5396863222122192,
+    -1.257396936416626,
+    2.497241497039795,
+    0.4066299498081207,
+    -2.3387465476989746,
+    1.169981598854065,
+    0.9534063339233398,
+    -4.832422733306885,
+    3.561372995376587,
+    -3.28432559967041,
+    1.3776347637176514,
+    2.4888627529144287,
+    -0.40270912647247314,
+    3.0443639755249023,
+    -2.4983632564544678,
+    1.949980616569519,
+    1.3464529514312744,
+    -5.154386043548584,
+    -3.6040518283843994,
+    -2.723118305206299,
+    1.6588674783706665,
+    0.08208529651165009,
+    -3.2736971378326416,
+    4.079704284667969,
+    -0.1967889964580536,
+    -7.244653224945068,
+    0.8659688830375671,
+    1.2404463291168213,
+    1.114430546760559,
+    1.3314752578735352,
+    3.1005914211273193,
+    -6.1284918785095215,
+    5.583816051483154,
+    2.259244441986084,
+    1.9260828495025635,
+    -0.22193089127540588,
+    -0.9485073089599609
+  ],
+  "searchable": true,
+  "pipelineResponse": [
+    {
+      "status": "accepted",
+      "message": "Extracted successfully",
+      "item_id": "b9a23447-d3aa-4d25-ad71-77108542a2ae",
+      "image": {
+        "image_id": "3475f272-7f33-4dff-9410-ef90f01cb57d",
+        "filename": "c21c5e9b-995e-47d6-897d-3b8b9b7fccd2.jpg"
+      },
+      "label": "Laptop",
+      "confidence": 0.9596195220947266,
+      "bbox": [
+        0,
+        13,
+        749,
+        750
+      ],
+      "color": "blue",
+      "ocr_text": "12:57 Tuesday 10 March 29 H 1080 acer A D F H C C N M CORE Aspire 3",
+      "ocr_text_display": "12:57\nTuesday 10 March\n\n29\n\nH 1080 acer\n\nA D F H\n\nC C N M\n\nCORE\n\nAspire 3",
+      "ocr_lines": [
+        {
+          "text": "12:57",
+          "bbox": [
+            310.46,
+            62.28,
+            427.3,
+            106.5
+          ],
+          "block_index": 0
+        },
+        {
+          "text": "Tuesday 10 March",
+          "bbox": [
+            329.19,
+            118.29,
+            413.82,
+            130.08
+          ],
+          "block_index": 0
+        },
+        {
+          "text": "29",
+          "bbox": [
+            210.84,
+            329.81,
+            228.82,
+            340.86
+          ],
+          "block_index": 1
+        },
+        {
+          "text": "H 1080 acer",
+          "bbox": [
+            89.51,
+            376.98,
+            401.84,
+            391.72
+          ],
+          "block_index": 2
+        },
+        {
+          "text": "A D F H",
+          "bbox": [
+            123.21,
+            494.16,
+            310.46,
+            500.79
+          ],
+          "block_index": 3
+        },
+        {
+          "text": "C C N M",
+          "bbox": [
+            169.65,
+            519.95,
+            364.39,
+            528.8
+          ],
+          "block_index": 4
+        },
+        {
+          "text": "CORE",
+          "bbox": [
+            19.85,
+            612.08,
+            52.06,
+            623.13
+          ],
+          "block_index": 5
+        },
+        {
+          "text": "Aspire 3",
+          "bbox": [
+            617.55,
+            696.83,
+            656.5,
+            709.36
+          ],
+          "block_index": 6
+        }
+      ],
+      "ocr_layout_source": "ocr_with_region",
+      "final_description": "The blue Acer Aspire 3 laptop is shown open and powered on, with the screen displaying 12:57 Tuesday 10 March. The device is equipped with a keyboard, trackpad, logo, and brand name. Damage is evident in the form of a cracked screen, screen scratches, and a scratch. The text \"12:57 Tuesday 10 March 29 H 1080 acer A D\" is visible on the surface.",
+      "detailed_description": "The blue Acer Aspire 3 laptop is shown open and powered on, with the screen displaying 12:57 Tuesday 10 March. The device is equipped with a keyboard, trackpad, logo, and brand name. Damage is evident in the form of a cracked screen, screen scratches, and a scratch. The text \"12:57 Tuesday 10 March 29 H 1080 acer A D\" is visible on the surface.",
+      "description_source": "gemini_evidence_locked",
+      "detailed_description_source": "gemini_evidence_locked",
+      "description_evidence_used": {
+        "summary": [
+          "gemini_description",
+          "grounded_features",
+          "grounded_defects",
+          "ocr_text"
+        ],
+        "detailed": [
+          "gemini_description",
+          "grounded_features",
+          "grounded_defects",
+          "ocr_text"
+        ]
+      },
+      "description_filters_applied": [
+        "gemini_evidence_locked"
+      ],
+      "description_word_count": {
+        "final_description": 64,
+        "detailed_description": 64
+      },
+      "category_details": {
+        "features": [
+          "logo",
+          "brand name",
+          "keyboard",
+          "trackpad"
+        ],
+        "defects": [
+          "cracked screen",
+          "screen scratches",
+          "scratch"
+        ],
+        "attachments": []
+      },
+      "key_count": null,
+      "tags": [],
+      "embeddings": {
+        "vector_128d": [
+          1.0534296035766602,
+          2.6293272972106934,
+          -3.3895578384399414,
+          0.16697990894317627,
+          2.045426845550537,
+          1.3324222564697266,
+          0.8602023124694824,
+          0.7608450651168823,
+          1.684680700302124,
+          -3.6421737670898438,
+          -0.12186112999916077,
+          -1.7805429697036743,
+          1.6671425104141235,
+          0.7467699646949768,
+          -1.1451407670974731,
+          2.5210342407226562,
+          8.951849937438965,
+          4.827878952026367,
+          -0.23020169138908386,
+          -1.6464879512786865,
+          4.106854438781738,
+          -5.02339506149292,
+          -2.1087217330932617,
+          0.6765519380569458,
+          3.5554373264312744,
+          0.8893759250640869,
+          0.43345171213150024,
+          -0.2786356210708618,
+          0.31768733263015747,
+          0.6958098411560059,
+          2.1046977043151855,
+          2.4784774780273438,
+          -6.58336067199707,
+          -1.1942015886306763,
+          -1.5681650638580322,
+          0.7967686057090759,
+          -1.6629422903060913,
+          0.1064329743385315,
+          3.0094306468963623,
+          6.93196964263916,
+          0.5375202894210815,
+          -0.586799681186676,
+          4.062605857849121,
+          1.2670296430587769,
+          4.1961140632629395,
+          -0.739096462726593,
+          2.5064024925231934,
+          2.2037997245788574,
+          2.1429495811462402,
+          0.7253649234771729,
+          -0.7464663982391357,
+          -2.4505648612976074,
+          4.669096946716309,
+          1.2970730066299438,
+          1.5323044061660767,
+          -1.3202288150787354,
+          -2.800539255142212,
+          1.940868616104126,
+          0.9778825640678406,
+          -4.187197208404541,
+          -0.1468103528022766,
+          -0.5126006603240967,
+          -1.2724703550338745,
+          -2.0530202388763428,
+          -1.634488821029663,
+          -2.03849196434021,
+          0.9241341352462769,
+          -0.8388502597808838,
+          0.03126591444015503,
+          1.2800569534301758,
+          -3.2559454441070557,
+          5.549948692321777,
+          1.1786669492721558,
+          4.429771900177002,
+          2.179544448852539,
+          -4.905940532684326,
+          0.173824280500412,
+          6.051433086395264,
+          2.3743107318878174,
+          3.7142674922943115,
+          6.196861267089844,
+          -0.8716698884963989,
+          -0.7350051403045654,
+          0.818474531173706,
+          -1.618206262588501,
+          4.808905124664307,
+          3.1896376609802246,
+          -0.10699829459190369,
+          -0.34606248140335083,
+          -0.3522526025772095,
+          -0.23897722363471985,
+          -1.5396863222122192,
+          -1.257396936416626,
+          2.497241497039795,
+          0.4066299498081207,
+          -2.3387465476989746,
+          1.169981598854065,
+          0.9534063339233398,
+          -4.832422733306885,
+          3.561372995376587,
+          -3.28432559967041,
+          1.3776347637176514,
+          2.4888627529144287,
+          -0.40270912647247314,
+          3.0443639755249023,
+          -2.4983632564544678,
+          1.949980616569519,
+          1.3464529514312744,
+          -5.154386043548584,
+          -3.6040518283843994,
+          -2.723118305206299,
+          1.6588674783706665,
+          0.08208529651165009,
+          -3.2736971378326416,
+          4.079704284667969,
+          -0.1967889964580536,
+          -7.244653224945068,
+          0.8659688830375671,
+          1.2404463291168213,
+          1.114430546760559,
+          1.3314752578735352,
+          3.1005914211273193,
+          -6.1284918785095215,
+          5.583816051483154,
+          2.259244441986084,
+          1.9260828495025635,
+          -0.22193089127540588,
+          -0.9485073089599609
+        ],
+        "vector_dinov2": [
+          -0.48837634921073914,
+          3.928929328918457,
+          -3.076742172241211,
+          -2.929980993270874,
+          3.1151092052459717,
+          -0.10068922489881516,
+          -0.03149913623929024,
+          -1.3216655254364014,
+          2.8618383407592773,
+          -0.3550221025943756,
+          -3.3810622692108154,
+          1.9324054718017578,
+          1.6772994995117188,
+          -3.1128218173980713,
+          -2.083001136779785,
+          -1.5077358484268188,
+          0.49747565388679504,
+          1.0225661993026733,
+          1.1050825119018555,
+          1.6153109073638916,
+          -3.6270930767059326,
+          -1.356236457824707,
+          -2.4324707984924316,
+          2.3754961490631104,
+          5.822671890258789,
+          0.9708238244056702,
+          0.9359981417655945,
+          3.2236480712890625,
+          4.139848232269287,
+          1.4762076139450073,
+          1.209920048713684,
+          -1.2299933433532715,
+          -4.544874668121338,
+          -0.502612829208374,
+          -0.4185868799686432,
+          -2.6166038513183594,
+          -0.6881992220878601,
+          -2.1780316829681396,
+          -1.3735828399658203,
+          -1.400373101234436,
+          -6.390216827392578,
+          4.906564712524414,
+          -5.490077495574951,
+          0.6915514469146729,
+          -2.5900182723999023,
+          1.7816431522369385,
+          -0.642812192440033,
+          2.7929084300994873,
+          3.256025791168213,
+          -1.0819742679595947,
+          1.1898112297058105,
+          0.5397028923034668,
+          3.1557247638702393,
+          5.133677005767822,
+          -2.349642276763916,
+          3.108309030532837,
+          4.7643327713012695,
+          0.05823083221912384,
+          -2.5585920810699463,
+          0.7087209224700928,
+          0.023099828511476517,
+          0.8633711934089661,
+          -2.502054452896118,
+          -0.03583768382668495,
+          1.72434663772583,
+          1.536177635192871,
+          3.2357635498046875,
+          0.1405724138021469,
+          0.6038524508476257,
+          -3.782637357711792,
+          6.100897312164307,
+          -3.744175434112549,
+          -2.128974676132202,
+          -1.7774296998977661,
+          1.1084104776382446,
+          -0.3986622393131256,
+          2.397658348083496,
+          1.6592130661010742,
+          0.770979642868042,
+          1.0884946584701538,
+          0.3037847876548767,
+          -3.632131338119507,
+          -0.45372799038887024,
+          -0.715295672416687,
+          1.367316722869873,
+          2.9429829120635986,
+          -3.950197458267212,
+          -1.8932725191116333,
+          0.9703366756439209,
+          0.8030495643615723,
+          -2.500924587249756,
+          -3.009965658187866,
+          -0.3573484718799591,
+          -0.6378709077835083,
+          1.8497357368469238,
+          0.3521457314491272,
+          0.1677442044019699,
+          -0.5935537219047546,
+          -5.293076038360596,
+          -6.188427448272705,
+          0.43339699506759644,
+          -0.3367193937301636,
+          -1.7319202423095703,
+          -1.567379355430603,
+          -1.6791170835494995,
+          -5.367415904998779,
+          -2.5434160232543945,
+          -1.6749579906463623,
+          1.7317216396331787,
+          -3.2806735038757324,
+          0.6425734758377075,
+          0.4531819820404053,
+          0.2863030433654785,
+          2.420985460281372,
+          -0.37091413140296936,
+          3.575383186340332,
+          0.4784289002418518,
+          0.16860106587409973,
+          0.21999907493591309,
+          2.2869462966918945,
+          -1.5617737770080566,
+          0.24944669008255005,
+          -0.5476747155189514,
+          0.3808216154575348,
+          -0.1780765801668167,
+          0.3899667263031006,
+          0.5796573758125305,
+          -1.9891643524169922,
+          1.3091243505477905,
+          -0.7590826749801636,
+          0.45003336668014526,
+          -1.1666563749313354,
+          -2.6805849075317383,
+          3.336049795150757,
+          -0.8507005572319031,
+          3.1758248805999756,
+          2.951791524887085,
+          0.49488362669944763,
+          2.0597567558288574,
+          1.8162262439727783,
+          0.8828207850456238,
+          0.5658910274505615,
+          2.4537782669067383,
+          1.5685131549835205,
+          0.33951956033706665,
+          -0.48023515939712524,
+          2.3858320713043213,
+          1.0463778972625732,
+          -1.3985368013381958,
+          0.22605782747268677,
+          -1.5183018445968628,
+          3.307828187942505,
+          -1.127339482307434,
+          1.665371060371399,
+          -1.2172129154205322,
+          0.09026865661144257,
+          1.0791081190109253,
+          -4.029209613800049,
+          -1.6451547145843506,
+          0.5120044946670532,
+          -1.5265285968780518,
+          0.616089403629303,
+          3.5884833335876465,
+          1.0660157203674316,
+          -0.9405902624130249,
+          2.6160783767700195,
+          -1.2156428098678589,
+          -1.3161259889602661,
+          1.3076717853546143,
+          -2.5046920776367188,
+          -3.2185792922973633,
+          3.6740355491638184,
+          0.8274339437484741,
+          -2.886805772781372,
+          1.6557563543319702,
+          -0.1425957977771759,
+          -0.868719220161438,
+          -4.793449401855469,
+          2.8288683891296387,
+          -1.5748018026351929,
+          2.7549571990966797,
+          2.8594610691070557,
+          -3.717237949371338,
+          3.467759609222412,
+          0.9092240333557129,
+          1.731204867362976,
+          -3.372891664505005,
+          -0.4019436538219452,
+          1.9311281442642212,
+          -2.9639570713043213,
+          0.3630693256855011,
+          0.18623225390911102,
+          6.890388488769531,
+          2.4950098991394043,
+          1.4080820083618164,
+          -1.0425989627838135,
+          1.7217471599578857,
+          1.4337565898895264,
+          -0.6607425212860107,
+          2.5949199199676514,
+          -3.4873499870300293,
+          -2.9769504070281982,
+          -5.999629497528076,
+          -0.5678136348724365,
+          3.9252753257751465,
+          1.9170417785644531,
+          5.762161731719971,
+          -0.9183822274208069,
+          -3.0278332233428955,
+          -3.4873428344726562,
+          1.3431694507598877,
+          -0.20685701072216034,
+          -0.5370900630950928,
+          -0.36975857615470886,
+          2.245338201522827,
+          7.600477695465088,
+          1.6777830123901367,
+          1.86229407787323,
+          3.049912452697754,
+          -1.0962300300598145,
+          -1.7967227697372437,
+          1.8979947566986084,
+          -5.320398807525635,
+          0.60710209608078,
+          -0.6370570659637451,
+          -2.559816598892212,
+          -1.1854279041290283,
+          0.8617919087409973,
+          0.10383298993110657,
+          0.07823585718870163,
+          2.5294244289398193,
+          -2.947810411453247,
+          -1.65837824344635,
+          2.844393491744995,
+          -2.5353381633758545,
+          1.8180418014526367,
+          1.556523323059082,
+          -4.48561954498291,
+          -1.3418734073638916,
+          -2.7912089824676514,
+          -1.1152901649475098,
+          -1.2608153820037842,
+          0.6668795347213745,
+          1.434783935546875,
+          4.147897720336914,
+          -0.8345828652381897,
+          -4.940127849578857,
+          0.6898399591445923,
+          -4.553582191467285,
+          -2.500671148300171,
+          3.347194194793701,
+          -0.981605589389801,
+          2.948476552963257,
+          3.9866092205047607,
+          -4.686056613922119,
+          0.4754619300365448,
+          -1.4336985349655151,
+          1.4099617004394531,
+          1.928226351737976,
+          1.4152591228485107,
+          -5.317283630371094,
+          2.868133544921875,
+          4.2355194091796875,
+          -0.4357960522174835,
+          -3.7503607273101807,
+          1.6549079418182373,
+          0.6143580079078674,
+          1.0919666290283203,
+          -3.7640559673309326,
+          -2.4699738025665283,
+          0.8651343584060669,
+          0.54315185546875,
+          1.6353315114974976,
+          2.164210796356201,
+          -4.536123275756836,
+          1.3796112537384033,
+          -3.4940438270568848,
+          3.6642775535583496,
+          0.8128426671028137,
+          2.378809690475464,
+          2.9390790462493896,
+          0.8780043721199036,
+          -4.383355140686035,
+          1.3301374912261963,
+          0.3374239504337311,
+          -4.187429904937744,
+          -0.044531360268592834,
+          -3.898418664932251,
+          -1.6363216638565063,
+          -2.3797903060913086,
+          -3.22428822517395,
+          1.1399805545806885,
+          1.4705185890197754,
+          -5.497199058532715,
+          0.23188714683055878,
+          -1.20656418800354,
+          -2.153404712677002,
+          2.8106489181518555,
+          0.5922197699546814,
+          4.304187297821045,
+          3.9567127227783203,
+          -2.70054292678833,
+          2.818324089050293,
+          -2.877166509628296,
+          -1.1562716960906982,
+          -3.206559181213379,
+          0.7066380381584167,
+          2.615802049636841,
+          -1.7057526111602783,
+          -6.844632148742676,
+          -1.8741880655288696,
+          -0.49571889638900757,
+          4.325900077819824,
+          -0.046263188123703,
+          3.0528953075408936,
+          -0.4451119899749756,
+          2.733853816986084,
+          1.2767043113708496,
+          -0.538919985294342,
+          3.785773754119873,
+          0.028141673654317856,
+          3.8541903495788574,
+          4.1075758934021,
+          0.8382427096366882,
+          -3.359407663345337,
+          -0.7005829215049744,
+          1.7407947778701782,
+          -0.7150120735168457,
+          -5.277172565460205,
+          0.7391632199287415,
+          4.319606304168701,
+          -1.3038110733032227,
+          -0.7145127654075623,
+          -4.218903064727783,
+          0.694009006023407,
+          -2.2308990955352783,
+          0.6649621725082397,
+          -3.1798059940338135,
+          0.3721584379673004,
+          2.192626476287842,
+          2.3092527389526367,
+          1.1763373613357544,
+          -0.9454661011695862,
+          1.3468598127365112,
+          0.22029688954353333,
+          2.3619449138641357,
+          -2.3904645442962646,
+          -3.065208911895752,
+          0.7399860620498657,
+          3.2881669998168945,
+          0.8708751201629639,
+          1.101141333580017,
+          0.9673119187355042,
+          3.5020008087158203,
+          2.2861533164978027,
+          1.642046332359314,
+          3.905513286590576,
+          -4.167230606079102,
+          -1.9137741327285767,
+          -0.4847754240036011,
+          3.0234618186950684,
+          -1.3253180980682373,
+          -0.5384835600852966,
+          -0.9023532867431641,
+          1.212427020072937,
+          0.583852231502533,
+          1.493925929069519,
+          -4.694591522216797,
+          0.2927609384059906,
+          4.142123699188232,
+          -1.0479655265808105,
+          1.3653662204742432,
+          -2.9569203853607178,
+          1.361517310142517,
+          -0.6431914567947388,
+          -4.16138219833374,
+          1.5959148406982422,
+          1.4782124757766724,
+          0.007392678875476122,
+          0.5337787866592407,
+          0.6215575933456421,
+          1.8900535106658936,
+          -4.710214614868164,
+          2.8313324451446533
+        ]
+      },
+      "processing_time": 73236.02,
+      "raw": {
+        "detection_source": "florence_override",
+        "yolo": {
+          "label": "Laptop",
+          "confidence": 0.9596195220947266,
+          "bbox": [
+            0,
+            13,
+            749,
+            750
+          ]
+        },
+        "florence": {
+          "caption": "An Acer laptop is open and turned on. The screen is blue and has lines on it. The time on the screen is 12:57. The laptop is silver and.",
+          "grounded_description": "An Acer laptop is open and turned on. The screen is blue and has lines on it. The time on the screen is 12:57. The laptop is silver and. It has keyboard, logo, trackpad. It shows cracked screen, screen scratches, scratch. The text \"12:57 Tuesday 10 March 29 H 1080 acer A D\" is visible on the surface.",
+          "final_description": "An Acer laptop is open and turned on. The screen is blue and has lines on it. The time on the screen is 12:57. The laptop is silver and. It has keyboard, logo, trackpad. It shows cracked screen, screen scratches, scratch. The text \"12:57 Tuesday 10 March 29 H 1080 acer A D\" is visible on the surface.",
+          "detailed_description": "An Acer laptop is open and turned on. The screen is blue and has lines on it. The time on the screen is 12:57. The laptop is silver and. It has keyboard, logo, trackpad. It shows cracked screen, screen scratches, scratch. The text \"12:57 Tuesday 10 March 29 H 1080 acer A D\" is visible on the surface.",
+          "description_source": "florence_direct",
+          "detailed_description_source": "florence_direct",
+          "description_evidence_used": {
+            "summary": [
+              "florence_caption",
+              "grounded_features",
+              "grounded_defects",
+              "ocr_text"
+            ],
+            "detailed": [
+              "florence_caption",
+              "grounded_features",
+              "grounded_defects",
+              "ocr_text"
+            ]
+          },
+          "description_filters_applied": [
+            "florence_direct"
+          ],
+          "description_word_count": {
+            "final_description": 58,
+            "detailed_description": 58
+          },
+          "ocr_text": "12:57 Tuesday 10 March 29 H 1080 acer A D F H C C N M CORE Aspire 3",
+          "ocr_text_display": "12:57\nTuesday 10 March\n\n29\n\nH 1080 acer\n\nA D F H\n\nC C N M\n\nCORE\n\nAspire 3",
+          "ocr_lines": [
+            {
+              "text": "12:57",
+              "bbox": [
+                310.46,
+                62.28,
+                427.3,
+                106.5
+              ],
+              "block_index": 0
+            },
+            {
+              "text": "Tuesday 10 March",
+              "bbox": [
+                329.19,
+                118.29,
+                413.82,
+                130.08
+              ],
+              "block_index": 0
+            },
+            {
+              "text": "29",
+              "bbox": [
+                210.84,
+                329.81,
+                228.82,
+                340.86
+              ],
+              "block_index": 1
+            },
+            {
+              "text": "H 1080 acer",
+              "bbox": [
+                89.51,
+                376.98,
+                401.84,
+                391.72
+              ],
+              "block_index": 2
+            },
+            {
+              "text": "A D F H",
+              "bbox": [
+                123.21,
+                494.16,
+                310.46,
+                500.79
+              ],
+              "block_index": 3
+            },
+            {
+              "text": "C C N M",
+              "bbox": [
+                169.65,
+                519.95,
+                364.39,
+                528.8
+              ],
+              "block_index": 4
+            },
+            {
+              "text": "CORE",
+              "bbox": [
+                19.85,
+                612.08,
+                52.06,
+                623.13
+              ],
+              "block_index": 5
+            },
+            {
+              "text": "Aspire 3",
+              "bbox": [
+                617.55,
+                696.83,
+                656.5,
+                709.36
+              ],
+              "block_index": 6
+            }
+          ],
+          "ocr_layout_source": "ocr_with_region",
+          "color_vqa": "blue",
+          "grounded_features": [
+            "keyboard",
+            "logo",
+            "trackpad"
+          ],
+          "grounded_defects": [
+            "cracked screen",
+            "screen scratches",
+            "scratch"
+          ],
+          "grounded_attachments": [],
+          "key_count": null,
+          "raw": {
+            "caption": "An Acer laptop is open and turned on. The screen is blue and has lines on it. The time on the screen is 12:57. The laptop is silver and.",
+            "caption_primary": "An Acer laptop is open and turned on. The screen is blue and has lines on it. The time on the screen is 12:57. The laptop is silver and is sitting on a wooden table.",
+            "caption_guided": "unanswerable",
+            "caption_source": "detailed_caption",
+            "caption_is_generic": false,
+            "description_source": "florence_direct",
+            "detailed_description_source": "florence_direct",
+            "description_evidence_used": {
+              "summary": [
+                "florence_caption",
+                "grounded_features",
+                "grounded_defects",
+                "ocr_text"
+              ],
+              "detailed": [
+                "florence_caption",
+                "grounded_features",
+                "grounded_defects",
+                "ocr_text"
+              ]
+            },
+            "description_filters_applied": [
+              "florence_direct"
+            ],
+            "description_word_count": {
+              "final_description": 58,
+              "detailed_description": 58
+            },
+            "ocr": "12:57 Tuesday 10 March 29 H 1080 acer A D F H C C N M CORE Aspire 3",
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "12:57",
+                  "bbox": [
+                    310.46,
+                    62.28,
+                    427.3,
+                    106.5
+                  ],
+                  "block_index": 0
+                },
+                {
+                  "text": "Tuesday 10 March",
+                  "bbox": [
+                    329.19,
+                    118.29,
+                    413.82,
+                    130.08
+                  ],
+                  "block_index": 0
+                },
+                {
+                  "text": "29",
+                  "bbox": [
+                    210.84,
+                    329.81,
+                    228.82,
+                    340.86
+                  ],
+                  "block_index": 1
+                },
+                {
+                  "text": "H 1080 acer",
+                  "bbox": [
+                    89.51,
+                    376.98,
+                    401.84,
+                    391.72
+                  ],
+                  "block_index": 2
+                },
+                {
+                  "text": "A D F H",
+                  "bbox": [
+                    123.21,
+                    494.16,
+                    310.46,
+                    500.79
+                  ],
+                  "block_index": 3
+                },
+                {
+                  "text": "C C N M",
+                  "bbox": [
+                    169.65,
+                    519.95,
+                    364.39,
+                    528.8
+                  ],
+                  "block_index": 4
+                },
+                {
+                  "text": "CORE",
+                  "bbox": [
+                    19.85,
+                    612.08,
+                    52.06,
+                    623.13
+                  ],
+                  "block_index": 5
+                },
+                {
+                  "text": "Aspire 3",
+                  "bbox": [
+                    617.55,
+                    696.83,
+                    656.5,
+                    709.36
+                  ],
+                  "block_index": 6
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "12:57",
+                  "bbox": [
+                    310.46,
+                    62.28,
+                    427.3,
+                    106.5
+                  ]
+                },
+                {
+                  "text": "Tuesday 10 March",
+                  "bbox": [
+                    329.19,
+                    118.29,
+                    413.82,
+                    130.08
+                  ]
+                },
+                {
+                  "text": "29",
+                  "bbox": [
+                    210.84,
+                    329.81,
+                    228.82,
+                    340.86
+                  ]
+                },
+                {
+                  "text": "H 1080",
+                  "bbox": [
+                    89.51,
+                    376.98,
+                    150.17,
+                    390.24
+                  ]
+                },
+                {
+                  "text": "acer",
+                  "bbox": [
+                    353.9,
+                    379.19,
+                    401.84,
+                    391.72
+                  ]
+                },
+                {
+                  "text": "A",
+                  "bbox": [
+                    123.21,
+                    494.16,
+                    130.7,
+                    500.05
+                  ]
+                },
+                {
+                  "text": "D",
+                  "bbox": [
+                    194.37,
+                    494.16,
+                    201.11,
+                    500.05
+                  ]
+                },
+                {
+                  "text": "F",
+                  "bbox": [
+                    231.07,
+                    494.16,
+                    237.06,
+                    500.05
+                  ]
+                },
+                {
+                  "text": "H",
+                  "bbox": [
+                    302.97,
+                    494.16,
+                    310.46,
+                    500.79
+                  ]
+                },
+                {
+                  "text": "C",
+                  "bbox": [
+                    169.65,
+                    519.95,
+                    177.14,
+                    526.59
+                  ]
+                },
+                {
+                  "text": "C",
+                  "bbox": [
+                    242.3,
+                    519.95,
+                    250.54,
+                    526.59
+                  ]
+                },
+                {
+                  "text": "N",
+                  "bbox": [
+                    317.95,
+                    519.95,
+                    326.19,
+                    528.06
+                  ]
+                },
+                {
+                  "text": "M",
+                  "bbox": [
+                    356.15,
+                    521.43,
+                    364.39,
+                    528.8
+                  ]
+                },
+                {
+                  "text": "CORE",
+                  "bbox": [
+                    19.85,
+                    612.08,
+                    52.06,
+                    623.13
+                  ]
+                },
+                {
+                  "text": "Aspire 3",
+                  "bbox": [
+                    617.55,
+                    696.83,
+                    656.5,
+                    709.36
+                  ]
+                }
+              ]
+            },
+            "color_vqa": "blue",
+            "defects_vqa": "vQA> List any visible wear or damage on the object using short phrases",
+            "grounding_raw": {
+              "labels": [
+                "logo",
+                "keyboard",
+                "trackpad",
+                "cracked screen",
+                "screen scratches",
+                "scratch",
+                "keycap",
+                "charger",
+                "charger",
+                "charger",
+                "cable",
+                "stickers"
+              ]
+            },
+            "attachment_vqa_checks": []
+          }
+        },
+        "florence_od_fallback": {
+          "triggered": true,
+          "reason": "caption_did_not_confirm",
+          "winner_source": "florence",
+          "florence_detections": [
+            {
+              "label": "Laptop",
+              "confidence": 0.5,
+              "bbox": [
+                35,
+                439,
+                712,
+                595
+              ],
+              "caption": "The image is of a black and silver keyboard. The keyboard is sitting on a wooden table. The keys on the keyboard are black with white lettering. There are also white symbols on the keys. At the bottom of the keyboard there is a small white square with a window in it.",
+              "ocr_text": "W R Y U P S G H K 5 6 V N M 3"
+            },
+            {
+              "label": "Laptop",
+              "confidence": 0.5,
+              "bbox": [
+                0,
+                0,
+                748,
+                418
+              ],
+              "caption": "An Acer laptop is open and turned on. The screen is blue and has lines on it. The time on the screen is 12:57 and it is Tuesday 10 March.",
+              "ocr_text": "12:57 Tuesday 10 March 29 25 Hg. 1080 acer"
+            },
+            {
+              "label": "Laptop",
+              "confidence": 0.5,
+              "bbox": [
+                0,
+                0,
+                748,
+                748
+              ],
+              "caption": "An Acer laptop is open and turned on. The screen is blue and has lines on it. The time on the screen is 12:57. The laptop is silver and the keyboard is black.",
+              "ocr_text": "12:57 Tuesday 10 March 29 Hb :1080 acer P A D F H C C N M CeCeT CORE ASpire 3"
+            }
+          ],
+          "arbiter_metadata": {
+            "match_type": "iou_matched",
+            "iou": 0.9787,
+            "florence_evidence_score": 0.2222,
+            "yolo_evidence_score": 0.1111,
+            "yolo_label": "Laptop",
+            "florence_label": "Laptop"
+          }
+        },
+        "label_rerank": {
+          "enabled": true,
+          "applied": false,
+          "initial_label": "Laptop",
+          "final_label": "Laptop",
+          "topk_candidates": [
+            {
+              "label": "Laptop",
+              "confidence": 0.9596195220947266,
+              "bbox": [
+                0,
+                13,
+                749,
+                750
+              ]
+            },
+            {
+              "label": "Laptop",
+              "confidence": 0.9170103669166565,
+              "bbox": [
+                0,
+                4,
+                750,
+                419
+              ]
+            },
+            {
+              "label": "Laptop",
+              "confidence": 0.41962099075317383,
+              "bbox": [
+                515,
+                699,
+                750,
+                749
+              ]
+            }
+          ],
+          "scores_by_label": {
+            "Laptop": {
+              "score": 4,
+              "matched_keywords": {
+                "caption": [
+                  "laptop"
+                ],
+                "ocr": [],
+                "grounding": [
+                  "keyboard",
+                  "trackpad"
+                ]
+              }
+            }
+          },
+          "winner_label": "Laptop",
+          "winner_score": 4,
+          "top1_score": 4,
+          "selected_bbox_source": "florence_od_arbiter",
+          "reason": "top1_best_score",
+          "canonical_lock_applied": false
+        },
+        "gemini": {
+          "status": "accepted",
+          "message": "Extracted successfully",
+          "label": "Laptop",
+          "color": "blue",
+          "category_details": {
+            "features": [
+              "logo",
+              "brand name",
+              "keyboard",
+              "trackpad"
+            ],
+            "defects": [
+              "cracked screen",
+              "screen scratches",
+              "scratch"
+            ],
+            "attachments": []
+          },
+          "key_count": null,
+          "final_description": "The blue Acer Aspire 3 laptop is shown open and powered on, with the screen displaying 12:57 Tuesday 10 March. The device is equipped with a keyboard, trackpad, logo, and brand name. Damage is evident in the form of a cracked screen, screen scratches, and a scratch. The text \"12:57 Tuesday 10 March 29 H 1080 acer A D\" is visible on the surface.",
+          "detailed_description": "The blue Acer Aspire 3 laptop is shown open and powered on, with the screen displaying 12:57 Tuesday 10 March. The device is equipped with a keyboard, trackpad, logo, and brand name. Damage is evident in the form of a cracked screen, screen scratches, and a scratch on the surface.",
+          "label_change_reason": null
+        },
+        "gemini_warnings": [],
+        "timings": {
+          "detect_ms": 423.98,
+          "florence_ms": 11988.79,
+          "florence_od_ms": 20389.09,
+          "label_rerank_ms": 6.07,
+          "gemini_ms": 28802.47,
+          "embeddings_ms": 0.32,
+          "total_ms": 73236.02
+        },
+        "description_debug": {
+          "final_description": "The blue Acer Aspire 3 laptop is shown open and powered on, with the screen displaying 12:57 Tuesday 10 March. The device is equipped with a keyboard, trackpad, logo, and brand name. Damage is evident in the form of a cracked screen, screen scratches, and a scratch. The text \"12:57 Tuesday 10 March 29 H 1080 acer A D\" is visible on the surface.",
+          "detailed_description": "The blue Acer Aspire 3 laptop is shown open and powered on, with the screen displaying 12:57 Tuesday 10 March. The device is equipped with a keyboard, trackpad, logo, and brand name. Damage is evident in the form of a cracked screen, screen scratches, and a scratch. The text \"12:57 Tuesday 10 March 29 H 1080 acer A D\" is visible on the surface.",
+          "description_source": "gemini_evidence_locked",
+          "detailed_description_source": "gemini_evidence_locked",
+          "description_evidence_used": {
+            "summary": [
+              "gemini_description",
+              "grounded_features",
+              "grounded_defects",
+              "ocr_text"
+            ],
+            "detailed": [
+              "gemini_description",
+              "grounded_features",
+              "grounded_defects",
+              "ocr_text"
+            ]
+          },
+          "description_filters_applied": [
+            "gemini_evidence_locked"
+          ],
+          "description_word_count": {
+            "final_description": 64,
+            "detailed_description": 64
+          }
+        }
+      }
+    }
+  ],
+  "createdAt": {
+    "$date": "2026-03-10T07:32:50.386Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-10T07:32:50.386Z"
+  },
+  "__v": 0
+},
+{
+  "_id": {
+    "$oid": "69b02cdaf177e628cb95bdfa"
+  },
+  "imageUrl": "https://res.cloudinary.com/dnbdsdnrq/image/upload/v1773153503/findassure/found-items/cpfje1t6eboaawsupesq.jpg",
+  "category": "Helmet",
+  "description": "a black helmet with a clear visor. The helmet has white writing on it. The text \"ACTIVE Generation \" is visible on the surface. Has some scratches on the visor",
+  "questions": [
+    "What is the primary color of the helmet?",
+    "What exact white text is visible on the helmet?",
+    "Describe the most noticeable scratches on the visor.?",
+    "What size marking is printed inside the helmet?",
+    "What is the specific tint or shade of the visor?"
+  ],
+  "questionMetadata": [
+    {
+      "question": "What is the primary color of the helmet?",
+      "type": "color",
+      "level": "strong",
+      "weight": 1.15
+    },
+    {
+      "question": "What exact white text is visible on the helmet?",
+      "type": "brand_identifier",
+      "level": "core",
+      "weight": 1.35
+    },
+    {
+      "question": "Describe the most noticeable scratches on the visor.?",
+      "type": "descriptive",
+      "level": "supporting",
+      "weight": 1
+    },
+    {
+      "question": "What size marking is printed inside the helmet?",
+      "type": "numeric",
+      "level": "core",
+      "weight": 1.35
+    },
+    {
+      "question": "What is the specific tint or shade of the visor?",
+      "type": "descriptive",
+      "level": "supporting",
+      "weight": 1
+    }
+  ],
+  "founderAnswers": [
+    "black",
+    "Active generation",
+    "minor scratches",
+    "Medium",
+    "Clear"
+  ],
+  "founderContact": {
+    "name": "Ravindu Rashmika",
+    "email": "ravindu@gmail.com",
+    "phone": "0741501985"
+  },
+  "found_location": [
+    {
+      "location": "new_building",
+      "floor_id": "6",
+      "hall_name": "F601"
+    }
+  ],
+  "status": "claimed",
+  "createdBy": {
+    "$oid": "69a957a7d7de11b12806f058"
+  },
+  "analysisMode": "pp2",
+  "pythonItemId": "525dc28a-875c-4ea4-81e3-d3484dd5374f",
+  "faissId": null,
+  "faissIds": [],
+  "detectedCategory": "Helmet",
+  "detectedDescription": "a black helmet with a clear visor. The helmet has white writing on it. The text \"ACTIVE ENERATION\" is visible on the surface.",
+  "detectedColor": "black",
+  "vector128": [],
+  "searchable": true,
+  "pipelineResponse": {
+    "item_id": "525dc28a-875c-4ea4-81e3-d3484dd5374f",
+    "per_view": [
+      {
+        "view_index": 0,
+        "filename": "1773153245924-317527940.jpg",
+        "detection": {
+          "bbox": [
+            0,
+            0,
+            1200,
+            1600
+          ],
+          "cls_name": "Helmet",
+          "confidence": 0,
+          "selected_by": "hint_rescue",
+          "outlier_view": false,
+          "candidates": []
+        },
+        "extraction": {
+          "caption": "a helmet. The helmet is black and has white writing on it. a clear visor on the top of the helmet.",
+          "detailed_description": null,
+          "ocr_text": "ACTIVE ENERATION HELME",
+          "ocr_text_display": null,
+          "ocr_lines": null,
+          "ocr_layout_source": null,
+          "extraction_confidence": 0.7,
+          "raw": {
+            "caption_source": "ocr_first",
+            "timings": {
+              "ocr_ms": 2742.3,
+              "caption_ms": 3956.13,
+              "guided_vqa_ms": 3506.42,
+              "total_ms": 10230.99,
+              "ocr_first_ms": 10231.22
+            },
+            "ocr_first": {
+              "status": "success",
+              "fast": true,
+              "ran_caption": true,
+              "ran_color_vqa": false,
+              "ran_grounding": false,
+              "needs_detail": true,
+              "detail_trigger": [
+                "canonical_label_missing"
+              ],
+              "ocr_input_wh": [
+                1200,
+                1600
+              ],
+              "ocr_resized_wh": [
+                576,
+                768
+              ],
+              "detail_input_wh": [
+                1200,
+                1600
+              ],
+              "detail_resized_wh": [
+                576,
+                768
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "caption_source": "detailed_caption",
+              "guided_vqa_len": 13,
+              "caption_len": 98,
+              "ocr_len": 22,
+              "reason": "ok_nonempty",
+              "stage1_nonempty": true
+            },
+            "florence": {
+              "status": "success",
+              "reason": "ok",
+              "stage": "all",
+              "attempts": [
+                {
+                  "source": "primary_ocr",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 2742.29
+                },
+                {
+                  "source": "primary_caption",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 3956.12
+                },
+                {
+                  "source": "guided_vqa",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 3506.41
+                }
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "recovery_attempted": false,
+              "recovery_succeeded": false,
+              "caption_len": 98,
+              "ocr_len": 22
+            },
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "ACTIVE ENERATION",
+                  "bbox": [
+                    132.19,
+                    187.01,
+                    435.17,
+                    290.69
+                  ],
+                  "block_index": 0
+                },
+                {
+                  "text": "HELME",
+                  "bbox": [
+                    248.54,
+                    451.2,
+                    495.65,
+                    556.42
+                  ],
+                  "block_index": 1
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "ACTIVE",
+                  "bbox": [
+                    132.19,
+                    187.01,
+                    435.17,
+                    290.69
+                  ]
+                },
+                {
+                  "text": "ENERATION",
+                  "bbox": [
+                    256.03,
+                    257.66,
+                    426.53,
+                    285.31
+                  ]
+                },
+                {
+                  "text": "HELME",
+                  "bbox": [
+                    248.54,
+                    451.2,
+                    495.65,
+                    556.42
+                  ]
+                }
+              ]
+            },
+            "florence_od_fallback": {
+              "triggered": true,
+              "reason": "always",
+              "winner_source": "yolo",
+              "florence_detections": [
+                {
+                  "label": "Helmet",
+                  "confidence": 0.5,
+                  "bbox": [
+                    0,
+                    240,
+                    1098,
+                    1381
+                  ],
+                  "caption": "A person is holding a helmet. The helmet is black and has white writing on it. There is a clear visor on the top of the helmet.",
+                  "ocr_text": "ACTIVE ENERATION HELME"
+                }
+              ],
+              "arbiter_metadata": {
+                "match_type": "no_iou_match",
+                "iou": 0,
+                "florence_evidence_score": 0.1333,
+                "yolo_evidence_score": 0
+              },
+              "florence_od_ms": 10063.48
+            },
+            "detection_source": "none"
+          }
+        },
+        "embedding": {
+          "dim": 128,
+          "vector_preview": [
+            0.052856117486953735,
+            0.03569144010543823,
+            -1.3754470348358154,
+            -0.14570581912994385,
+            4.499876499176025,
+            -1.9002041816711426,
+            1.9454904794692993,
+            1.569609522819519
+          ],
+          "vector_id": "525dc28a-875c-4ea4-81e3-d3484dd5374f_view_0"
+        },
+        "quality_score": 176.41951603367812,
+        "status": "processed"
+      },
+      {
+        "view_index": 1,
+        "filename": "1773153246007-438193405.jpg",
+        "detection": {
+          "bbox": [
+            6,
+            353,
+            919,
+            1383
+          ],
+          "cls_name": "Helmet",
+          "confidence": 0.8175745010375977,
+          "selected_by": "consensus_match",
+          "outlier_view": false,
+          "candidates": [
+            {
+              "raw_label": "Helmet",
+              "canonical_label": "Helmet",
+              "confidence": 0.8175745010375977,
+              "bbox": [
+                6,
+                353,
+                919,
+                1383
+              ]
+            },
+            {
+              "raw_label": "Smart Phone",
+              "canonical_label": "Smart Phone",
+              "confidence": 0.8175745010375977,
+              "bbox": [
+                6,
+                353,
+                919,
+                1383
+              ]
+            },
+            {
+              "raw_label": "Key",
+              "canonical_label": "Key",
+              "confidence": 0.6270305514335632,
+              "bbox": [
+                0,
+                0,
+                240,
+                363
+              ]
+            }
+          ]
+        },
+        "extraction": {
+          "caption": "A person is holding a black helmet with a clear visor. The helmet has white writing on it. There is a white table under the helmet.",
+          "detailed_description": null,
+          "ocr_text": "U.P2",
+          "ocr_text_display": null,
+          "ocr_lines": null,
+          "ocr_layout_source": null,
+          "extraction_confidence": 0.7,
+          "raw": {
+            "caption_source": "ocr_first",
+            "timings": {
+              "ocr_ms": 2946.23,
+              "total_ms": 2965.3,
+              "ocr_first_ms": 2965.49
+            },
+            "ocr_first": {
+              "status": "success",
+              "fast": true,
+              "ran_caption": false,
+              "ran_color_vqa": false,
+              "ran_grounding": false,
+              "needs_detail": false,
+              "detail_trigger": [],
+              "ocr_input_wh": [
+                1102,
+                1442
+              ],
+              "ocr_resized_wh": [
+                587,
+                768
+              ],
+              "detail_input_wh": [
+                1102,
+                1442
+              ],
+              "detail_resized_wh": [
+                587,
+                768
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "caption_len": 0,
+              "ocr_len": 4,
+              "reason": "ok_empty_caption",
+              "stage1_nonempty": true
+            },
+            "florence": {
+              "status": "success",
+              "reason": "ok",
+              "stage": "all",
+              "attempts": [
+                {
+                  "source": "primary_ocr",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 2946.23
+                }
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "recovery_attempted": false,
+              "recovery_succeeded": false,
+              "caption_len": 0,
+              "ocr_len": 4
+            },
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "U.P2",
+                  "bbox": [
+                    187.55,
+                    216.96,
+                    391.82,
+                    263.04
+                  ],
+                  "block_index": 0
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "U.P2",
+                  "bbox": [
+                    187.55,
+                    216.96,
+                    391.82,
+                    263.04
+                  ]
+                }
+              ]
+            },
+            "florence_od_fallback": {
+              "triggered": true,
+              "reason": "always",
+              "winner_source": "florence",
+              "florence_detections": [
+                {
+                  "label": "Helmet",
+                  "confidence": 0.5,
+                  "bbox": [
+                    0,
+                    357,
+                    919,
+                    1381
+                  ],
+                  "caption": "A person is holding a black helmet with a clear visor. The helmet has white writing on it. There is a white table under the helmet.",
+                  "ocr_text": "U.P.2"
+                }
+              ],
+              "arbiter_metadata": {
+                "match_type": "iou_matched",
+                "iou": 0.9877,
+                "florence_evidence_score": 0.1333,
+                "yolo_evidence_score": 0,
+                "yolo_label": "Smart Phone",
+                "florence_label": "Helmet"
+              },
+              "florence_od_ms": 9760.1
+            },
+            "detection_source": "florence_override",
+            "od_caption_adopted": true
+          }
+        },
+        "embedding": {
+          "dim": 128,
+          "vector_preview": [
+            0.5162063241004944,
+            0.27855736017227173,
+            -1.2755261659622192,
+            -3.6423115730285645,
+            2.405564069747925,
+            0.115791916847229,
+            6.193455696105957,
+            0.7196881771087646
+          ],
+          "vector_id": "525dc28a-875c-4ea4-81e3-d3484dd5374f_view_1"
+        },
+        "quality_score": 137.30339286591746,
+        "status": "processed"
+      },
+      {
+        "view_index": 2,
+        "filename": "1773153246080-994377717.jpg",
+        "detection": {
+          "bbox": [
+            0,
+            0,
+            1200,
+            1600
+          ],
+          "cls_name": "Helmet",
+          "confidence": 0,
+          "selected_by": "hint_rescue",
+          "outlier_view": false,
+          "candidates": []
+        },
+        "extraction": {
+          "caption": "The helmet is black and has a clear visor on top of it. a white piece of paper under the helmet.",
+          "detailed_description": null,
+          "ocr_text": "U",
+          "ocr_text_display": null,
+          "ocr_lines": null,
+          "ocr_layout_source": null,
+          "extraction_confidence": 0.7,
+          "raw": {
+            "caption_source": "ocr_first",
+            "timings": {
+              "ocr_ms": 5007.29,
+              "caption_ms": 4110.22,
+              "guided_vqa_ms": 2892.54,
+              "total_ms": 12040.24,
+              "ocr_first_ms": 12040.4
+            },
+            "ocr_first": {
+              "status": "success",
+              "fast": true,
+              "ran_caption": true,
+              "ran_color_vqa": false,
+              "ran_grounding": false,
+              "needs_detail": true,
+              "detail_trigger": [
+                "canonical_label_missing"
+              ],
+              "ocr_input_wh": [
+                1200,
+                1600
+              ],
+              "ocr_resized_wh": [
+                576,
+                768
+              ],
+              "detail_input_wh": [
+                1200,
+                1600
+              ],
+              "detail_resized_wh": [
+                576,
+                768
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "caption_source": "detailed_caption",
+              "guided_vqa_len": 13,
+              "caption_len": 96,
+              "ocr_len": 1,
+              "reason": "ok_nonempty",
+              "stage1_nonempty": true
+            },
+            "florence": {
+              "status": "success",
+              "reason": "ok",
+              "stage": "all",
+              "attempts": [
+                {
+                  "source": "primary_ocr",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 5007.27
+                },
+                {
+                  "source": "primary_caption",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 4110.21
+                },
+                {
+                  "source": "guided_vqa",
+                  "status": "success",
+                  "reason": "ok_nonempty",
+                  "elapsed_ms": 2892.52
+                }
+              ],
+              "timeout_ms_used": {
+                "ocr_ms": 60000,
+                "full_ms": 120000
+              },
+              "recovery_attempted": false,
+              "recovery_succeeded": false,
+              "caption_len": 96,
+              "ocr_len": 1
+            },
+            "ocr_layout": {
+              "source": "ocr_with_region",
+              "lines": [
+                {
+                  "text": "U",
+                  "bbox": [
+                    196.7,
+                    298.37,
+                    262.37,
+                    333.7
+                  ],
+                  "block_index": 0
+                }
+              ],
+              "tokens": [
+                {
+                  "text": "U",
+                  "bbox": [
+                    196.7,
+                    298.37,
+                    262.37,
+                    333.7
+                  ]
+                }
+              ]
+            },
+            "florence_od_fallback": {
+              "triggered": true,
+              "reason": "always",
+              "winner_source": "yolo",
+              "florence_detections": [
+                {
+                  "label": "Helmet",
+                  "confidence": 0.5,
+                  "bbox": [
+                    129,
+                    362,
+                    1135,
+                    1546
+                  ],
+                  "caption": "A person's hand is holding a helmet. The helmet is black and has a clear plastic top. There is a red and white logo on the top of the clear part of the helmet.",
+                  "ocr_text": "U"
+                }
+              ],
+              "arbiter_metadata": {
+                "match_type": "no_iou_match",
+                "iou": 0,
+                "florence_evidence_score": 0.0667,
+                "yolo_evidence_score": 0
+              },
+              "florence_od_ms": 8730.83
+            },
+            "detection_source": "none"
+          }
+        },
+        "embedding": {
+          "dim": 128,
+          "vector_preview": [
+            -0.8717691898345947,
+            -2.3758926391601562,
+            -0.9846681356430054,
+            -4.338081359863281,
+            1.4550963640213013,
+            0.043214619159698486,
+            4.040501594543457,
+            -1.2763530015945435
+          ],
+          "vector_id": "525dc28a-875c-4ea4-81e3-d3484dd5374f_view_2"
+        },
+        "quality_score": 60.16179733818332,
+        "status": "processed"
+      }
+    ],
+    "verification": {
+      "mode": "two_view",
+      "cosine_sim_matrix": [
+        [
+          1,
+          0.592633843421936,
+          0.476002037525177
+        ],
+        [
+          0.592633843421936,
+          1,
+          0.7036245465278625
+        ],
+        [
+          0.476002037525177,
+          0.7036245465278625,
+          1
+        ]
+      ],
+      "faiss_sim_matrix": [
+        [
+          1,
+          0.592633843421936,
+          0.4760020673274994
+        ],
+        [
+          0.592633843421936,
+          1,
+          0.7036244869232178
+        ],
+        [
+          0.4760020673274994,
+          0.7036244869232178,
+          1
+        ]
+      ],
+      "geometric_scores": {
+        "0-1": {
+          "skipped": true,
+          "reason": "non_eligible_pair",
+          "passed": false,
+          "best_similarity_path": "center/center",
+          "multi_crop_helped": true,
+          "selected_cosine": 0.592633843421936,
+          "selected_faiss": 0.592633843421936,
+          "full_full_cosine": 0.5766321420669556,
+          "full_full_faiss": 0.5766321420669556,
+          "pair_strength": "near_miss",
+          "ocr_overlap_tokens": [],
+          "strong_overlap": false,
+          "ocr_rescue_eligible": false,
+          "ocr_rescue_applied": false,
+          "smartphone_front_back_candidate": false,
+          "smartphone_front_back_evidence_ready": false,
+          "smartphone_front_back_retryable": false,
+          "smartphone_front_back_complementary": false,
+          "smartphone_front_back_brand_conflict": false,
+          "smartphone_front_back_color_conflict": false,
+          "smartphone_front_back_floor": 0
+        },
+        "0-2": {
+          "skipped": true,
+          "reason": "non_eligible_pair",
+          "passed": false,
+          "best_similarity_path": "center/center",
+          "multi_crop_helped": true,
+          "selected_cosine": 0.476002037525177,
+          "selected_faiss": 0.4760020673274994,
+          "full_full_cosine": 0.4458547532558441,
+          "full_full_faiss": 0.44585472345352173,
+          "pair_strength": "weak",
+          "ocr_overlap_tokens": [],
+          "strong_overlap": false,
+          "ocr_rescue_eligible": false,
+          "ocr_rescue_applied": false,
+          "smartphone_front_back_candidate": false,
+          "smartphone_front_back_evidence_ready": false,
+          "smartphone_front_back_retryable": false,
+          "smartphone_front_back_complementary": false,
+          "smartphone_front_back_brand_conflict": false,
+          "smartphone_front_back_color_conflict": false,
+          "smartphone_front_back_floor": 0
+        },
+        "1-2": {
+          "num_keypoints_a": 2000,
+          "num_keypoints_b": 2000,
+          "num_matches": 2000,
+          "num_good_matches": 15,
+          "num_inliers": 5,
+          "inlier_ratio": 0.3333333333333333,
+          "passed": false,
+          "best_similarity_path": "full/full",
+          "multi_crop_helped": false,
+          "selected_cosine": 0.7036245465278625,
+          "selected_faiss": 0.7036244869232178,
+          "full_full_cosine": 0.7036245465278625,
+          "full_full_faiss": 0.7036244869232178,
+          "pair_strength": "strong",
+          "ocr_overlap_tokens": [],
+          "strong_overlap": false,
+          "ocr_rescue_eligible": false,
+          "ocr_rescue_applied": false,
+          "smartphone_front_back_candidate": false,
+          "smartphone_front_back_evidence_ready": false,
+          "smartphone_front_back_retryable": false,
+          "smartphone_front_back_complementary": false,
+          "smartphone_front_back_brand_conflict": false,
+          "smartphone_front_back_color_conflict": false,
+          "smartphone_front_back_floor": 0
+        }
+      },
+      "passed": true,
+      "failure_reasons": [],
+      "used_views": [
+        1,
+        2
+      ],
+      "dropped_views": [
+        {
+          "view_index": 0,
+          "reason": "not_best_pair_lower_similarity"
+        }
+      ]
+    },
+    "fused": {
+      "category": "Helmet",
+      "brand": null,
+      "color": "black",
+      "caption": "This black helmet. It has the text \"ACTIVE\". It has a clear visor. the helmet has white writing on it.",
+      "detailed_description": "a black helmet with a clear visor. The helmet has white writing on it. The text \"ACTIVE ENERATION\" is visible on the surface.",
+      "description_source": "consensus_conservative_caption",
+      "detailed_description_source": "best_view_evidence_composer",
+      "description_evidence_used": {
+        "summary": [
+          "best_view_description",
+          "ocr_text"
+        ],
+        "detailed": [
+          "best_view_description",
+          "ocr_text"
+        ]
+      },
+      "description_filters_applied": [
+        "consensus_only",
+        "best_view_evidence_composer"
+      ],
+      "description_word_count": {
+        "final_description": 23,
+        "detailed_description": 23
+      },
+      "merged_ocr_tokens": [
+        "ACTIVE",
+        "ENERATION"
+      ],
+      "attributes": {
+        "conflicts": {
+          "category_specific_exclusions": "Excluded category-specific fields from views [0, 2] due to outlier/label mismatch (0:outlier/label_mismatch, 2:outlier/label_mismatch)."
+        },
+        "captions": {
+          "view_0": "a helmet. The helmet is black and has white writing on it. a clear visor on the top of the helmet.",
+          "view_1": "A person is holding a black helmet with a clear visor. The helmet has white writing on it. There is a white table under the helmet.",
+          "view_2": "The helmet is black and has a clear visor on top of it. a white piece of paper under the helmet."
+        },
+        "ocr_rejected": [
+          "P2",
+          "U"
+        ],
+        "caption_enrichment_mode": "conservative_plus_caption_snippet",
+        "caption_snippets_used": [
+          "a clear visor. the helmet has white writing on it"
+        ],
+        "multi_angle_phrases_used": [],
+        "description_scope_view_indices": [
+          1
+        ]
+      },
+      "defects": [],
+      "best_view_index": 0,
+      "fused_embedding_id": "525dc28a-875c-4ea4-81e3-d3484dd5374f_fused"
+    },
+    "faiss_ids": null,
+    "resolved_label": null,
+    "stored": true,
+    "cache_key": "item:525dc28a-875c-4ea4-81e3-d3484dd5374f"
+  },
+  "createdAt": {
+    "$date": "2026-03-10T14:38:24.522Z"
+  },
+  "updatedAt": {
+    "$date": "2026-03-10T14:46:41.118Z"
+  },
+  "__v": 0
+}]

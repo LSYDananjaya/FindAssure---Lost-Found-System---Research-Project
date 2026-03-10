@@ -75,6 +75,7 @@ export interface FoundItem {
   category: string;
   description: string;
   questions: string[];
+  questionMetadata?: VerificationQuestionMetadata[];
   founderAnswers?: string[];
   founderContact?: FounderContact;
   found_location: LocationDetail[]; // Array of location details
@@ -84,6 +85,13 @@ export interface FoundItem {
   } | null;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface VerificationQuestionMetadata {
+  question: string;
+  type: 'boolean' | 'numeric' | 'color' | 'brand_identifier' | 'location' | 'descriptive';
+  level: 'core' | 'strong' | 'supporting';
+  weight: number;
 }
 
 export interface LostItem {
@@ -185,6 +193,7 @@ export type RootStackParamList = {
     category: string;
     description: string;
     selectedQuestions: string[];
+    selectedQuestionMetadata?: VerificationQuestionMetadata[];
     suggestedAnswersByQuestion?: Record<string, string>;
   };
   ReportFoundLocation: { 
@@ -193,6 +202,7 @@ export type RootStackParamList = {
     category: string;
     description: string;
     selectedQuestions: string[];
+    selectedQuestionMetadata?: VerificationQuestionMetadata[];
     founderAnswers: string[];
   };
   ReportFoundSuccess: undefined;

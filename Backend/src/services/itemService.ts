@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { FoundItem, IFoundItem, FoundItemStatus, IFounderContact, ILocationDetail } from '../models/FoundItem';
+import { FoundItem, IFoundItem, FoundItemStatus, IFounderContact, ILocationDetail, IQuestionMetadata } from '../models/FoundItem';
 import { LostRequest, ILostRequest } from '../models/LostRequest';
 
 export interface CreateFoundItemData {
@@ -8,6 +8,7 @@ export interface CreateFoundItemData {
   category: string;
   description: string;
   questions: string[];
+  questionMetadata?: IQuestionMetadata[];
   founderAnswers: string[];
   found_location: ILocationDetail[];
   founderContact: IFounderContact;
@@ -99,6 +100,7 @@ export const createFoundItem = async (data: CreateFoundItemData): Promise<IFound
     category: data.category,
     description: data.description,
     questions: data.questions,
+    questionMetadata: data.questionMetadata ?? [],
     founderAnswers: data.founderAnswers,
     found_location: data.found_location,
     founderContact: data.founderContact,

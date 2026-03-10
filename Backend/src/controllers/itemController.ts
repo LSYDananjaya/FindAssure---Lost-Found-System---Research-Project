@@ -1079,12 +1079,14 @@ export const createFoundItem = async (
     const preAnalysisToken = normalizePreAnalysisToken(req.body.preAnalysisToken);
 
     let questions: string[];
+    let questionMetadata: any[] = [];
     let founderAnswers: string[];
     let foundLocation: any[];
     let founderContact: any;
 
     try {
       questions = parseJsonField<string[]>(req.body.questions, 'questions');
+      questionMetadata = parseJsonField<any[]>(req.body.questionMetadata || '[]', 'questionMetadata');
       founderAnswers = parseJsonField<string[]>(req.body.founderAnswers, 'founderAnswers');
       foundLocation = parseJsonField<any[]>(req.body.found_location, 'found_location');
       founderContact = parseJsonField<any>(req.body.founderContact, 'founderContact');
@@ -1114,6 +1116,11 @@ export const createFoundItem = async (
 
     if (questions.length !== founderAnswers.length) {
       res.status(400).json({ message: 'Number of answers must match number of questions' });
+      return;
+    }
+
+    if (questionMetadata.length > 0 && questionMetadata.length !== questions.length) {
+      res.status(400).json({ message: 'Question metadata count must match number of questions' });
       return;
     }
 
@@ -1157,6 +1164,7 @@ export const createFoundItem = async (
       category,
       description,
       questions,
+      questionMetadata,
       founderAnswers,
       found_location: foundLocation,
       founderContact,
@@ -1718,6 +1726,7 @@ export const generateQuestions = async (
       category,
       description,
     });
+    const questionMetadata = geminiService.deriveQuestionMetadata(questions);
 
     const suggestedFounderAnswers = await geminiService.generateSuggestedFounderAnswers({
       category,
@@ -1725,7 +1734,7 @@ export const generateQuestions = async (
       questions,
     });
 
-    res.status(200).json({ questions, suggestedFounderAnswers });
+    res.status(200).json({ questions, questionMetadata, suggestedFounderAnswers });
   } catch (error) {
     next(error);
   }

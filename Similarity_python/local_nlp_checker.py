@@ -21,6 +21,28 @@ GENERIC_WORDS = {
     "thing", "object", "something", "someone"
 }
 
+BOOLEAN_TRUE = {"yes", "yeah", "yep", "true", "correct", "right"}
+BOOLEAN_FALSE = {"no", "nope", "false", "incorrect", "wrong"}
+NUMBER_WORDS = {
+    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
+    "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
+    "ten": "10", "first": "1", "second": "2", "third": "3"
+}
+COLOR_WORDS = {
+    "black", "white", "red", "blue", "green", "yellow", "pink", "purple",
+    "orange", "brown", "gray", "grey", "silver", "gold", "beige", "maroon",
+    "navy", "cyan", "teal"
+}
+
+QUESTION_TYPE_CONFIG = {
+    "boolean": {"weight": 1.15, "match_floor": 0.95, "mismatch_cap": 0.05},
+    "numeric": {"weight": 1.20, "match_floor": 0.95, "mismatch_cap": 0.12},
+    "color": {"weight": 1.10, "match_floor": 0.92, "mismatch_cap": 0.18},
+    "brand_identifier": {"weight": 1.35, "match_floor": 0.94, "mismatch_cap": 0.20},
+    "location": {"weight": 1.05, "match_floor": 0.88, "mismatch_cap": 0.22},
+    "descriptive": {"weight": 1.00, "match_floor": None, "mismatch_cap": None},
+}
+
 def py(v):
     """Convert numpy / scalar types to native Python types."""
     try:
@@ -103,6 +125,98 @@ class LocalNLP:
         """
         return len(keywords) <= 2
 
+    def extract_numbers(self, text):
+        normalized = self.normalize(text)
+        values = set(re.findall(r"\b\d+\b", normalized))
+        for token in normalized.split():
+            mapped = NUMBER_WORDS.get(token)
+            if mapped:
+                values.add(mapped)
+        return values
+
+    def extract_colors(self, text):
+        normalized = self.normalize(text)
+        return {token for token in normalized.split() if token in COLOR_WORDS}
+
+    def extract_identifier_tokens(self, text):
+        normalized = self.normalize(text)
+        return {
+            token for token in normalized.split()
+            if len(token) >= 3 and not token.isdigit() and token not in GENERIC_WORDS
+        }
+
+    def extract_boolean_label(self, text):
+        normalized_tokens = set(self.normalize(text).split())
+        if normalized_tokens & BOOLEAN_TRUE:
+            return "yes"
+        if normalized_tokens & BOOLEAN_FALSE:
+            return "no"
+        return None
+
+    def infer_question_type(self, question_text, founder_answer=""):
+        q = self.normalize(question_text)
+        founder_norm = self.normalize(founder_answer)
+
+        if any(phrase in q for phrase in {
+            "is there", "does it", "did it", "was it", "were there", "do you",
+            "has it", "have you", "is it", "are there"
+        }):
+            return "boolean"
+        if any(word in q for word in {"number", "serial", "digit", "code", "year", "size", "count", "many"}):
+            return "numeric"
+        if "color" in q or self.extract_colors(founder_norm):
+            return "color"
+        if any(word in q for word in {"brand", "logo", "model", "name", "label", "text", "written", "identifier", "institute"}):
+            return "brand_identifier"
+        if any(word in q for word in {"where", "location", "place", "building", "floor", "hall", "room", "area"}):
+            return "location"
+        return "descriptive"
+
+    def apply_question_type_rules(self, base_score, question_type, founder, owner):
+        config = QUESTION_TYPE_CONFIG.get(question_type, QUESTION_TYPE_CONFIG["descriptive"])
+
+        if question_type == "boolean":
+            founder_bool = self.extract_boolean_label(founder)
+            owner_bool = self.extract_boolean_label(owner)
+            if founder_bool and owner_bool:
+                if founder_bool == owner_bool:
+                    return max(base_score, config["match_floor"]), "boolean_exact_match"
+                return min(base_score, config["mismatch_cap"]), "boolean_mismatch"
+
+        elif question_type == "numeric":
+            founder_nums = self.extract_numbers(founder)
+            owner_nums = self.extract_numbers(owner)
+            if founder_nums and owner_nums:
+                if founder_nums & owner_nums:
+                    return max(base_score, config["match_floor"]), "numeric_exact_match"
+                return min(base_score, config["mismatch_cap"]), "numeric_mismatch"
+
+        elif question_type == "color":
+            founder_colors = self.extract_colors(founder)
+            owner_colors = self.extract_colors(owner)
+            if founder_colors and owner_colors:
+                if founder_colors & owner_colors:
+                    return max(base_score, config["match_floor"]), "color_exact_match"
+                return min(base_score, config["mismatch_cap"]), "color_mismatch"
+
+        elif question_type == "brand_identifier":
+            founder_ids = self.extract_identifier_tokens(founder)
+            owner_ids = self.extract_identifier_tokens(owner)
+            if founder_ids and owner_ids:
+                if founder_ids & owner_ids:
+                    return max(base_score, config["match_floor"]), "identifier_overlap"
+                return min(base_score, config["mismatch_cap"]), "identifier_mismatch"
+
+        elif question_type == "location":
+            founder_kw = self.extract_keywords(founder)
+            owner_kw = self.extract_keywords(owner)
+            if founder_kw and owner_kw:
+                if founder_kw & owner_kw:
+                    return max(base_score, config["match_floor"]), "location_overlap"
+                return min(base_score, config["mismatch_cap"]), "location_mismatch"
+
+        return base_score, None
+
     # -----------------------------
     # SIMILARITY METHODS
     # -----------------------------
@@ -179,9 +293,19 @@ class LocalNLP:
     # MAIN ENTRY
     # -----------------------------
 
-    def score_pair(self, founder, owner):
+    def score_pair(self, founder, owner, question_text="", question_type=None, question_weight=None):
+        resolved_question_type = question_type or self.infer_question_type(question_text, founder)
+        config = QUESTION_TYPE_CONFIG.get(resolved_question_type, QUESTION_TYPE_CONFIG["descriptive"])
+        resolved_question_weight = float(question_weight) if question_weight is not None else float(config["weight"])
+
         if not owner or len(owner.strip()) < 3:
-            return {"fused": 0.0, "reason": "empty_answer"}
+            return {
+                "fused": 0.0,
+                "reason": "empty_answer",
+                "question_type": resolved_question_type,
+                "question_weight": resolved_question_weight,
+                "type_adjustment_reason": None,
+            }
 
         # Normalize for comparison
         founder_norm = self.normalize(founder)
@@ -193,6 +317,9 @@ class LocalNLP:
                 "fused": 1.0,
                 "coverage": 1.0,
                 "reason": "exact_match",
+                "question_type": resolved_question_type,
+                "question_weight": resolved_question_weight,
+                "type_adjustment_reason": "exact_match",
                 "features": {
                     "tfidf": 1.0,
                     "char_ngram": 1.0,
@@ -224,6 +351,9 @@ class LocalNLP:
                     "fused": 0.0,
                     "coverage": 0.0,
                     "reason": "opposite_answer",
+                    "question_type": resolved_question_type,
+                    "question_weight": resolved_question_weight,
+                    "type_adjustment_reason": "opposite_answer",
                     "features": {
                         "tfidf": 0.0,
                         "char_ngram": 0.0,
@@ -251,6 +381,9 @@ class LocalNLP:
                     "fused": substring_score,
                     "coverage": 0.9,
                     "reason": "word_subset_match",
+                    "question_type": resolved_question_type,
+                    "question_weight": resolved_question_weight,
+                    "type_adjustment_reason": "word_subset_match",
                     "features": {
                         "tfidf": substring_score,
                         "char_ngram": substring_score,
@@ -271,6 +404,9 @@ class LocalNLP:
                         "fused": word_overlap_score,
                         "coverage": overlap_ratio,
                         "reason": "high_word_overlap",
+                        "question_type": resolved_question_type,
+                        "question_weight": resolved_question_weight,
+                        "type_adjustment_reason": "high_word_overlap",
                         "features": {
                             "tfidf": word_overlap_score,
                             "char_ngram": word_overlap_score,
@@ -284,7 +420,13 @@ class LocalNLP:
         owner_kw = self.extract_keywords(owner)
 
         if self.is_generic_answer(owner_kw):
-            return {"fused": 0.05, "reason": "generic_answer"}
+            return {
+                "fused": 0.05,
+                "reason": "generic_answer",
+                "question_type": resolved_question_type,
+                "question_weight": resolved_question_weight,
+                "type_adjustment_reason": None,
+            }
 
         coverage = self.keyword_coverage(founder_kw, owner_kw)
 
@@ -293,16 +435,28 @@ class LocalNLP:
             return {
                 "fused": float(0.05),
                 "coverage": float(coverage),
-                "reason": "insufficient_detail_match"
+                "reason": "insufficient_detail_match",
+                "question_type": resolved_question_type,
+                "question_weight": resolved_question_weight,
+                "type_adjustment_reason": None,
             }
 
         feats = self.compute_features(founder, owner, founder_kw, owner_kw)
         fused = self.fuse_score(feats, coverage)
+        fused, type_reason = self.apply_question_type_rules(
+            float(py(fused)),
+            resolved_question_type,
+            founder,
+            owner,
+        )
 
         # sanitize everything into native types
         return {
             "features": {k: py(v) for k, v in feats.items()},
             "fused": float(py(fused)),
             "coverage": float(py(coverage)),
-            "reason": "ok"
+            "reason": "ok",
+            "question_type": resolved_question_type,
+            "question_weight": resolved_question_weight,
+            "type_adjustment_reason": type_reason,
         }

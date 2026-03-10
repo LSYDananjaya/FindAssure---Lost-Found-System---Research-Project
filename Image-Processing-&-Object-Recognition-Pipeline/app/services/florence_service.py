@@ -171,7 +171,14 @@ def _chunk_list(items: List[str], chunk_size: int = 25) -> List[List[str]]:
 
 
 def _normalize_ocr_text(value: Any) -> str:
-    return re.sub(r"\s+", " ", _safe_str(value)).strip()
+    text = _safe_str(value)
+    # Strip model special tokens (</s>, <s>, <pad>, etc.)
+    text = re.sub(r"</\s*s\s*>|<s>|<pad>", "", text, flags=re.IGNORECASE)
+    # Strip any remaining isolated XML/HTML-like tags (short tags only)
+    text = re.sub(r"<[^>]{0,10}>", "", text)
+    # Collapse whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 def _median(values: List[float], default: float = 0.0) -> float:
@@ -390,7 +397,10 @@ def _caption_mentions_person(text: str) -> bool:
     """True if text mentions person-related words."""
     if not text:
         return False
-    keywords = {"person", "hand", "finger", "skin", "holding", "man", "woman", "boy", "girl", "human"}
+    keywords = {
+        "person", "hand", "finger", "skin", "holding", "man", "woman",
+        "boy", "girl", "human", "selfie",
+    }
     text_lower = text.lower()
     words = set(re.findall(r"\b\w+\b", text_lower))
     return bool(keywords & words)
@@ -414,9 +424,68 @@ def _caption_mentions_demographics(text: str) -> bool:
     return False
 
 
+def _caption_mentions_scene(text: str) -> bool:
+    """True if text mentions scene/camera/meta context rather than the object."""
+    if not text:
+        return False
+    scene_patterns = [
+        r"\btaking\s+a\s+(?:photo|picture|pic)\b",
+        r"\bclose[\s-]?up\b",
+        r"\bthis\s+(?:image|photo|picture)\b",
+        r"\bin\s+(?:the\s+)?(?:image|photo|picture)\b",
+        r"\bcan\s+(?:be\s+)?seen\b",
+        r"\bplaced\s+on\s+(?:a\s+)?(?:table|desk|surface|floor)\b",
+        r"\bsitting\s+on\s+(?:a\s+)?(?:table|desk|surface|wood)\b",
+        r"\blying\s+on\b",
+        r"\bon\s+(?:a\s+)?(?:wooden\s+)?table\b",
+        # Background object as sentence subject ("a white table under the helmet")
+        r"^(?:a|the|an)\s+(?:\w+\s+){0,2}(?:table|desk|surface|floor|wall|carpet|mat|counter|shelf)\s+(?:under|near|beside|below|beneath|behind|next\s+to)\b",
+    ]
+    text_lower = text.lower()
+    return any(re.search(p, text_lower) for p in scene_patterns)
+
+
+def _strip_caption_context(text: str) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        return ""
+
+    prefix_patterns = [
+        r"(?i)^a\s+person\s+is\s+holding\s+",
+        r"(?i)^the\s+person\s+is\s+holding\s+",
+        r"(?i)^someone\s+is\s+holding\s+",
+        r"(?i)^a\s+hand\s+is\s+holding\s+",
+        r"(?i)^the\s+hand\s+is\s+holding\s+",
+        r"(?i)^held\s+in\s+(?:a\s+)?hand\s*,?\s*",
+        r"(?i)^being\s+held\s+in\s+(?:a\s+)?hand\s*,?\s*",
+        r"(?i)^close[\s-]?up\s+of\s+",
+        r"(?i)^this\s+(?:image|photo|picture)\s+shows\s+",
+        r"(?i)^in\s+(?:this|the)\s+(?:image|photo|picture)\s*,?\s*",
+        r"(?i)^there\s+is\s+",
+        r"(?i)^(?:the\s+)?(?:inside|front|back|side|rear|top|bottom)\s+view\s+shows\s+",
+    ]
+    for pattern in prefix_patterns:
+        cleaned = re.sub(pattern, "", cleaned).strip()
+
+    tail_patterns = [
+        r"(?i)\s+(?:on|against|near|beside|above|over|below|beneath|next\s+to)\s+(?:a\s+|the\s+)?(?:\w+\s+){0,2}(?:table|desk|surface|floor|wall|carpet|mat|counter|shelf)\b.*$",
+        r"(?i)\s+sitting\s+on\s+(?:a\s+|the\s+)?(?:\w+\s+)?(?:table|desk|surface|floor)\b.*$",
+        r"(?i)\s+lying\s+on\s+(?:a\s+|the\s+)?(?:\w+\s+)?(?:table|desk|surface|floor)\b.*$",
+        r"(?i)\s+is\s+sitting\s+on\s+(?:a\s+|the\s+)?(?:\w+\s+)?(?:table|desk|surface|floor)\b.*$",
+        r"(?i)\s+is\s+lying\s+on\s+(?:a\s+|the\s+)?(?:\w+\s+)?(?:table|desk|surface|floor)\b.*$",
+        r"(?i)\s+is\s+sitting\b.*$",
+        r"(?i)\s+is\s+lying\b.*$",
+    ]
+    for pattern in tail_patterns:
+        cleaned = re.sub(pattern, "", cleaned).strip(" ,.")
+
+    return cleaned
+
+
 def _sanitize_caption(text: str) -> Tuple[str, List[str]]:
     """
-    Splits caption into sentences and drops those mentioning person/hand/skin.
+    Splits caption into sentences and drops those mentioning person/hand/skin
+    or scene/camera/background context.
     Returns (sanitized_text, removed_sentences).
     """
     if not text:
@@ -429,10 +498,20 @@ def _sanitize_caption(text: str) -> Tuple[str, List[str]]:
     removed = []
     
     for s in sentences:
-        if _caption_mentions_person(s) or _caption_mentions_demographics(s):
+        stripped = _strip_caption_context(s)
+        if stripped and stripped != s:
+            s = stripped
+
+        if s.strip().lower() in {"it", "this", "that", "object", "item"}:
+            removed.append(s)
+            continue
+
+        if _caption_mentions_person(s) or _caption_mentions_demographics(s) or _caption_mentions_scene(s):
             removed.append(s)
         else:
-            kept.append(s)
+            normalized = s.strip().rstrip(". ")
+            if normalized:
+                kept.append(normalized + ".")
             
     return " ".join(kept).strip(), removed
 
@@ -444,9 +523,10 @@ def _is_generic_caption(text: str) -> bool:
     if not text:
         return True
     
-    # 1. Length check (< 10 words)
+    # 1. Length check (< 5 words) — lowered from 10 to preserve valid short
+    #    captions like "A brown leather wallet with stitched logo" (8 words).
     words = text.split()
-    if len(words) < 10:
+    if len(words) < 5:
         return True
         
     text_lower = text.lower()
@@ -469,6 +549,17 @@ def _is_generic_caption(text: str) -> bool:
              return True
              
     return False
+
+
+def _normalize_ocr_quote(ocr_text: str, max_words: int = 10, max_chars: int = 80) -> str:
+    cleaned = " ".join(str(ocr_text or "").split()).strip()
+    if not cleaned:
+        return ""
+
+    snippet = " ".join(cleaned.split()[:max_words])
+    if len(snippet) > max_chars:
+        snippet = snippet[: max_chars - 1].rstrip()
+    return snippet
 
 
 def _build_florence_description(
@@ -494,6 +585,9 @@ def _build_florence_description(
     ]
     for pat in meta_patterns:
         desc = re.sub(pat, "", desc).strip()
+    desc, _ = _sanitize_caption(desc)
+    if _is_generic_caption(desc):
+        desc = ""
 
     # Build a structured prefix with label/color if available
     prefix_parts = []
@@ -507,13 +601,14 @@ def _build_florence_description(
     if color and str(color).lower() not in ("unknown", "none", ""):
         prefix_parts.insert(0, str(color).lower())
 
-    # Only prepend label/color if the caption doesn't already mention them
     desc_lower = desc.lower()
+    sentences = []
     if prefix_parts:
         prefix = " ".join(prefix_parts)
-        # Check if the caption already starts with something similar
-        if not any(p in desc_lower[:60] for p in prefix_parts):
-            desc = f"A {prefix}. {desc}" if desc else f"A {prefix}."
+        if not desc or not any(p in desc_lower[:60] for p in prefix_parts):
+            sentences.append(f"A {prefix}.")
+    if desc:
+        sentences.append(desc.rstrip(". ") + ".")
 
     # Append grounded evidence that the caption may have missed
     extras = []
@@ -523,23 +618,28 @@ def _build_florence_description(
 
     unseen_features = [f for f in features if f.lower() not in desc_lower]
     if unseen_features:
-        extras.append("Features: " + ", ".join(unseen_features[:5]))
+        extras.append("It has " + ", ".join(unseen_features[:5]) + ".")
 
     unseen_defects = [d for d in defects if d.lower() not in desc_lower]
     if unseen_defects:
-        extras.append("Wear: " + ", ".join(unseen_defects[:3]))
+        extras.append("It shows " + ", ".join(unseen_defects[:3]) + ".")
 
     unseen_attachments = [a for a in attachments if a.lower() not in desc_lower]
     if unseen_attachments:
-        extras.append("Attachments: " + ", ".join(unseen_attachments[:3]))
+        extras.append("It includes " + ", ".join(unseen_attachments[:3]) + ".")
 
     if ocr_text and ocr_text.strip():
-        snippet = " ".join(ocr_text.strip().split()[:4])
+        snippet = _normalize_ocr_quote(ocr_text)
         if snippet.lower() not in desc_lower:
-            extras.append(f'Text on object: "{snippet}"')
+            extras.append(f'The text "{snippet}" is visible on the surface.')
 
     if extras:
-        desc = desc.rstrip(". ") + ". " + ". ".join(extras) + "."
+        sentences.extend(extras)
+
+    if not sentences:
+        sentences.append("Item visible in the image.")
+
+    desc = " ".join(sentence.strip() for sentence in sentences if sentence.strip())
 
     word_count = len(desc.split())
 
@@ -1747,6 +1847,55 @@ class FlorenceService:
                 timings["caption_ms"] = round((time.perf_counter() - caption_start) * 1000.0, 2)
                 return _safe_payload()
             timings["caption_ms"] = round((time.perf_counter() - caption_start) * 1000.0, 2)
+
+            # Step 2b: Guided VQA for richer object-only descriptions (same
+            # prompt used in analyze_crop full-mode).  This produces multi-
+            # sentence descriptions whereas caption() alone is brief.
+            if profile_key != "fast":
+                guided_start = time.perf_counter()
+                try:
+                    guide_prompt = (
+                        "Describe ONLY the main object in this image in 3–5 detailed sentences. "
+                        "Focus on physical characteristics you can directly observe: "
+                        "object type, material and texture (e.g. leather, fabric, metal, plastic), "
+                        "primary color and shade, exact shape and size, "
+                        "any brand names/logos/printed text (spell them out exactly as written), "
+                        "stitching style, closure mechanism (zipper, button, snap, clasp), "
+                        "compartments/pockets, surface condition, "
+                        "any attachments or accessories (only separate add-ons like a metal ring, lanyard, tag, or remote fob — if clearly visible), "
+                        "and any visible wear or defects (scratches, dents, cracks, stains, rust, bends, fading, peeling, tears). "
+                        "IMPORTANT: Describe only what is physically visible. Do NOT mention the person, hand, background, or any surface. "
+                        "Do NOT include meta-commentary about the task or about reading text. "
+                        "Do NOT say 'this image shows' or 'I can see'. Just describe the object directly."
+                    )
+                    guided_raw = self._run_with_timeout(
+                        self.vqa,
+                        timeout_ms,
+                        detail_image,
+                        guide_prompt,
+                        profile_key,
+                    )
+                    guided_clean, _ = _sanitize_caption(str(guided_raw or ""))
+                    _record_attempt(
+                        "guided_vqa",
+                        "success",
+                        "ok_nonempty" if guided_clean.strip() else "ok_empty_guided",
+                        (time.perf_counter() - guided_start) * 1000.0,
+                    )
+                    # Prefer guided if substantial (>= 5 words), else keep caption
+                    if len(guided_clean.split()) >= 5:
+                        caption_text = guided_clean.strip()
+                        raw["ocr_first"]["caption_source"] = "guided_vqa"
+                    else:
+                        raw["ocr_first"]["caption_source"] = "detailed_caption"
+                    raw["ocr_first"]["guided_vqa_len"] = len(guided_clean.strip())
+                except TimeoutError:
+                    _record_attempt("guided_vqa", "timeout", "timeout", (time.perf_counter() - guided_start) * 1000.0)
+                    raw["ocr_first"]["caption_source"] = "detailed_caption"
+                except Exception:
+                    _record_attempt("guided_vqa", "error", "exception", (time.perf_counter() - guided_start) * 1000.0)
+                    raw["ocr_first"]["caption_source"] = "detailed_caption"
+                timings["guided_vqa_ms"] = round((time.perf_counter() - guided_start) * 1000.0, 2)
 
         # Step 3: Optional enrichments for non-fast pass only.
         if not fast:

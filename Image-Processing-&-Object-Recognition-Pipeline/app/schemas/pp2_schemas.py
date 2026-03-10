@@ -21,6 +21,7 @@ class PP2DetectionCandidate(BaseModel):
 
 class PP2PerViewExtraction(BaseModel):
     caption: str
+    detailed_description: Optional[str] = None
     ocr_text: str
     ocr_text_display: Optional[str] = None
     ocr_lines: Optional[List[Dict[str, Any]]] = None

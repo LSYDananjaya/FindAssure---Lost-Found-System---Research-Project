@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     FAISS_THRESHOLD_2VIEW: float | None = None
     GOOGLE_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
-    PERF_PROFILE: str = "fast"
+    PERF_PROFILE: str = "balanced"
     PP1_MAX_DETECTIONS: int = 1
     PP1_GEMINI_INCLUDE_IMAGE: bool = False
     FLORENCE_FAST_MAX_NEW_TOKENS: int = 96

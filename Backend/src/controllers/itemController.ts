@@ -247,7 +247,10 @@ const pickBestText = (...values: unknown[]): string | null => {
 
 const buildAnalysisPrefillFields = (analysis: FoundItemAnalysisSnapshot) => ({
   detectedCategory: analysis.detectedCategory,
-  detectedDescription: analysis.detectedDescription,
+  detectedDescription: pickBestText(
+    analysis.detailedDescription,
+    analysis.detectedDescription
+  ),
   detailedDescription: analysis.detailedDescription,
   detectedColor: analysis.detectedColor,
   ocrText: analysis.ocrText,
@@ -283,10 +286,14 @@ const extractPP2AnalysisDetails = (pp2Result: any) => {
   const mergedOcrTokens = normalizeStringArray(fused?.merged_ocr_tokens);
   const mergedOcrText = mergedOcrTokens.length > 0 ? mergedOcrTokens.join(' ') : null;
   const mergedOcrDisplay = mergedOcrTokens.length > 0 ? mergedOcrTokens.join('\n') : null;
+  const preferredDescription = pickBestText(
+    fused?.detailed_description,
+    fused?.caption
+  );
 
   return {
-    detectedDescription: pickBestText(fused?.caption, fused?.detailed_description),
-    detailedDescription: pickBestText(fused?.detailed_description, fused?.caption),
+    detectedDescription: preferredDescription,
+    detailedDescription: preferredDescription,
     ocrText: mergedOcrText,
     ocrTextDisplay: mergedOcrDisplay || mergedOcrText,
     categoryDetails: normalizeCategoryDetails({

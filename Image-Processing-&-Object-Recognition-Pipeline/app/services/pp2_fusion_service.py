@@ -351,7 +351,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _extract_caption_snippet(caption: str) -> str:
-        text = str(caption or "").strip()
+        text = MultiViewFusionService._sanitize_object_text(caption)
         if not text:
             return ""
         lowered = text.lower().strip().rstrip(".")
@@ -359,12 +359,78 @@ class MultiViewFusionService:
         if not match:
             return ""
         snippet = match.group(1)
-        snippet = re.split(r"\b(?:on|against|near|beside|sitting on|lying on)\b", snippet)[0].strip(" ,.")
+        snippet = re.sub(
+            r"(?i)\s+(?:on|against|near|beside)\s+(?:a\s+|the\s+)?(?:wooden\s+)?(?:table|desk|surface|floor)\b.*$",
+            "",
+            snippet,
+        ).strip(" ,.")
         if len(snippet.split()) < 2:
             return ""
-        if any(term in snippet for term in ("hand", "person", "background", "table", "desk")):
+        if any(term in snippet for term in (
+            "hand", "person", "background", "table", "desk", "floor",
+            "wall", "shelf", "carpet", "mat", "counter", "foreground",
+        )):
             return ""
         return snippet
+
+    @staticmethod
+    def _sanitize_object_text(text: str) -> str:
+        raw = str(text or "").strip()
+        if not raw:
+            return ""
+
+        prefix_patterns = [
+            r"(?i)^a\s+person\s+is\s+holding\s+",
+            r"(?i)^the\s+person\s+is\s+holding\s+",
+            r"(?i)^someone\s+is\s+holding\s+",
+            r"(?i)^a\s+hand\s+is\s+holding\s+",
+            r"(?i)^the\s+hand\s+is\s+holding\s+",
+            r"(?i)^held\s+in\s+(?:a\s+)?hand\s*,?\s*",
+            r"(?i)^being\s+held\s+in\s+(?:a\s+)?hand\s*,?\s*",
+            r"(?i)^close[\s-]?up\s+of\s+",
+            r"(?i)^this\s+(?:image|photo|picture)\s+shows\s+",
+            r"(?i)^in\s+(?:this|the)\s+(?:image|photo|picture)\s*,?\s*",
+            r"(?i)^there\s+is\s+",
+            r"(?i)^(?:the\s+)?(?:inside|front|back|side|rear|top|bottom)\s+view\s+shows\s+",
+        ]
+        tail_patterns = [
+            r"(?i)\s+(?:on|against|near|beside|above|over|below|beneath|next\s+to)\s+(?:a\s+|the\s+)?(?:\w+\s+){0,2}(?:table|desk|surface|floor|wall|carpet|mat|counter|shelf)\b.*$",
+            r"(?i)\s+sitting\s+on\s+(?:a\s+|the\s+)?(?:\w+\s+)?(?:table|desk|surface|floor)\b.*$",
+            r"(?i)\s+lying\s+on\s+(?:a\s+|the\s+)?(?:\w+\s+)?(?:table|desk|surface|floor)\b.*$",
+            r"(?i)\s+is\s+sitting\b.*$",
+            r"(?i)\s+is\s+lying\b.*$",
+        ]
+        banned_terms = {
+            "person", "hand", "finger", "selfie", "background", "holding",
+            "table", "desk", "floor", "wall", "carpet", "mat",
+            "counter", "shelf", "foreground", "backdrop",
+        }
+        generic_phrases = {"wallet front", "wallet back", "helmet front", "helmet back", "wallet side", "helmet side"}
+
+        cleaned_sentences: List[str] = []
+        for sentence in re.split(r"(?<=[.!?])\s+", raw):
+            candidate = sentence.strip()
+            if not candidate:
+                continue
+            for pattern in prefix_patterns:
+                candidate = re.sub(pattern, "", candidate).strip()
+            for pattern in tail_patterns:
+                candidate = re.sub(pattern, "", candidate).strip(" ,.")
+            if not candidate:
+                continue
+
+            lower = candidate.lower()
+            if any(term in re.findall(r"\b\w+\b", lower) for term in banned_terms):
+                continue
+            if lower in generic_phrases:
+                continue
+            if len(candidate.split()) < 3:
+                continue
+
+            cleaned_sentences.append(candidate.rstrip(". "))
+
+        cleaned_sentences = MultiViewFusionService._dedupe_keep_order(cleaned_sentences)
+        return ". ".join(cleaned_sentences).strip()
 
     @staticmethod
     def _pick_majority_value(values: List[str]) -> Optional[str]:
@@ -425,6 +491,36 @@ class MultiViewFusionService:
         consensus_values = self._dedupe_keep_order(consensus_values)
         fallback_values = self._dedupe_keep_order(best_view_values) if not consensus_values else []
         return consensus_values, fallback_values
+
+    def _collect_angle_specific_field_values(
+        self,
+        scope_views: List[PP2PerViewResult],
+        *,
+        field_name: str,
+        excluded_values: List[str],
+        exclude_view_index: Optional[int] = None,
+    ) -> List[str]:
+        ranked_views = sorted(
+            scope_views,
+            key=lambda view: (float(view.quality_score), float(view.detection.confidence)),
+            reverse=True,
+        )
+        excluded_norms = {str(value).strip().lower() for value in excluded_values if str(value).strip()}
+        collected: List[str] = []
+        seen_norms: Set[str] = set(excluded_norms)
+
+        for view in ranked_views:
+            if exclude_view_index is not None and int(view.view_index) == int(exclude_view_index):
+                continue
+            grounded = view.extraction.grounded_features or {}
+            for value in self._dedupe_keep_order(self._to_clean_str_list(grounded.get(field_name))):
+                norm = str(value).strip().lower()
+                if not norm or norm in seen_norms:
+                    continue
+                seen_norms.add(norm)
+                collected.append(value)
+
+        return collected
 
     def _collect_caption_ocr_tokens(
         self,
@@ -490,7 +586,7 @@ class MultiViewFusionService:
         if defect_values:
             evidence_clauses.append(f"shows {self._join_natural(defect_values[:2])}")
         if ocr_values:
-            evidence_clauses.append(f"marked with {ocr_values[0]}")
+            evidence_clauses.append(f'has the text "{ocr_values[0]}"')
 
         if not evidence_clauses:
             return first_sentence
@@ -784,7 +880,7 @@ class MultiViewFusionService:
             ]
         )
         if not caption_features and not caption_attachments and not sorted_defects and len(caption_snippets) == 1:
-            main_caption = f"{main_caption} Visible details: {caption_snippets[0]}."
+            main_caption = f"{main_caption} It has {caption_snippets[0]}."
             merged_attributes["caption_enrichment_mode"] = "conservative_plus_caption_snippet"
             merged_attributes["caption_snippets_used"] = caption_snippets
         else:
@@ -836,40 +932,198 @@ class MultiViewFusionService:
         detailed_attachments_for_description = consensus_attachments[:]
         detailed_defects_for_description = consensus_defects[:]
         if not detailed_features_for_description and best_view_feature_fallback:
-            detailed_features_for_description = best_view_feature_fallback[:2]
+            detailed_features_for_description = best_view_feature_fallback[:3]
             detailed_description_filters.append("best_view_feature_fallback")
         if not detailed_attachments_for_description and best_view_attachment_fallback:
-            detailed_attachments_for_description = best_view_attachment_fallback[:1]
+            detailed_attachments_for_description = best_view_attachment_fallback[:2]
             detailed_description_filters.append("best_view_attachment_fallback")
         if not detailed_defects_for_description and best_view_defect_fallback:
-            detailed_defects_for_description = best_view_defect_fallback[:1]
+            detailed_defects_for_description = best_view_defect_fallback[:2]
             detailed_description_filters.append("best_view_defect_fallback")
+
+        angle_specific_features = self._collect_angle_specific_field_values(
+            detailed_scope_views,
+            field_name="features",
+            excluded_values=detailed_features_for_description,
+            exclude_view_index=detail_best_view.view_index if detail_best_view is not None else None,
+        )
+        if angle_specific_features:
+            detailed_features_for_description = self._dedupe_keep_order(
+                detailed_features_for_description + angle_specific_features[:3]
+            )
+            detailed_description_filters.append("other_angle_feature_fusion")
+
+        angle_specific_attachments = self._collect_angle_specific_field_values(
+            detailed_scope_views,
+            field_name="attachments",
+            excluded_values=detailed_attachments_for_description,
+            exclude_view_index=detail_best_view.view_index if detail_best_view is not None else None,
+        )
+        if angle_specific_attachments:
+            detailed_attachments_for_description = self._dedupe_keep_order(
+                detailed_attachments_for_description + angle_specific_attachments[:2]
+            )
+            detailed_description_filters.append("other_angle_attachment_fusion")
+
+        angle_specific_defects = self._collect_angle_specific_field_values(
+            detailed_scope_views,
+            field_name="defects",
+            excluded_values=detailed_defects_for_description,
+            exclude_view_index=detail_best_view.view_index if detail_best_view is not None else None,
+        )
+        if angle_specific_defects:
+            detailed_defects_for_description = self._dedupe_keep_order(
+                detailed_defects_for_description + angle_specific_defects[:2]
+            )
+            detailed_description_filters.append("other_angle_defect_fusion")
 
         detailed_ocr_text = " ".join(merged_ocr_tokens[:2]).strip()
         detailed_caption = ""
         if detail_best_view is not None:
-            detailed_caption = str(getattr(detail_best_view.extraction, "caption", "") or "")
+            detailed_caption = self._sanitize_object_text(
+                str(getattr(detail_best_view.extraction, "caption", "") or "")
+            )
 
         # Use the best view's Florence description directly if available,
         # otherwise fall back to the caption
         best_view_description = ""
         if detail_best_view is not None:
-            best_view_description = str(
+            best_view_description = self._sanitize_object_text(str(
                 getattr(detail_best_view.extraction, "detailed_description", "")
                 or getattr(detail_best_view.extraction, "final_description", "")
                 or ""
-            ).strip()
+            ).strip())
         if not best_view_description:
             best_view_description = detailed_caption
 
+        if not best_view_description:
+            best_view_description = self.build_conservative_caption(
+                final_category,
+                detailed_color or final_color,
+                detailed_brand or final_brand,
+                merged_ocr_tokens,
+                detailed_features_for_description,
+                detailed_defects_for_description,
+                detailed_attachments_for_description,
+            )
+
+        # ── Ensure colour + category open the description ────────────
+        # If the best-view text doesn't mention the item's colour in its
+        # opening sentence, prepend a structured "A {colour} {category}."
+        _obj_color = (detailed_color or final_color or "").strip()
+        if _obj_color and best_view_description:
+            _opening = best_view_description.split(".")[0].lower()
+            if _obj_color.lower() not in _opening:
+                _obj_brand = (detailed_brand or final_brand or "").strip()
+                _cat_text = self._humanize_category(final_category)
+                _adj = [_obj_color.lower()]
+                if _obj_brand:
+                    _adj.append(_obj_brand)
+                _adj.append(_cat_text)
+                best_view_description = f"A {' '.join(_adj)}. {best_view_description}"
+
+        detail_text_lower = best_view_description.lower()
+
+        # ── Multi-angle caption merging ──────────────────────────────
+        # Collect unique descriptive facts from OTHER scope views'
+        # captions / detailed_descriptions that aren't in the best-view text.
+        other_angle_phrases: List[str] = []
+        best_view_idx = detail_best_view.view_index if detail_best_view is not None else -1
+        for res in detailed_scope_views:
+            if res.view_index == best_view_idx:
+                continue
+            # Prefer the view's detailed_description; fall back to caption
+            other_desc = self._sanitize_object_text(str(
+                getattr(res.extraction, "detailed_description", "")
+                or getattr(res.extraction, "caption", "")
+                or ""
+            ).strip())
+            if not other_desc or len(other_desc.split()) < 3:
+                continue
+            # Extract the descriptive portion after "with …" if present
+            snippet = self._extract_caption_snippet(other_desc)
+            if snippet and snippet.lower() not in detail_text_lower:
+                other_angle_phrases.append(snippet)
+                continue
+            # Fallback: use the whole description if it's substantial and
+            # contains information not already in the base text.
+            # Split into sentences and keep those with novel tokens.
+            for sentence in re.split(r'(?<=[.!?])\s+', other_desc):
+                sentence = sentence.strip().rstrip(". ")
+                if not sentence or len(sentence.split()) < 3:
+                    continue
+                sentence_lower = sentence.lower()
+                # Keep sentence if >40% of its content words are novel
+                content_words = [w for w in re.findall(r'[a-z]{3,}', sentence_lower)
+                                 if w not in {'the', 'and', 'with', 'from', 'that', 'this', 'its', 'for', 'are', 'has', 'was'}]
+                if content_words:
+                    novel_ratio = sum(1 for w in content_words if w not in detail_text_lower) / len(content_words)
+                    if novel_ratio > 0.4:
+                        other_angle_phrases.append(sentence)
+                        # Update the lower-text tracker so later views don't repeat
+                        detail_text_lower = (detail_text_lower + " " + sentence_lower)
+
+        # Deduplicate and cap at 3 angle phrases
+        other_angle_phrases = self._dedupe_keep_order(other_angle_phrases)[:3]
+        merged_attributes["multi_angle_phrases_used"] = list(other_angle_phrases)
+
+        detail_sentences: List[str] = []
+
+        if other_angle_phrases:
+            detail_sentences.extend(
+                phrase if phrase.endswith(".") else f"{phrase}."
+                for phrase in other_angle_phrases
+            )
+            detailed_description_filters.append("multi_angle_fusion")
+
+        unseen_features = [value for value in detailed_features_for_description if str(value).lower() not in detail_text_lower]
+        if unseen_features:
+            detail_sentences.append(f"It also has {self._join_natural(unseen_features[:4])}.")
+
+        unseen_attachments = [value for value in detailed_attachments_for_description if str(value).lower() not in detail_text_lower]
+        if unseen_attachments:
+            detail_sentences.append(f"It also includes {self._join_natural(unseen_attachments[:2])}.")
+
+        unseen_defects = [value for value in detailed_defects_for_description if str(value).lower() not in detail_text_lower]
+        if unseen_defects:
+            detail_sentences.append(f"It shows {self._join_natural(unseen_defects[:2])}.")
+
+        if detailed_ocr_text and detailed_ocr_text.lower() not in detail_text_lower:
+            detail_sentences.append(f'The text "{detailed_ocr_text}" is visible on the surface.')
+
+        detailed_description_text = best_view_description.rstrip(". ")
+        detailed_description_parts = [part for part in [detailed_description_text] if part]
+        detailed_description_parts.extend(sentence.strip() for sentence in detail_sentences if sentence.strip())
+        detailed_description_text = " ".join(
+            part if part.endswith(".") else f"{part}."
+            for part in detailed_description_parts
+        ).strip()
+
+        detailed_evidence: List[str] = []
+        if best_view_description:
+            detailed_evidence.append("best_view_description")
+        elif detailed_caption:
+            detailed_evidence.append("florence_caption")
+        if other_angle_phrases:
+            detailed_evidence.append("multi_angle_views")
+        if detailed_features_for_description:
+            detailed_evidence.append("grounded_features")
+        if detailed_attachments_for_description:
+            detailed_evidence.append("grounded_attachments")
+        if detailed_defects_for_description:
+            detailed_evidence.append("grounded_defects")
+        if detailed_ocr_text:
+            detailed_evidence.append("ocr_text")
+
+        desc_source = "multi_angle_evidence_composer" if other_angle_phrases else "best_view_evidence_composer"
         detailed_description_bundle = {
-            "detailed_description": best_view_description or detailed_caption,
-            "detailed_description_source": "florence_direct",
-            "description_evidence_used": {"summary": ["florence_caption"], "detailed": ["florence_caption"]},
-            "description_filters_applied": ["florence_direct"],
+            "detailed_description": detailed_description_text,
+            "detailed_description_source": desc_source,
+            "description_evidence_used": {"summary": detailed_evidence, "detailed": detailed_evidence},
+            "description_filters_applied": ["best_view_evidence_composer"],
             "description_word_count": {
-                "final_description": len((best_view_description or detailed_caption).split()),
-                "detailed_description": len((best_view_description or detailed_caption).split()),
+                "final_description": len(detailed_description_text.split()),
+                "detailed_description": len(detailed_description_text.split()),
             },
             "description_timings_ms": {},
         }

@@ -118,16 +118,111 @@ class UnifiedPipeline:
         analysis: Dict[str, Any],
         category_details: Optional[Dict[str, Any]],
         key_count: Optional[int],
+        preferred_description: Optional[str] = None,
+        preferred_description_source: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Pass through Florence's description fields directly."""
+        """Compose the richest public-facing description from verified evidence."""
+        def _clean_list(value: Any) -> List[str]:
+            if isinstance(value, (list, tuple, set)):
+                return [str(item).strip() for item in value if str(item).strip()]
+            if value is None:
+                return []
+            text = str(value).strip()
+            return [text] if text else []
+
+        def _clean_description_text(value: str) -> str:
+            cleaned = str(value or "").strip()
+            if not cleaned:
+                return ""
+            cleaned = re.sub(
+                r"(?i)^(?:the\s+)?(?:inside|front|back|side|rear|top|bottom)\s+view\s+shows\s+",
+                "",
+                cleaned,
+            ).strip()
+            cleaned = re.sub(
+                r"(?i)\s+(?:on|against|near|beside)\s+(?:a\s+|the\s+)?(?:wooden\s+)?(?:table|desk|surface|floor)\b.*$",
+                "",
+                cleaned,
+            ).strip(" ,.")
+            cleaned = re.sub(r"(?i)\s+is\s+sitting\b.*$", "", cleaned).strip(" ,.")
+            cleaned = re.sub(r"(?i)\s+is\s+lying\b.*$", "", cleaned).strip(" ,.")
+            return cleaned
+
+        description_text = str(
+            preferred_description
+            or analysis.get("detailed_description")
+            or analysis.get("final_description")
+            or analysis.get("caption", "")
+            or ""
+        ).strip()
+        description_text = _clean_description_text(description_text)
+        description_lower = description_text.lower()
+
+        features = _clean_list((category_details or {}).get("features") if isinstance(category_details, dict) else [])
+        defects = _clean_list((category_details or {}).get("defects") if isinstance(category_details, dict) else [])
+        attachments = _clean_list((category_details or {}).get("attachments") if isinstance(category_details, dict) else [])
+        ocr_text = str(analysis.get("ocr_text", "") or "").strip()
+        ocr_snippet = " ".join(ocr_text.split()[:10]).strip()
+
+        prefix_parts: List[str] = []
+        canonical = canonicalize_label(label or "") if label else None
+        if canonical:
+            label_word = canonical.lower()
+            if canonical == "Key" and isinstance(key_count, int) and key_count > 1:
+                label_word = f"{key_count} keys"
+            prefix_parts.append(label_word)
+        if color and str(color).lower() not in ("unknown", "none", ""):
+            prefix_parts.insert(0, str(color).lower())
+
+        sentences: List[str] = []
+        if prefix_parts and not any(part in description_lower[:80] for part in prefix_parts):
+            sentences.append(f"A {' '.join(prefix_parts)}.")
+        if description_text:
+            sentences.append(description_text.rstrip(". ") + ".")
+
+        unseen_features = [item for item in features if item.lower() not in description_lower]
+        if unseen_features:
+            sentences.append("It has " + ", ".join(unseen_features[:4]) + ".")
+
+        unseen_attachments = [item for item in attachments if item.lower() not in description_lower]
+        if unseen_attachments:
+            sentences.append("It includes " + ", ".join(unseen_attachments[:2]) + ".")
+
+        unseen_defects = [item for item in defects if item.lower() not in description_lower]
+        if unseen_defects:
+            sentences.append("It shows " + ", ".join(unseen_defects[:2]) + ".")
+
+        if ocr_snippet and ocr_snippet.lower() not in description_lower:
+            sentences.append(f'The text "{ocr_snippet}" is visible on the surface.')
+
+        if not sentences:
+            sentences.append("Item visible in the image.")
+
+        composed_description = " ".join(sentence.strip() for sentence in sentences if sentence.strip())
+        evidence: List[str] = []
+        if preferred_description:
+            evidence.append("gemini_description")
+        elif analysis.get("caption"):
+            evidence.append("florence_caption")
+        if features:
+            evidence.append("grounded_features")
+        if defects:
+            evidence.append("grounded_defects")
+        if attachments:
+            evidence.append("grounded_attachments")
+        if ocr_snippet:
+            evidence.append("ocr_text")
+
+        source = preferred_description_source or "evidence_composer"
+        word_count = len(composed_description.split())
         return {
-            "final_description": analysis.get("final_description") or analysis.get("detailed_description") or analysis.get("caption", ""),
-            "detailed_description": analysis.get("detailed_description") or analysis.get("final_description") or analysis.get("caption", ""),
-            "description_source": analysis.get("description_source", "florence_direct"),
-            "detailed_description_source": analysis.get("detailed_description_source", "florence_direct"),
-            "description_evidence_used": analysis.get("description_evidence_used", {"summary": [], "detailed": []}),
-            "description_filters_applied": analysis.get("description_filters_applied", []),
-            "description_word_count": analysis.get("description_word_count", {"final_description": 0, "detailed_description": 0}),
+            "final_description": composed_description,
+            "detailed_description": composed_description,
+            "description_source": source,
+            "detailed_description_source": source,
+            "description_evidence_used": {"summary": evidence, "detailed": evidence},
+            "description_filters_applied": [source],
+            "description_word_count": {"final_description": word_count, "detailed_description": word_count},
             "description_timings_ms": analysis.get("raw", {}).get("description_timings_ms", {}),
         }
 
@@ -1085,6 +1180,12 @@ class UnifiedPipeline:
                     analysis=analysis,
                     category_details=response_category_details,
                     key_count=response_key_count if response_key_count is not None else analysis.get("key_count"),
+                    preferred_description=gemini_result.get("detailed_description") or gemini_result.get("final_description"),
+                    preferred_description_source=(
+                        "gemini_evidence_locked"
+                        if gemini_result.get("detailed_description") or gemini_result.get("final_description")
+                        else None
+                    ),
                 )
                 raw_payload["description_debug"] = description_bundle
                 gemini_result["final_description"] = description_bundle.get("final_description")

@@ -39,6 +39,7 @@ MAX_WORKERS = 5
 LOW_AUDIO_OWNER_THRESHOLD = 0.50
 HIGH_GUESSING_RISK_THRESHOLD = 0.70
 AVG_GUESSING_RISK_REJECT_THRESHOLD = 0.40
+PER_QUESTION_AUDIO_WEIGHT = 0.15
 
 
 # -----------------------------
@@ -365,6 +366,7 @@ def verify_owner():
         # LOCAL NLP + FUSION
         # -----------------------------
         results = []
+        semantic_scores = []
         final_scores = []
         question_weights = []
         audio_scores = []
@@ -410,8 +412,6 @@ def verify_owner():
             if final_type_adjustment_reason:
                 type_adjustment_reason = final_type_adjustment_reason
 
-            final_scores.append(fused)
-            question_weights.append(question_weight)
             audio_data = a.get("audio_analysis") or {}
             audio_label = audio_data.get("label")
             audio_score = float(audio_data.get("audio_confidence_score", 0.0) or 0.0)
@@ -424,6 +424,17 @@ def verify_owner():
                 audio_scores.append(audio_score)
                 guessing_risk_scores.append(guessing_risk)
 
+            semantic_scores.append(fused)
+            question_final = fused
+            if audio_is_valid:
+                question_final = (
+                    (fused * (1.0 - PER_QUESTION_AUDIO_WEIGHT)) +
+                    (audio_score * PER_QUESTION_AUDIO_WEIGHT)
+                )
+
+            final_scores.append(question_final)
+            question_weights.append(question_weight)
+
             results.append({
                 "question_id": a["question_id"],
                 "question_text": a.get("question_text"),
@@ -435,8 +446,9 @@ def verify_owner():
                 "owner_transcript": a["owner_answer"],
                 "local_score": to_percent(local_score),
                 "gemini_score": to_percent(gem_score),
-                "final_similarity": to_percent(fused),
-                "status": classify_status(fused),
+                "semantic_similarity": to_percent(fused),
+                "final_similarity": to_percent(question_final),
+                "status": classify_status(question_final),
                 "gemini_analysis": gemini_details[i].get("analysis")
                 if i < len(gemini_details) and isinstance(gemini_details[i], dict) else None,
                 "audio_confidence": {
@@ -450,6 +462,10 @@ def verify_owner():
 
         total_question_weight = sum(question_weights) if question_weights else 0.0
         semantic_avg_final = (
+            sum(score * weight for score, weight in zip(semantic_scores, question_weights)) / total_question_weight
+            if total_question_weight > 0 else 0.0
+        )
+        question_avg_final = (
             sum(score * weight for score, weight in zip(final_scores, question_weights)) / total_question_weight
             if total_question_weight > 0 else 0.0
         )
@@ -501,10 +517,8 @@ def verify_owner():
 
         # Face is currently a presence-only gate. It must be visible, but it
         # does not change the confidence score or apply suspiciousness penalties.
-        if avg_audio_confidence is None:
-            avg_final = semantic_avg_final
-        else:
-            avg_final = (semantic_avg_final * 0.80) + (avg_audio_confidence * 0.20)
+        # Per-question final scores already include audio confidence when available.
+        avg_final = question_avg_final
 
         # Additional penalty when many answers look like guessed/uncertain delivery.
         guessing_penalty = min(0.20, avg_guessing_risk * 0.20)

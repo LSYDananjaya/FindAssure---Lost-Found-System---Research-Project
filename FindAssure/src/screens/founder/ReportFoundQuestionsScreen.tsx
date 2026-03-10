@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../types/models';
+import { RootStackParamList, VerificationQuestionMetadata } from '../../types/models';
 import { LoadingScreen } from '../../components/LoadingScreen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { QuestionChip } from '../../components/QuestionChip';
@@ -24,6 +24,7 @@ const ReportFoundQuestionsScreen = () => {
   const { images, preAnalysisToken, category, description } = route.params;
 
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+  const [questionMetadataMap, setQuestionMetadataMap] = useState<Record<string, VerificationQuestionMetadata>>({});
   const [suggestedAnswersByQuestion, setSuggestedAnswersByQuestion] = useState<Record<string, string>>({});
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +36,12 @@ const ReportFoundQuestionsScreen = () => {
       setError(null);
       const response = await itemsApi.generateQuestions({ category, description });
       setSuggestedQuestions(response.questions);
+
+      const metadataMap: Record<string, VerificationQuestionMetadata> = {};
+      response.questionMetadata?.forEach((item) => {
+        metadataMap[item.question] = item;
+      });
+      setQuestionMetadataMap(metadataMap);
 
       const answerMap: Record<string, string> = {};
       response.questions.forEach((question, index) => {
@@ -95,6 +102,7 @@ const ReportFoundQuestionsScreen = () => {
       category,
       description,
       selectedQuestions,
+      selectedQuestionMetadata: selectedQuestions.map((question) => questionMetadataMap[question]).filter(Boolean),
       suggestedAnswersByQuestion,
     });
   };

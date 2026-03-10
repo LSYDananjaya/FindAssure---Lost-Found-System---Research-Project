@@ -14,11 +14,19 @@ export interface ILocationDetail {
   hall_name?: string | null;
 }
 
+export interface IQuestionMetadata {
+  question: string;
+  type: string;
+  level: 'core' | 'strong' | 'supporting';
+  weight: number;
+}
+
 export interface IFoundItem extends Document {
   imageUrl: string;
   category: string;
   description: string;
   questions: string[];
+  questionMetadata?: IQuestionMetadata[];
   founderAnswers: string[];
   founderContact: IFounderContact;
   found_location: ILocationDetail[];
@@ -80,6 +88,32 @@ const founderContactSchema = new Schema<IFounderContact>(
   { _id: false }
 );
 
+const questionMetadataSchema = new Schema<IQuestionMetadata>(
+  {
+    question: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    type: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    level: {
+      type: String,
+      enum: ['core', 'strong', 'supporting'],
+      required: true,
+    },
+    weight: {
+      type: Number,
+      required: true,
+      min: 0.1,
+    },
+  },
+  { _id: false }
+);
+
 const foundItemSchema = new Schema<IFoundItem>(
   {
     imageUrl: {
@@ -103,6 +137,16 @@ const foundItemSchema = new Schema<IFoundItem>(
       validate: {
         validator: (v: string[]) => v.length > 0,
         message: 'At least one question is required',
+      },
+    },
+    questionMetadata: {
+      type: [questionMetadataSchema],
+      default: [],
+      validate: {
+        validator: function (v: IQuestionMetadata[]) {
+          return !v || v.length === 0 || v.length === (this as any).questions.length;
+        },
+        message: 'Question metadata count must match number of questions',
       },
     },
     founderAnswers: {

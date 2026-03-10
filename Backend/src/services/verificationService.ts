@@ -116,6 +116,7 @@ export const createVerification = async (
       founderAnswer: foundItem.founderAnswers[questionIndex],
       ownerAnswer: ownerAnswer.answer,
       videoKey: ownerAnswer.videoKey || 'default_video_placeholder',
+      questionMetadata: foundItem.questionMetadata?.[questionIndex],
     };
   });
 
@@ -168,6 +169,9 @@ export const createVerification = async (
         founder_answer: answer.founderAnswer,
         owner_answer: answer.ownerAnswer,
         question_text: answer.question,
+        question_type: answer.questionMetadata?.type,
+        question_level: answer.questionMetadata?.level,
+        question_weight: answer.questionMetadata?.weight,
       })),
     };
 

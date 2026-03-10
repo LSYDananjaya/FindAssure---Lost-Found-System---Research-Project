@@ -8,6 +8,11 @@ export interface IVerificationAnswer {
   founderAnswer: string;
   ownerAnswer: string;
   videoKey: string;
+  questionMetadata?: {
+    type?: string;
+    level?: string;
+    weight?: number;
+  };
 }
 
 export interface IVerification extends Document {
@@ -57,6 +62,20 @@ const verificationAnswerSchema = new Schema<IVerificationAnswer>(
       type: String,
       required: true,
       default: 'default_video_placeholder',
+    },
+    questionMetadata: {
+      type: {
+        type: String,
+        default: null,
+      },
+      level: {
+        type: String,
+        default: null,
+      },
+      weight: {
+        type: Number,
+        default: null,
+      },
     },
   },
   { _id: false }

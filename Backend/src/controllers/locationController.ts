@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import {
   MAIN_LOCATIONS,
   NEW_BUILDING_FLOORS,
+  MAIN_BUILDING_FLOORS,
   BUILDINGS_WITH_FLOORS,
   hasFloors,
   getFloorsForBuilding,
@@ -146,6 +147,7 @@ export const getAllLocationData = async (req: Request, res: Response): Promise<v
         mainLocations: MAIN_LOCATIONS,
         buildingsWithFloors: BUILDINGS_WITH_FLOORS,
         newBuildingFloors: NEW_BUILDING_FLOORS,
+        mainBuildingFloors: MAIN_BUILDING_FLOORS,
       },
     });
   } catch (error) {

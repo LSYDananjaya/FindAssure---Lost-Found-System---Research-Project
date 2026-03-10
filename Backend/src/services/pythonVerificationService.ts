@@ -13,6 +13,9 @@ export interface PythonVerificationAnswer {
   founder_answer: string;
   owner_answer: string;
   question_text?: string;
+  question_type?: string;
+  question_level?: string;
+  question_weight?: number;
 }
 
 export interface PythonVerificationRequest {
@@ -29,6 +32,8 @@ export interface VideoFile {
 
 export interface PythonVerificationResult {
   question_id: number;
+  question_type?: string;
+  question_weight?: number;
   local_score: string;
   gemini_score: string | null;
   final_similarity: string;

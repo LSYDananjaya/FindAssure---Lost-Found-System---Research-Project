@@ -3,17 +3,14 @@ import re
 import uuid
 import tempfile
 import subprocess
-import threading
 from typing import Dict, List, Any
 
-import whisper
 from scipy.io import wavfile
 from scipy.signal import lfilter
 import numpy as np
+from transcription_backend import transcribe_audio
 
 TMP_DIR = tempfile.gettempdir()
-model = whisper.load_model("base")
-whisper_lock = threading.Lock()
 
 FILLER_WORDS = {
     "uh", "um", "ah", "erm", "hmm", "mm",
@@ -413,16 +410,7 @@ def analyze_audio_confidence(video_path: str) -> Dict[str, Any]:
     try:
         audio_path = extract_audio_from_video(video_path)
 
-        # Whisper model access must be serialized across threads.
-        with whisper_lock:
-            result = model.transcribe(
-                audio_path,
-                fp16=False,
-                verbose=False,
-                language="en",
-                task="transcribe",
-                word_timestamps=True,
-            )
+        result = transcribe_audio(audio_path, with_word_timestamps=True)
         transcript = (result.get("text") or "").strip()
         segments = result.get("segments") or []
 
@@ -575,7 +563,10 @@ def analyze_audio_confidence(video_path: str) -> Dict[str, Any]:
                 "energy_cv": _safe_round(acoustic.get("energy_cv", 0.0), 4),
                 "pitch_jitter": _safe_round(acoustic.get("pitch_jitter", 0.0), 4),
                 "voiced_ratio": _safe_round(acoustic.get("voiced_ratio", 0.0), 4),
-                "guessing_risk_score": _safe_round(guessing_risk_score, 3)
+                "guessing_risk_score": _safe_round(guessing_risk_score, 3),
+                "transcription_device": result.get("model_device"),
+                "transcription_compute_type": result.get("model_compute_type"),
+                "transcription_model": result.get("model_name"),
             }
         }
 

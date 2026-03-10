@@ -6,6 +6,7 @@ import {
   AdminOverview,
   SelectedImageAsset,
   FounderImagePreAnalysisResponse,
+  VerificationQuestionMetadata,
 } from '../types/models';
 
 const logAxiosRequestError = (context: string, error: any) => {
@@ -117,8 +118,8 @@ export const itemsApi = {
   generateQuestions: async (data: {
     category: string;
     description: string;
-  }): Promise<{ questions: string[]; suggestedFounderAnswers?: string[] }> => {
-    const response = await axiosClient.post<{ questions: string[]; suggestedFounderAnswers?: string[] }>(
+  }): Promise<{ questions: string[]; questionMetadata?: VerificationQuestionMetadata[]; suggestedFounderAnswers?: string[] }> => {
+    const response = await axiosClient.post<{ questions: string[]; questionMetadata?: VerificationQuestionMetadata[]; suggestedFounderAnswers?: string[] }>(
       '/items/generate-questions',
       data
     );
@@ -202,6 +203,7 @@ export const itemsApi = {
     category: string;
     description: string;
     questions: string[];
+    questionMetadata?: VerificationQuestionMetadata[];
     founderAnswers: string[];
     found_location: {
       location: string;
@@ -230,6 +232,7 @@ export const itemsApi = {
       formData.append('preAnalysisToken', data.preAnalysisToken);
     }
     formData.append('questions', JSON.stringify(data.questions));
+    formData.append('questionMetadata', JSON.stringify(data.questionMetadata || []));
     formData.append('founderAnswers', JSON.stringify(data.founderAnswers));
     formData.append('founderContact', JSON.stringify(data.founderContact));
     formData.append('found_location', JSON.stringify(data.found_location));

@@ -23,6 +23,7 @@ const ReportFoundAnswersScreen = () => {
     category,
     description,
     selectedQuestions,
+    selectedQuestionMetadata,
     suggestedAnswersByQuestion,
   } = route.params;
 
@@ -54,6 +55,7 @@ const ReportFoundAnswersScreen = () => {
       category,
       description,
       selectedQuestions,
+      selectedQuestionMetadata,
       founderAnswers: answers.map((answer) => answer.trim()),
     });
   };

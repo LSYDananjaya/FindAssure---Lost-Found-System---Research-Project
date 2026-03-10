@@ -1674,7 +1674,10 @@ export const NEW_BUILDING_FLOORS = [
 ];
 
 // Buildings that have floor/hall structure
-export const BUILDINGS_WITH_FLOORS = ['new_building'];
+export const BUILDINGS_WITH_FLOORS = ['new_building', 'main_building'];
+
+import { MAIN_BUILDING_FLOORS } from './mainBuildingFloors';
+export { MAIN_BUILDING_FLOORS };
 
 // Helper function to check if a location has floors
 export const hasFloors = (location: string): boolean => {
@@ -1685,6 +1688,9 @@ export const hasFloors = (location: string): boolean => {
 export const getFloorsForBuilding = (building: string) => {
   if (building === 'new_building') {
     return NEW_BUILDING_FLOORS;
+  }
+  if (building === 'main_building') {
+    return MAIN_BUILDING_FLOORS;
   }
   return [];
 };

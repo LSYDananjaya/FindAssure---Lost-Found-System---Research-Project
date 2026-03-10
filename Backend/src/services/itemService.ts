@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import { FoundItem, IFoundItem, FoundItemStatus, IFounderContact, ILocationDetail, IQuestionMetadata } from '../models/FoundItem';
 import { LostRequest, ILostRequest } from '../models/LostRequest';
+import { Verification } from '../models/Verification';
 
 export interface CreateFoundItemData {
   _id?: Types.ObjectId;
@@ -38,6 +39,16 @@ export interface CreateLostRequestData {
   hall_name?: string | null;
   owner_location_confidence_stage: number;
   ownerImageUrl?: string | null;
+}
+
+export interface AdminFoundItemResponse extends Record<string, unknown> {
+  claimedBy?: {
+    _id?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+  } | null;
+  claimedAt?: Date | null;
 }
 
 export interface AiSearchMatchInput {
@@ -342,12 +353,63 @@ export const getLostRequestsByOwner = async (ownerId: string): Promise<ILostRequ
 /**
  * Get all found items for admin (with full details)
  */
-export const getAllFoundItemsForAdmin = async (): Promise<IFoundItem[]> => {
+export const getAllFoundItemsForAdmin = async (): Promise<AdminFoundItemResponse[]> => {
   const items = await FoundItem.find()
     .sort({ createdAt: -1 })
     .populate('createdBy', 'name email role');
 
-  return items;
+  const claimedItemIds = items
+    .filter((item) => item.status === 'claimed')
+    .map((item) => item._id);
+
+  const claimMap = new Map<string, { claimedBy: AdminFoundItemResponse['claimedBy']; claimedAt: Date | null }>();
+
+  if (claimedItemIds.length > 0) {
+    const passedVerifications = await Verification.find({
+      foundItemId: { $in: claimedItemIds },
+      status: 'passed',
+    })
+      .sort({ createdAt: -1 })
+      .populate('ownerId', 'name email phone')
+      .select('foundItemId ownerId createdAt');
+
+    for (const verification of passedVerifications) {
+      const itemId = verification.foundItemId.toString();
+      if (claimMap.has(itemId)) {
+        continue;
+      }
+
+      const owner = verification.ownerId as unknown as {
+        _id?: Types.ObjectId;
+        name?: string;
+        email?: string;
+        phone?: string;
+      } | null;
+
+      claimMap.set(itemId, {
+        claimedBy: owner
+          ? {
+              _id: owner._id?.toString(),
+              name: owner.name,
+              email: owner.email,
+              phone: owner.phone,
+            }
+          : null,
+        claimedAt: verification.createdAt ?? null,
+      });
+    }
+  }
+
+  return items.map((item) => {
+    const itemObject = item.toObject() as unknown as AdminFoundItemResponse;
+    const claimInfo = claimMap.get(item._id.toString());
+
+    return {
+      ...itemObject,
+      claimedBy: claimInfo?.claimedBy ?? null,
+      claimedAt: claimInfo?.claimedAt ?? null,
+    };
+  });
 };
 
 /**

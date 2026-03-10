@@ -83,6 +83,13 @@ export interface FoundItem {
   imageMatch?: {
     score: number;
   } | null;
+  claimedBy?: {
+    _id?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+  } | null;
+  claimedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
 }

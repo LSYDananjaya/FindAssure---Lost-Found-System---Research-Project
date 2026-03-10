@@ -1112,5 +1112,129 @@ class TestOCRSurfacePhrasing(unittest.TestCase):
         self.assertIn("visible on the surface", desc)
 
 
+class TestStructuredDescriptionCoverage(unittest.TestCase):
+    def setUp(self):
+        self.service = MultiViewFusionService()
+        self.vectors = [np.array([1.0, 0.0]), np.array([1.0, 0.0])]
+
+    def test_detailed_description_explicitly_lists_features_attachments_and_defects(self):
+        per_view = [
+            _view_result(
+                0,
+                "ACTIVE GENERATION",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Helmet",
+                grounded_features={
+                    "color": "black",
+                    "features": ["clear visor", "white writing"],
+                    "attachments": ["chin strap"],
+                    "defects": ["surface scratches"],
+                },
+                caption="A helmet.",
+                detailed_description="A helmet.",
+            ),
+            _view_result(
+                1,
+                "ACTIVE GENERATION",
+                quality_score=0.92,
+                confidence=0.95,
+                cls_name="Helmet",
+                grounded_features={
+                    "color": "black",
+                    "features": ["chin vent"],
+                    "attachments": ["buckle strap"],
+                    "defects": ["scuff marks"],
+                },
+                caption="A helmet with a chin vent.",
+                detailed_description="A helmet with a chin vent.",
+            ),
+        ]
+
+        fused = self.service.fuse(per_view, self.vectors, item_id="structured-coverage")
+
+        desc_lower = fused.detailed_description.lower()
+        self.assertIn("visible features include", desc_lower)
+        self.assertIn("clear visor", desc_lower)
+        self.assertIn("attached parts include", desc_lower)
+        self.assertTrue("chin strap" in desc_lower or "buckle strap" in desc_lower)
+        self.assertIn("visible defects include", desc_lower)
+        self.assertTrue("surface scratches" in desc_lower or "scuff marks" in desc_lower)
+
+    def test_detailed_description_strips_florence_meta_text(self):
+        per_view = [
+            _view_result(
+                0,
+                "BAELLERRY",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Wallet",
+                grounded_features={"color": "brown", "features": ["logo"]},
+                caption="A brown wallet.",
+                detailed_description=(
+                    "A brown wallet with a visible logo. "
+                    "Answering does not require reading text in the image."
+                ),
+            ),
+            _view_result(
+                1,
+                "BAELLERRY",
+                quality_score=0.93,
+                confidence=0.95,
+                cls_name="Wallet",
+                grounded_features={"color": "brown"},
+                caption="A brown wallet.",
+            ),
+        ]
+
+        fused = self.service.fuse(per_view, self.vectors, item_id="wallet-meta-strip")
+
+        desc_lower = fused.detailed_description.lower()
+        self.assertIn("brown wallet", desc_lower)
+        self.assertNotIn("answering", desc_lower)
+        self.assertNotIn("does not require", desc_lower)
+        self.assertNotIn("reading text in the image", desc_lower)
+
+    def test_detailed_description_hides_internal_wallet_terms(self):
+        per_view = [
+            _view_result(
+                0,
+                "BAELLERRY",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Wallet",
+                grounded_features={
+                    "color": "brown",
+                    "features": ["logo", "zipper compartment"],
+                    "attachments": ["bill compartment"],
+                },
+                caption="A brown wallet.",
+                detailed_description="A brown wallet with a visible logo and zipper.",
+            ),
+            _view_result(
+                1,
+                "BAELLERRY",
+                quality_score=0.92,
+                confidence=0.95,
+                cls_name="Wallet",
+                grounded_features={
+                    "color": "brown",
+                    "features": ["zipper", "stitching"],
+                    "attachments": ["coin pouch"],
+                },
+                caption="A brown wallet with zipper and stitching.",
+            ),
+        ]
+
+        fused = self.service.fuse(per_view, self.vectors, item_id="wallet-internal-filter")
+
+        desc_lower = fused.detailed_description.lower()
+        self.assertIn("baellerry", desc_lower)
+        self.assertTrue("zipper" in desc_lower or "stitching" in desc_lower)
+        self.assertNotIn("zipper compartment", desc_lower)
+        self.assertNotIn("bill compartment", desc_lower)
+        self.assertNotIn("coin pouch", desc_lower)
+
+
 if __name__ == "__main__":
     unittest.main()

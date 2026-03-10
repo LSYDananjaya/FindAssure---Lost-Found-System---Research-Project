@@ -553,13 +553,24 @@ class MultiViewPipeline:
             for view in per_view_results:
                 canonical = canonical_label_by_index.get(view.view_index, str(view.detection.cls_name))
                 raw = view.extraction.raw if isinstance(view.extraction.raw, dict) else {}
+                grounded = view.extraction.grounded_features if isinstance(view.extraction.grounded_features, dict) else {}
+                category_details = self._build_phase2_category_details(grounded)
+                detailed_description = str(
+                    getattr(view.extraction, "detailed_description", "")
+                    or getattr(view.extraction, "caption", "")
+                    or ""
+                )
                 per_image.append({
                     "view_index": int(view.view_index),
                     "phase1_output": {
                         "label": canonical,
-                        "description": str(view.extraction.caption or ""),
+                        "description": detailed_description,
+                        "detailed_description": detailed_description,
                         "color_vqa": str(raw.get("color_vqa") or ""),
                         "ocr_text": str(view.extraction.ocr_text or ""),
+                        "category_details": category_details,
+                        "brand": str(grounded.get("brand") or ""),
+                        "key_count": grounded.get("key_count"),
                     },
                 })
             bundle = {"item_id": item_id, "per_image": per_image}
@@ -603,6 +614,83 @@ class MultiViewPipeline:
             if text:
                 out.append(text)
         return out
+
+    @classmethod
+    def _build_phase2_category_details(cls, grounded: Any) -> Dict[str, List[str]]:
+        source = grounded if isinstance(grounded, dict) else {}
+        return {
+            "features": cls._normalize_string_list(source.get("features")),
+            "defects": cls._normalize_string_list(source.get("defects")),
+            "attachments": cls._normalize_string_list(source.get("attachments")),
+        }
+
+    @classmethod
+    def _description_fact_coverage(
+        cls,
+        description: Any,
+        *,
+        features: List[str],
+        defects: List[str],
+        attachments: List[str],
+        ocr_text: str,
+    ) -> tuple[int, int]:
+        text = str(description or "").strip().lower()
+        if not text:
+            return (0, 0)
+
+        score = 0
+        for value in cls._normalize_string_list(features) + cls._normalize_string_list(defects) + cls._normalize_string_list(attachments):
+            lowered = value.lower()
+            if lowered and lowered in text:
+                score += 1
+
+        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", str(ocr_text or "")):
+            lowered = token.lower()
+            if len(lowered) >= 3 and lowered in text:
+                score += 1
+                break
+
+        return (score, len(text.split()))
+
+    @classmethod
+    def _should_prefer_phase2_description(
+        cls,
+        current_description: Any,
+        candidate_description: Any,
+        *,
+        features: List[str],
+        defects: List[str],
+        attachments: List[str],
+        ocr_text: str,
+    ) -> bool:
+        candidate = str(candidate_description or "").strip()
+        if not candidate:
+            return False
+
+        current = str(current_description or "").strip()
+        if not current:
+            return True
+
+        current_score, current_words = cls._description_fact_coverage(
+            current,
+            features=features,
+            defects=defects,
+            attachments=attachments,
+            ocr_text=ocr_text,
+        )
+        candidate_score, candidate_words = cls._description_fact_coverage(
+            candidate,
+            features=features,
+            defects=defects,
+            attachments=attachments,
+            ocr_text=ocr_text,
+        )
+
+        if candidate_score > current_score:
+            return True
+        if candidate_score == current_score and candidate_words >= current_words + 8:
+            return True
+        return False
 
     def _normalize_extraction_payload(self, extraction_data: Any) -> Dict[str, Any]:
         """
@@ -2525,9 +2613,41 @@ class MultiViewPipeline:
                     phase2_timeout = float(getattr(settings, "PP2_PHASE2_TIMEOUT_S", 15))
                     phase2_result = _pp2_phase2_future.result(timeout=phase2_timeout)
                     if isinstance(phase2_result, dict) and phase2_result.get("status") == "accepted":
-                        if phase2_result.get("final_description") and not getattr(fused, "detailed_description", None):
-                            fused.detailed_description = str(phase2_result["final_description"])
-                            fused.detailed_description_source = "phase2_gemini_fallback"
+                        phase2_description = str(phase2_result.get("final_description") or "").strip()
+                        fused_attributes = getattr(fused, "attributes", {}) if isinstance(getattr(fused, "attributes", {}), dict) else {}
+                        fused_features = self._normalize_string_list(fused_attributes.get("features"))
+                        fused_defects = self._normalize_string_list(getattr(fused, "defects", []))
+                        fused_attachments = self._normalize_string_list(fused_attributes.get("attachments"))
+                        fused_ocr_text = " ".join(getattr(fused, "merged_ocr_tokens", [])[:2])
+
+                        if self._should_prefer_phase2_description(
+                            getattr(fused, "detailed_description", None),
+                            phase2_description,
+                            features=fused_features,
+                            defects=fused_defects,
+                            attachments=fused_attachments,
+                            ocr_text=fused_ocr_text,
+                        ):
+                            fused.detailed_description = phase2_description
+                            fused.detailed_description_source = "phase2_gemini_enriched"
+                            word_count = len(phase2_description.split())
+                            fused.description_word_count = {
+                                "final_description": word_count,
+                                "detailed_description": word_count,
+                            }
+                            evidence = fused.description_evidence_used if isinstance(getattr(fused, "description_evidence_used", None), dict) else {"summary": [], "detailed": []}
+                            evidence = dict(evidence)
+                            evidence["summary"] = self._normalize_string_list(evidence.get("summary"))
+                            evidence["detailed"] = self._normalize_string_list(evidence.get("detailed"))
+                            if "phase2_gemini" not in evidence["summary"]:
+                                evidence["summary"].append("phase2_gemini")
+                            if "phase2_gemini" not in evidence["detailed"]:
+                                evidence["detailed"].append("phase2_gemini")
+                            fused.description_evidence_used = evidence
+                            filters = self._normalize_string_list(getattr(fused, "description_filters_applied", []))
+                            if "phase2_gemini_enriched" not in filters:
+                                filters.append("phase2_gemini_enriched")
+                            fused.description_filters_applied = filters
                         if phase2_result.get("color"):
                             fused.color = str(phase2_result["color"])
                         logger.debug(

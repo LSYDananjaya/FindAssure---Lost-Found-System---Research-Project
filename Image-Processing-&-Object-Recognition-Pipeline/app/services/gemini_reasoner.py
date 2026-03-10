@@ -208,8 +208,13 @@ STEP-BY-STEP:
 3) Merge details:
    - combined_color: choose the most specific non-conflicting color phrase from evidence.color_vqa.
      If conflicts (e.g., "black" vs "white") -> rejected.
-   - combined_features/defects/attachments: union of evidence-backed items (de-dup).
-4) Write final_description: 1–2 sentences, only confirmed details.
+    - combined_features/defects/attachments: union of evidence-backed items from per_image[].phase1_output.category_details (de-dup).
+    - Use per_image[].phase1_output.detailed_description as the preferred prose evidence for each view.
+4) Write final_description: 3–5 sentences.
+    - Sentence 1 must open with the item color and label if known.
+    - Include every confirmed feature, attachment, and defect at least once.
+    - If OCR text is confirmed on the item, include the most relevant exact text verbatim.
+    - Keep the wording object-only and do not mention the background.
 5) Produce final JSON in the exact schema below.
 
 OUTPUT FORMAT:

@@ -128,6 +128,94 @@ class TestMultiViewPipelineNormalization(unittest.TestCase):
         normalized = self.pipeline._normalize_extraction_payload(payload)
         self.assertEqual(normalized["ocr_text"], "AB 123")
 
+    def test_build_phase2_category_details_extracts_lists(self):
+        details = self.pipeline._build_phase2_category_details(
+            {
+                "features": ["logo", 123],
+                "defects": ["scratch"],
+                "attachments": ["key ring", None],
+            }
+        )
+
+        self.assertEqual(details["features"], ["logo", "123"])
+        self.assertEqual(details["defects"], ["scratch"])
+        self.assertEqual(details["attachments"], ["key ring"])
+
+    def test_should_prefer_phase2_description_when_it_covers_more_facts(self):
+        preferred = self.pipeline._should_prefer_phase2_description(
+            "A black helmet with a visor.",
+            (
+                "A black helmet with a clear visor. Visible features include white writing and chin vent. "
+                "Attached parts include chin strap. Visible defects include surface scratches."
+            ),
+            features=["clear visor", "white writing", "chin vent"],
+            defects=["surface scratches"],
+            attachments=["chin strap"],
+            ocr_text="",
+        )
+
+        self.assertTrue(preferred)
+
+
+class TestPP2Phase2GeminiBundle(unittest.TestCase):
+    def setUp(self):
+        self.gemini = MagicMock()
+        self.gemini.run_phase2.return_value = {"status": "accepted", "final_description": "rich desc"}
+        self.pipeline = MultiViewPipeline(
+            yolo=MagicMock(),
+            florence=MagicMock(),
+            dino=MagicMock(),
+            verifier=MagicMock(),
+            fusion=MagicMock(),
+            faiss=MagicMock(),
+            gemini=self.gemini,
+        )
+        self.pipeline._get_gemini = MagicMock(return_value=self.gemini)
+
+    def test_phase2_bundle_includes_category_details_and_detailed_description(self):
+        per_view = [
+            PP2PerViewResult(
+                view_index=0,
+                filename="view0.jpg",
+                detection=PP2PerViewDetection(
+                    bbox=(0.0, 0.0, 10.0, 10.0),
+                    cls_name="Helmet",
+                    confidence=0.95,
+                ),
+                extraction=PP2PerViewExtraction(
+                    caption="short caption",
+                    detailed_description="A black helmet with white writing.",
+                    ocr_text="ACTIVE GENERATION",
+                    grounded_features={
+                        "color": "black",
+                        "features": ["white writing", "clear visor"],
+                        "defects": ["surface scratches"],
+                        "attachments": ["chin strap"],
+                    },
+                    extraction_confidence=1.0,
+                    raw={"color_vqa": "black"},
+                ),
+                embedding=PP2PerViewEmbedding(dim=16, vector_preview=[0.1] * 8, vector_id="vec0"),
+                quality_score=0.99,
+            )
+        ]
+
+        self.pipeline._run_pp2_phase2_gemini_sync(
+            per_view_results=per_view,
+            canonical_label_by_index={0: "Helmet"},
+            item_id="item-1",
+            request_id="req-1",
+        )
+
+        bundle = self.gemini.run_phase2.call_args.kwargs["evidence_bundle_json"]
+        phase1_output = bundle["per_image"][0]["phase1_output"]
+
+        self.assertEqual(phase1_output["description"], "A black helmet with white writing.")
+        self.assertEqual(phase1_output["detailed_description"], "A black helmet with white writing.")
+        self.assertEqual(phase1_output["category_details"]["features"], ["white writing", "clear visor"])
+        self.assertEqual(phase1_output["category_details"]["defects"], ["surface scratches"])
+        self.assertEqual(phase1_output["category_details"]["attachments"], ["chin strap"])
+
 
 class TestHintScoringNegativeKeywords(unittest.TestCase):
     """Tests for the negative-keyword penalty in _infer_canonical_hint_with_signals."""

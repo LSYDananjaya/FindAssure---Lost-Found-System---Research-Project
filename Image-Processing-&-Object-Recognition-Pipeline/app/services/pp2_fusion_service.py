@@ -12,6 +12,18 @@ class MultiViewFusionService:
     _SPLIT_RE = re.compile(r"[\/\._-]+")
     _TECH_STOPWORDS = {"HTTP", "HTTPS", "WWW", "COM", "NET", "LK", "ORG", "CO"}
     _ALPHA_ONLY_RE = re.compile(r"^[A-Z]+$")
+    _META_DESCRIPTION_PATTERNS = [
+        re.compile(r"(?i)\banswering\s+does\s+not\s+require\b"),
+        re.compile(r"(?i)\bdoes\s+not\s+require\s+reading\s+(?:the\s+)?text\b"),
+        re.compile(r"(?i)\breading\s+(?:the\s+)?text\s+in\s+the\s+image\b"),
+        re.compile(r"(?i)\b(?:name|text)\s+on\s+the\s+\w+\s+is\s+written\s+in\b"),
+    ]
+    _WALLET_INTERNAL_DETAIL_PATTERNS = [
+        re.compile(r"(?i)\bbill\s+compartment\b"),
+        re.compile(r"(?i)\bzipper\s+compartment\b"),
+        re.compile(r"(?i)\bcoin\s+pouch\b"),
+        re.compile(r"(?i)\b(?:inner|inside|interior)\s+(?:pocket|compartment|slot)\b"),
+    ]
 
     @classmethod
     def _looks_like_url_or_domain(cls, raw_token: str) -> bool:
@@ -412,6 +424,8 @@ class MultiViewFusionService:
             candidate = sentence.strip()
             if not candidate:
                 continue
+            if any(pattern.search(candidate) for pattern in MultiViewFusionService._META_DESCRIPTION_PATTERNS):
+                continue
             for pattern in prefix_patterns:
                 candidate = re.sub(pattern, "", candidate).strip()
             for pattern in tail_patterns:
@@ -431,6 +445,23 @@ class MultiViewFusionService:
 
         cleaned_sentences = MultiViewFusionService._dedupe_keep_order(cleaned_sentences)
         return ". ".join(cleaned_sentences).strip()
+
+    @classmethod
+    def _is_hidden_wallet_detail(cls, value: str, category: str) -> bool:
+        if str(category or "").strip().lower() != "wallet":
+            return False
+        text = str(value or "").strip()
+        if not text:
+            return False
+        return any(pattern.search(text) for pattern in cls._WALLET_INTERNAL_DETAIL_PATTERNS)
+
+    @classmethod
+    def _filter_public_detail_values(cls, values: List[str], category: str) -> List[str]:
+        return [
+            value
+            for value in cls._dedupe_keep_order(values)
+            if not cls._is_hidden_wallet_detail(value, category)
+        ]
 
     @staticmethod
     def _pick_majority_value(values: List[str]) -> Optional[str]:
@@ -580,11 +611,11 @@ class MultiViewFusionService:
 
         evidence_clauses: List[str] = []
         if feature_values:
-            evidence_clauses.append(f"features {self._join_natural(feature_values[:3])}")
+            evidence_clauses.append(f"features {self._join_natural(feature_values[:5])}")
         if attachment_values:
-            evidence_clauses.append(f"includes {self._join_natural(attachment_values[:2])}")
+            evidence_clauses.append(f"includes {self._join_natural(attachment_values[:4])}")
         if defect_values:
-            evidence_clauses.append(f"shows {self._join_natural(defect_values[:2])}")
+            evidence_clauses.append(f"shows {self._join_natural(defect_values[:4])}")
         if ocr_values:
             evidence_clauses.append(f'has the text "{ocr_values[0]}"')
 
@@ -612,6 +643,8 @@ class MultiViewFusionService:
         """
         if not per_view:
             raise ValueError("Cannot fuse empty view list")
+
+        _ = vectors
 
         # 1. Determine Best View
         # Rule: Highest quality_score; tie-breaker = highest detection confidence
@@ -730,8 +763,8 @@ class MultiViewFusionService:
             try:
                 unique_values = sorted(list(set(values)))
             except TypeError:
-                 # Fallback for unhashable types (like lists/dicts), store strict list
-                 unique_values = values
+                # Fallback for unhashable types (like lists/dicts), store strict list
+                unique_values = values
 
             if not unique_values:
                 continue
@@ -977,6 +1010,19 @@ class MultiViewFusionService:
             )
             detailed_description_filters.append("other_angle_defect_fusion")
 
+        public_features_for_description = self._filter_public_detail_values(
+            detailed_features_for_description,
+            final_category,
+        )
+        public_attachments_for_description = self._filter_public_detail_values(
+            detailed_attachments_for_description,
+            final_category,
+        )
+        public_defects_for_description = self._filter_public_detail_values(
+            detailed_defects_for_description,
+            final_category,
+        )
+
         detailed_ocr_text = " ".join(merged_ocr_tokens[:2]).strip()
         detailed_caption = ""
         if detail_best_view is not None:
@@ -1002,9 +1048,9 @@ class MultiViewFusionService:
                 detailed_color or final_color,
                 detailed_brand or final_brand,
                 merged_ocr_tokens,
-                detailed_features_for_description,
-                detailed_defects_for_description,
-                detailed_attachments_for_description,
+                public_features_for_description,
+                public_defects_for_description,
+                public_attachments_for_description,
             )
 
         # ── Ensure colour + category open the description ────────────
@@ -1076,17 +1122,20 @@ class MultiViewFusionService:
             )
             detailed_description_filters.append("multi_angle_fusion")
 
-        unseen_features = [value for value in detailed_features_for_description if str(value).lower() not in detail_text_lower]
-        if unseen_features:
-            detail_sentences.append(f"It also has {self._join_natural(unseen_features[:4])}.")
+        if public_features_for_description:
+            detail_sentences.append(
+                f"Visible features include {self._join_natural(public_features_for_description[:4])}."
+            )
 
-        unseen_attachments = [value for value in detailed_attachments_for_description if str(value).lower() not in detail_text_lower]
-        if unseen_attachments:
-            detail_sentences.append(f"It also includes {self._join_natural(unseen_attachments[:2])}.")
+        if public_attachments_for_description:
+            detail_sentences.append(
+                f"Attached parts include {self._join_natural(public_attachments_for_description[:3])}."
+            )
 
-        unseen_defects = [value for value in detailed_defects_for_description if str(value).lower() not in detail_text_lower]
-        if unseen_defects:
-            detail_sentences.append(f"It shows {self._join_natural(unseen_defects[:2])}.")
+        if public_defects_for_description:
+            detail_sentences.append(
+                f"Visible defects include {self._join_natural(public_defects_for_description[:3])}."
+            )
 
         if detailed_ocr_text and detailed_ocr_text.lower() not in detail_text_lower:
             detail_sentences.append(f'The text "{detailed_ocr_text}" is visible on the surface.')
@@ -1106,11 +1155,11 @@ class MultiViewFusionService:
             detailed_evidence.append("florence_caption")
         if other_angle_phrases:
             detailed_evidence.append("multi_angle_views")
-        if detailed_features_for_description:
+        if public_features_for_description:
             detailed_evidence.append("grounded_features")
-        if detailed_attachments_for_description:
+        if public_attachments_for_description:
             detailed_evidence.append("grounded_attachments")
-        if detailed_defects_for_description:
+        if public_defects_for_description:
             detailed_evidence.append("grounded_defects")
         if detailed_ocr_text:
             detailed_evidence.append("ocr_text")

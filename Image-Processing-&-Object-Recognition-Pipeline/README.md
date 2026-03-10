@@ -1,691 +1,334 @@
-# Vision Core Backend for FindAssure
+# FindAssure Image Pipeline
 
-This service is the image processing and object recognition pipeline used by FindAssure. It is a FastAPI-based Python backend that performs single-image analysis, multi-view verification, vector embedding, image-based retrieval, and founder correction analytics for the lost-and-found workflow.
+The image pipeline is the Python computer-vision backend used by FindAssure for visual pre-analysis, multiview verification, image-based retrieval, and founder correction analytics. It runs as an internal FastAPI service behind the Node backend.
 
-This README is the primary architecture and integration guide for:
-- engineers working inside the Python pipeline
-- full-stack developers working on the React Native app and Node backend
-- project evaluators who need to understand how the image pipeline fits into the full system
+This README focuses on the pipeline itself: what it does, how it is structured, how to run it, and which endpoints it exposes. For the full app-to-backend-to-pipeline request flow, see `INTEGRATION_FLOW_README.md` in this folder.
 
-## Project Purpose and Scope
+## What This Service Does
 
-The pipeline exists to solve four problems in the FindAssure system:
-- analyze one uploaded image and generate a structured item profile
-- verify whether two or three uploaded views belong to the same physical item
-- store and search visual embeddings for later re-identification
-- collect correction feedback when the founder edits the AI-suggested category or description
+The pipeline handles four core responsibilities:
 
-It is not the main public backend of the app. The React Native mobile app talks to the Node backend first, and the Node backend calls this pipeline as an internal service.
+- PP1 single-image analysis for founder prefill and item understanding.
+- PP2 multiview verification and fusion for 2 to 3 images of the same item.
+- Visual vector generation and FAISS-based image retrieval.
+- Founder feedback analytics after the final found-item submission is saved by the Node backend.
 
-Primary responsibilities:
-- PP1 single-image pre-analysis
-- PP2 multi-view verification and fusion
-- async pre-analysis jobs for the founder flow
-- image-based vector search
-- vector indexing for searchable items
-- founder feedback analytics relay
+It does not own user authentication, mobile session management, main business workflows, or semantic text search. Those stay in the React Native app, the Node backend, and the separate semantic engine.
 
-Non-responsibilities:
-- user authentication
-- app session management
-- lost-item semantic text search
-- final business rules for item ownership and verification
-
-## High-Level Architecture
+## Service Position In The System
 
 ```mermaid
 flowchart LR
-    App["React Native App"]
-    Node["Node.js Backend"]
-    Pipeline["Python Image Pipeline"]
-    Redis["Redis"]
-    SQL["PostgreSQL / SQLite"]
-    Faiss["FAISS Index"]
-    Models["YOLO + Florence + DINO + Gemini"]
+    App[React Native App]
+    Node[Node.js Backend]
+    Pipe[Python Image Pipeline]
+    Models[YOLO + Florence + DINO + Gemini]
+    Redis[Redis / In-memory jobs]
+    SQL[SQLite or PostgreSQL]
+    Faiss[FAISS]
 
-    App -->|"REST requests"| Node
-    Node -->|"multipart/form-data / JSON"| Pipeline
-    Pipeline --> Models
-    Pipeline --> Redis
-    Pipeline --> SQL
-    Pipeline --> Faiss
-    Pipeline -->|"JSON response"| Node
-    Node -->|"app-facing response"| App
+    App --> Node
+    Node --> Pipe
+    Pipe --> Models
+    Pipe --> Redis
+    Pipe --> SQL
+    Pipe --> Faiss
+    Pipe --> Node
+    Node --> App
 ```
 
-At runtime the pipeline exposes a small set of endpoints on its own server, and the Node backend acts as the orchestrator:
-- app uploads images to Node
-- Node stores temp files and chooses PP1 or PP2
-- Node calls the Python pipeline
-- Python returns structured analysis or async task status
-- Node persists app-facing pre-analysis tokens and found items
-- Node relays founder correction analytics back to the pipeline after final item submission
+The mobile app never calls this service directly in the normal founder flow. The Node backend is the orchestrator and internal API client.
 
-## Technologies Used
+## Main Capabilities
 
-### Runtime and framework
+### PP1: Single-image analysis
 
-| Technology | Role in this service | Status |
-| --- | --- | --- |
-| Python 3 | Runtime for all pipeline logic | Core |
-| FastAPI | HTTP API layer and dependency injection | Core |
-| Uvicorn | ASGI server used by `run_server.py` | Core |
-| Pydantic | Request and response validation | Core |
-| pydantic-settings | Environment-backed settings | Core |
-| python-dotenv | Loads local `.env` values | Core |
+PP1 is used when the founder submits exactly one image. The pipeline:
 
-### ML and computer vision stack
+1. detects the best object with YOLO,
+2. extracts visual evidence with Florence,
+3. applies evidence-locked reasoning,
+4. creates embeddings with DINO,
+5. returns a structured item profile.
 
-| Technology | Why it is used | Where it sits in the flow | Status |
-| --- | --- | --- | --- |
-| PyTorch | Model execution runtime | All major model services | Core |
-| Torchvision | Vision model utilities | Supporting model execution | Core |
-| Ultralytics | YOLO object detection wrapper | Detection stage in PP1 and PP2 | Core |
-| Transformers | Florence-2 and DINOv2 loading/inference | Captioning, OCR, VLM, embeddings | Core |
-| OpenCV | ORB, RANSAC, geometric checks, quality signals | PP2 verification and image quality | Core |
-| NumPy | Vector and matrix handling | Embeddings, FAISS, similarity logic | Core |
-| scikit-learn | Similarity calculations | PP2 verification matrices | Core |
-| FAISS | 128d vector indexing and nearest-neighbor search | Search and vector persistence | Core |
+Primary routes:
 
-### Model components actually used
+- `POST /pp1/analyze`
+- `POST /pp1/analyze_async`
 
-| Component | What it does | Status |
-| --- | --- | --- |
-| YOLOv8 fine-tuned weights | Detects item bounding boxes and categories | Core |
-| Florence-2 local model | Captioning, OCR, VQA, grounding, attribute extraction | Core |
-| DINOv2 | Generates embeddings for item similarity and indexing | Core |
-| Gemini | Evidence-locked structured reasoning and description synthesis | Core but cloud-dependent |
+### PP2: Multiview verification and fusion
 
-### Components present but not primary
+PP2 is used when the founder submits 2 or 3 images that should represent the same physical item. The pipeline:
 
-| Component | Current state |
-| --- | --- |
-| SwinIR | Present for image enhancement support, not the main decision engine |
-| LightGlue weights | Present in the repo, not wired into the active request path |
-| Qwen VLM service | Experimental service file exists, not the active production path |
-| Siamese prototype | Prototype architecture exists, not integrated into the main API flow |
+1. validates whether the views belong to one item,
+2. evaluates view quality and geometric consistency,
+3. fuses category, OCR, features, attachments, defects, and descriptions,
+4. stores or returns the fused profile.
 
-### Persistence, cache, and infrastructure
+Primary routes:
 
-| Technology | Why it is used | Status |
-| --- | --- | --- |
-| SQLAlchemy | ORM for item evidence and feedback persistence | Core |
-| PostgreSQL / SQLite | Relational storage depending on configured `DATABASE_URL` | Core |
-| Redis | Cache and async job store when healthy | Core with fallback |
-| In-memory job store | Fallback when Redis is unavailable for async pre-analysis jobs | Built-in resilience |
+- `POST /pp2/analyze_multiview`
+- `POST /pp2/analyze_multiview_async`
 
-### Transport and integration
+### Image-based retrieval
 
-| Technology | Role |
-| --- | --- |
-| multipart/form-data | Image upload format between Node and the pipeline |
-| Axios + FormData in Node | Internal HTTP client used by the Node backend |
-| React Native app API calls | User-facing app calls go to Node, not directly to Python |
+The pipeline can index vectors and search by image against a FAISS index.
 
-## Services, Models, and Infrastructure
+Primary routes:
 
-### Main Python entrypoints
+- `POST /search/index_vector`
+- `POST /search/by-image`
 
-| Module | Responsibility |
-| --- | --- |
-| `app/main.py` | FastAPI app, PP1 routes, founder analytics relay, async job status |
-| `app/core/lifespan.py` | Startup/shutdown lifecycle, model initialization, Redis and DB bootstrapping |
-| `run_server.py` | Uvicorn server launcher |
+### Founder correction analytics
 
-### Core services
+After the Node backend creates the final found item, it relays founder edits back to the pipeline so the system can measure how much the AI suggestion changed.
 
-| Service | Responsibility |
-| --- | --- |
-| `app/services/unified_pipeline.py` | PP1 single-image orchestration |
-| `app/services/pp2_multiview_pipeline.py` | PP2 multi-view orchestration |
-| `app/services/pp2_multiview_verifier.py` | Pair scoring, pass/fail logic, used/dropped view selection |
-| `app/services/pp2_geometric_verifier.py` | ORB and RANSAC geometric verification |
-| `app/services/pp2_fusion_service.py` | Multi-view fusion of category, attributes, OCR, and description |
-| `app/services/yolo_service.py` | Detection model wrapper |
-| `app/services/florence_service.py` | Local VLM analysis, OCR, grounding, VQA |
-| `app/services/dino_embedder.py` | 768d to 128d embedding generation |
-| `app/services/gemini_reasoner.py` | Evidence-locked reasoning with Gemini |
-| `app/services/storage_service.py` | SQL + Redis persistence for PP1 and PP2 results |
-| `app/services/pre_analysis_job_store.py` | Async pre-analysis task storage in Redis or memory |
-| `app/services/founder_prefill_analytics.py` | Founder correction metrics and multiview feedback analytics |
+Primary route:
 
-### Domain and schema helpers
+- `POST /feedback/founder-prefill`
 
-| Module | Responsibility |
-| --- | --- |
-| `app/domain/category_specs.py` | Allowed labels plus feature/defect/attachment vocabularies |
-| `app/domain/color_utils.py` | Color normalization and extraction |
-| `app/schemas/pp2_schemas.py` | Typed PP2 response schema |
-| `app/schemas/search_schemas.py` | Typed search and index response schema |
+## Core Runtime Stack
 
-### Startup lifecycle
+### API and runtime
 
-At startup the service:
-1. ensures the `data/` directory exists
-2. initializes Redis if available
-3. creates SQLAlchemy tables and applies founder feedback schema compatibility updates
-4. loads FAISS index state
-5. initializes YOLO, Florence, DINO, Gemini, PP1, and PP2 services
-6. stores the PP1 and PP2 orchestrators on `app.state`
+- Python 3
+- FastAPI
+- Uvicorn
+- Pydantic
+- pydantic-settings
 
-At shutdown the service:
-1. saves the FAISS index
-2. clears application state
-3. closes Redis
+### Vision and ML components
 
-Server defaults from `run_server.py`:
-- host: `0.0.0.0`
-- port: `8002`
-- reload: disabled unless enabled by env
+- YOLOv8: object detection and primary category proposal
+- Florence-2: captioning, OCR, VQA, phrase grounding, category detail extraction
+- DINOv2: embedding generation for similarity and retrieval
+- Gemini: optional evidence-locked reasoning and enrichment, depending on configuration
 
-## How the Mobile App, Node Backend, and Image Pipeline Connect
+### Storage and infrastructure
 
-The app does not call the Python pipeline directly. The integration path is:
-- React Native app calls the Node backend
-- Node backend uploads temp images, chooses PP1 or PP2, and calls the pipeline
-- pipeline returns structured results or async task progress
-- Node converts that into app-facing state and persistence
+- SQLite or PostgreSQL through SQLAlchemy
+- Redis for async pre-analysis jobs when available
+- in-memory job-store fallback when Redis is unavailable
+- FAISS for nearest-neighbor vector search
 
-### App -> Node -> Python integration map
+## Repository Structure
 
-App-side founder flow:
-- image selection happens in `FindAssure/src/screens/founder/ReportFoundStartScreen.tsx`
-- API calls are made from `FindAssure/src/api/itemsApi.ts`
-- the app calls Node endpoints like `/items/pre-analyze-found-images/start` and `/items/pre-analyze-found-images/status/:taskId`
-
-Node-side orchestration:
-- `Backend/src/services/imageProcessingService.ts` is the internal HTTP client for this pipeline
-- default pipeline base URL in Node is `http://127.0.0.1:8002`
-- `Backend/src/controllers/itemController.ts` decides whether to call PP1 or PP2 and stores pre-analysis results under a token
-
-Python-side execution:
-- `app/main.py` exposes PP1 routes, async job status, and founder analytics relay
-- `app/routers/pp2_router.py` exposes PP2 routes
-- `app/routers/search_router.py` exposes FAISS vector indexing and image search routes
-
-```mermaid
-sequenceDiagram
-    participant App as React Native App
-    participant Node as Node Backend
-    participant Pipe as Python Image Pipeline
-    participant Cache as Mongo/Redis/SQL/FAISS
-
-    App->>Node: Upload founder images
-    Node->>Pipe: POST /pp1/analyze_async or /pp2/analyze_multiview_async
-    Pipe-->>Node: taskId + stage metadata
-    Node-->>App: queued/processing response
-    App->>Node: Poll pre-analysis status
-    Node->>Pipe: GET /jobs/pre-analysis/{taskId}
-    Pipe-->>Node: stage/result payload
-    Node-->>App: suggested category/description + token
-    App->>Node: Submit final found item
-    Node->>Cache: Save found item + pre-analysis token relation
-    Node->>Pipe: POST /feedback/founder-prefill
-    Pipe->>Cache: Save founder analytics
-    Pipe-->>Node: change metrics + multiview analytics
+```text
+Image-Processing-&-Object-Recognition-Pipeline/
+├── app/
+│   ├── config/                     # settings, model paths
+│   ├── core/                       # startup and lifespan
+│   ├── domain/                     # label, color, bbox, and category helpers
+│   ├── routers/                    # PP2 and search API routers
+│   ├── schemas/                    # typed request/response contracts
+│   ├── services/                   # PP1, PP2, model wrappers, storage, analytics
+│   └── main.py                     # FastAPI app and PP1 routes
+├── data/                           # SQLite DB, FAISS index, vector mapping
+├── tests/                          # unit and integration tests
+├── run_server.py                   # local server entrypoint
+├── requirements.txt
+├── OVERVIEW.md
+└── INTEGRATION_FLOW_README.md      # app/backend/pipeline integration guide
 ```
 
-### Founder pre-analysis flow in detail
-
-```mermaid
-flowchart TD
-    A["Founder selects 1 to 3 images in app"] --> B["App calls Node pre-analysis start endpoint"]
-    B --> C{"Node image count"}
-    C -->|"1 image"| D["Call POST /pp1/analyze_async"]
-    C -->|"2 to 3 images"| E["Call POST /pp2/analyze_multiview_async"]
-    D --> F["Pipeline stores async job state"]
-    E --> F
-    F --> G["Node polls GET /jobs/pre-analysis/{taskId}"]
-    G --> H{"Completed?"}
-    H -->|"No"| G
-    H -->|"Yes"| I["Node stores pre-analysis snapshot with token"]
-    I --> J["App shows suggested category and description"]
-    J --> K["Founder edits or accepts values"]
-    K --> L["App submits final found item to Node"]
-    L --> M["Node creates found item and links token"]
-    M --> N["Node relays POST /feedback/founder-prefill"]
-    N --> O["Pipeline computes correction analytics and multiview summary"]
-```
-
-### Other integration path: owner image search
-
-The Node backend also uses this pipeline for owner-side image-based narrowing:
-- Node uploads the owner image to the pipeline via `POST /search/by-image`
-- the pipeline generates one or more crop embeddings
-- FAISS returns matching indexed vectors
-- Node merges this with semantic text search results from the separate semantic engine
-
-## Features and How They Work
-
-### 1. Single-image pre-analysis (PP1)
-
-Trigger:
-- one founder image
-- used by the Node pre-analysis flow and direct PP1 API calls
-
-Main components:
-- YOLO detection
-- Florence analysis
-- Gemini reasoning
-- DINO embeddings
-- StorageService
-
-Key logic:
-- validate exactly one image
-- save temp file and convert HEIC if needed
-- detect the best object crop
-- run Florence captioning, OCR, and grounding
-- run Gemini to synthesize a structured result
-- generate 128d embeddings
-- persist accepted results to SQL and Redis
-
-Output:
-- structured item analysis
-- optional stored item record
-- optional vector payload for Node-side indexing flow
-
-Fallbacks:
-- if Gemini is unavailable or transiently fails, PP1 can degrade to Florence-led output instead of hard-failing
-
-### 2. Multi-view verification and fusion (PP2)
-
-Trigger:
-- two or three founder images
-
-Main components:
-- YOLO for each view
-- Florence OCR-first extraction
-- DINO embeddings per view
-- geometric verifier
-- multi-view verifier
-- fusion service
-- FAISS
-
-Key logic:
-- process each image as a view
-- compute per-view quality and extraction results
-- generate cosine-like and FAISS-based similarity evidence
-- select the strongest eligible pair
-- mark used views and dropped views
-- verify same-item consistency
-- if verification passes, fuse evidence into one profile and store it
-
-Output:
-- PP2 response with `per_view`, `verification`, `fused`, `faiss_ids`, and `stored`
-
-Fallbacks:
-- if verification fails, Node treats the result as manual fallback instead of surfacing a confident suggestion
-
-### 3. Async founder pre-analysis jobs
-
-Trigger:
-- app founder flow uses async calls for both PP1 and PP2
-
-Main components:
-- background tasks
-- `pre_analysis_job_store.py`
-- Redis or in-memory fallback
-
-Key logic:
-- create a task id
-- save stage payloads like `queued`, `detecting`, `reasoning`, `finalizing`
-- update job state until complete, manual fallback, or failure
+## Important Modules
 
-Output:
-- `taskId`
-- stage labels/messages
-- final result payload when complete
+### API entrypoints
 
-Failure handling:
-- if Redis is unavailable, job storage falls back to local in-memory state
+- `app/main.py`: FastAPI app, health route, PP1 routes, founder feedback route, pre-analysis job status route.
+- `app/routers/pp2_router.py`: synchronous and asynchronous PP2 endpoints.
+- `app/routers/search_router.py`: FAISS indexing and image search endpoints.
 
-### 4. Category and description suggestion
+### PP1 orchestration
 
-Trigger:
-- founder pre-analysis
+- `app/services/unified_pipeline.py`: main single-image pipeline orchestration.
+- `app/services/yolo_service.py`: detection wrapper.
+- `app/services/florence_service.py`: caption, OCR, VQA, grounding, category-specific detail extraction.
+- `app/services/gemini_reasoner.py`: evidence-locked reasoning and optional description enrichment.
+- `app/services/dino_embedder.py`: image embeddings for storage and retrieval.
 
-Main components:
-- label normalization in `category_specs.py`
-- Florence evidence extraction
-- Gemini reasoning for PP1
-- fusion service for PP2
+### PP2 orchestration
 
-Key logic:
-- produce a canonical category from detected evidence
-- generate a suggested public description from visual signals
+- `app/services/pp2_multiview_pipeline.py`: end-to-end PP2 flow.
+- `app/services/pp2_multiview_verifier.py`: multiview similarity logic.
+- `app/services/pp2_geometric_verifier.py`: ORB and RANSAC geometric checks.
+- `app/services/pp2_fusion_service.py`: final fusion of labels, OCR, features, defects, attachments, and detailed description.
 
-Output:
-- Node stores `detectedCategory`, `detectedDescription`, and `detectedColor` in a pre-analysis snapshot
+### Support services
 
-### 5. OCR extraction
+- `app/services/storage_service.py`: persistence helper.
+- `app/services/pre_analysis_job_store.py`: Redis-backed or in-memory async job tracking.
+- `app/services/founder_prefill_analytics.py`: founder edit and correction analytics.
+- `app/domain/category_specs.py`: canonical labels and allowed category-specific details.
 
-Trigger:
-- PP1 and PP2 visual analysis
+## Runtime Configuration
 
-Main components:
-- Florence OCR pipeline
+The service uses environment-backed settings from `app/config/settings.py` and `run_server.py`.
 
-Key logic:
-- read visible text from crops
-- return raw OCR text and structured OCR layout where available
-- feed OCR into description generation, fusion, and later feedback analytics
+### Common settings
 
-Output:
-- OCR text for captions, reasoning, and evidence storage
+- `HOST`: server host, default `0.0.0.0`
+- `PORT`: server port, default `8002`
+- `RELOAD`: enable reload for local development, default `false`
+- `WORKERS`: uvicorn worker count, default `1`
+- `LOG_LEVEL`: uvicorn log level, default `info`
+- `DATABASE_URL`: default `sqlite:///./data/app.db`
+- `REDIS_URL`: default `redis://localhost:6379/0`
+- `FAISS_INDEX_PATH`: default `./data/faiss.index`
+- `FAISS_MAPPING_PATH`: default `./data/faiss_mapping.json`
+- `GOOGLE_API_KEY` or `GEMINI_API_KEY`: optional Gemini access
+- `PP2_ENABLE_GEMINI`: default `False`
 
-### 6. Color detection and normalization
+### Important behavior defaults
 
-Trigger:
-- PP1 and PP2 analysis and founder feedback analytics
+- PP2 Gemini enrichment is disabled by default.
+- Async pre-analysis jobs use Redis when available and fall back to in-memory storage when Redis is unavailable.
+- The pipeline can run with SQLite locally, but production-like flows should use a proper database and stable Redis.
 
-Main components:
-- Florence VQA and caption evidence
-- `color_utils.py`
+## How To Run Locally
 
-Key logic:
-- infer object color
-- normalize variants like `navy` into canonical buckets like `blue`
-- reuse normalized colors in PP2 checks and founder analytics
-
-Output:
-- normalized color in PP1/PP2 results
-- stable color comparison metrics during founder feedback relay
-
-### 7. Geometric verification
-
-Trigger:
-- PP2 verification and `/pp2/verify_pair`
-
-Main components:
-- OpenCV ORB keypoints
-- RANSAC-based consistency checks
-
-Key logic:
-- compare crops from different views
-- estimate whether they are visually consistent as the same object instance
-- contribute pair-level evidence to PP2 verification
-
-Output:
-- pair-level geometric scores
-- pass/fail support for the multiview verifier
-
-### 8. Vector embedding generation
-
-Trigger:
-- PP1 crop analysis
-- PP2 per-view processing
-- image search
-
-Main components:
-- DINOv2 embedder
-
-Key logic:
-- generate feature vectors from cropped item images
-- project or store in 128d form for FAISS operations
-
-Output:
-- vector embeddings for search and storage
-
-### 9. FAISS indexing and image search
-
-Trigger:
-- Node indexes pre-analysis vectors with `POST /search/index_vector`
-- Node searches by owner image with `POST /search/by-image`
-
-Main components:
-- DINOv2
-- FAISS service
-- search router
-
-Key logic:
-- indexing stores a vector plus metadata
-- search performs multi-crop retrieval using YOLO crop, center crop, and full image
-- results are deduplicated by FAISS id and grouped by item
-
-Output:
-- top matches with metadata, grouped vector hits, and scores
-
-### 10. Founder correction analytics relay
-
-Trigger:
-- founder submits the final item after reviewing pre-analysis suggestions
-
-Main components:
-- Node feedback relay
-- Python analytics service
-- SQL founder feedback table
-
-Key logic:
-- Node sends predicted values, final values, and trimmed analysis evidence
-- pipeline computes deterministic change metrics and multiview summaries
-- pipeline stores analytics and returns them to Node
-
-Output:
-- change metrics
-- comparison evidence
-- multiview verification summary
-- terminal log line for observability
-
-### 11. Result storage and cache behavior
-
-Trigger:
-- accepted PP1 and successful PP2 flows
-
-Main components:
-- SQLAlchemy models
-- Redis cache
-- FAISS index
-
-Key logic:
-- PP1 stores an `ItemRecord`, one `ViewEvidence`, and an embedding row
-- PP2 stores fused item data plus per-view evidence and a fused embedding row
-- Redis caches compact item payloads for 24 hours
-
-Output:
-- relational persistence
-- Redis item cache
-- FAISS index updates when used
-
-### 12. Degradation and fallback handling
-
-Examples:
-- Redis unavailable: async job store falls back to memory
-- HEIC upload: convert to JPEG when possible
-- PP1 degraded reasoning: Florence-led fallback can still produce an accepted result
-- PP2 failed verification: Node returns manual fallback rather than a strong suggestion
-- cache failure: Redis warnings do not abort SQL persistence
-
-### 13. HEIC and HEIF support
-
-Trigger:
-- iPhone gallery uploads
-
-Main components:
-- `pillow-heif`
-- temp file conversion path in `app/main.py`
-
-Key logic:
-- detect HEIC by header bytes, not just file extension
-- convert to JPEG before PP1 or async processing
-
-Output:
-- downstream model stack always receives a standard RGB image
-
-### 14. Per-view quality scoring and best-pair selection
-
-Trigger:
-- PP2 with 2 to 3 images
-
-Main components:
-- per-view extraction
-- quality scoring
-- verifier and pipeline pair selection logic
-
-Key logic:
-- compute quality per view
-- select decision pair
-- report `used_views` and `dropped_views`
-- capture strong, near-miss, and weak pair evidence
-
-Output:
-- interpretable PP2 verification metadata
-
-### 15. Debug observability
-
-Current observability surfaces:
-- startup and shutdown logs
-- PP1 upload and conversion logs
-- PP2 request start/end logs
-- PP2 verification summary logs
-- founder feedback analytics logs
-- stored SQL feedback analytics payloads
-
-This is intended for engineering visibility and admin/debug analysis, not for direct mobile UI display.
-
-## API Endpoints Used by Other Services
-
-| Endpoint | Caller | High-level input | Main output | Used in flow |
-| --- | --- | --- | --- | --- |
-| `GET /` | Internal health checks, developers | none | service health message | pipeline availability |
-| `POST /pp1/analyze` | Node backend | one image file | immediate PP1 analysis result | sync founder pre-analysis |
-| `POST /pp1/analyze_async` | Node backend | one image file | `taskId` + stage metadata | app founder async pre-analysis |
-| `POST /pp2/analyze_multiview` | Node backend | two or three image files | PP2 response with verification and fusion | sync multi-view analysis |
-| `POST /pp2/analyze_multiview_async` | Node backend | two or three image files | `taskId` + stage metadata | app founder async multi-view analysis |
-| `POST /pp2/verify_pair` | available to internal callers | exactly two images | geometric + similarity verification | debugging or pair verification |
-| `GET /jobs/pre-analysis/{task_id}` | Node backend | task id | async job status/result | app polling loop |
-| `POST /search/index_vector` | Node backend | 128d vector + metadata | assigned `faiss_id` | make PP1 results searchable |
-| `POST /search/by-image` | Node backend | image file + `top_k` + `min_score` + optional category | grouped image matches | owner image-based narrowing |
-| `POST /feedback/founder-prefill` | Node backend | predicted vs final values + evidence | stored analytics + metrics | founder correction learning loop |
-
-### Request style notes
-
-- image routes use `multipart/form-data`
-- vector indexing uses JSON
-- founder feedback relay uses JSON
-- Node-side caller is `Backend/src/services/imageProcessingService.ts`
-- app-side caller remains the Node backend, not this Python service directly
-
-## Data Persistence and Caching
-
-### SQL storage
-
-The pipeline persists:
-- `ItemRecord`
-- `ViewEvidence`
-- `EmbeddingRecord`
-- `FounderPrefillFeedbackRecord`
-
-PP1 persistence:
-- one image
-- one view evidence row
-- one embedding row
-
-PP2 persistence:
-- fused item profile
-- multiple view evidence rows
-- one fused embedding row
-
-Founder feedback persistence:
-- predicted and final values
-- analysis evidence snapshot
-- change metrics
-- comparison evidence
-- multiview verification summary
-
-### Redis usage
-
-Redis is used for:
-- item cache with a 24-hour TTL
-- async pre-analysis job storage when healthy
-
-If Redis is unavailable:
-- item persistence still succeeds through SQL
-- async jobs fall back to in-memory storage
-
-### FAISS usage
-
-FAISS stores 128d vectors plus metadata and is used for:
-- indexing PP1 pre-analysis vectors from Node
-- retrieving similar items for owner image search
-
-The index is loaded at startup and saved on shutdown.
-
-## Startup and Configuration
-
-### Installation
+### 1. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Run locally
+### 2. Provide required model assets
+
+Ensure the expected model files and folders exist under `app/models/` and any configured model paths. At minimum, local development typically expects the project’s YOLO and Florence assets to be available.
+
+### 3. Configure environment variables
+
+Create a local `.env` file if needed. Typical values:
+
+```env
+PORT=8002
+DATABASE_URL=sqlite:///./data/app.db
+REDIS_URL=redis://localhost:6379/0
+PP2_ENABLE_GEMINI=false
+GOOGLE_API_KEY=
+```
+
+### 4. Start the server
 
 ```bash
 python run_server.py
 ```
 
-Default server settings:
-- host `0.0.0.0`
-- port `8002`
+Expected local URL:
 
-### Important configuration areas
+- `http://127.0.0.1:8002`
 
-This service relies on environment-backed settings for:
-- database connection
-- FAISS paths
-- Redis connection
-- Gemini/API credentials
-- pre-analysis retry and TTL values
-- optional reload and worker settings via `run_server.py`
+### 5. Make sure the Node backend points here
 
-### Node backend expectation
+The backend uses `IMAGE_PIPELINE_URL`, and its default already points to `http://127.0.0.1:8002`.
 
-The Node backend expects this service at:
+## API Surface
 
-```text
-IMAGE_PIPELINE_URL=http://127.0.0.1:8002
-```
+### Health and utility
 
-If you change the host or port here, update the Node backend environment accordingly.
+- `GET /`
+- `GET /jobs/pre-analysis/{task_id}`
 
-## Testing and Troubleshooting
+### PP1
 
-### Tests
+- `POST /pp1/analyze`
+- `POST /pp1/analyze_async`
+- `POST /analyze` is deprecated and intentionally returns an error directing callers to `/pp1/analyze`
 
-The repo includes pytest-based tests for major PP1, PP2, schema, fusion, and router behavior under `tests/`.
+### PP2
 
-Typical command:
+- `POST /pp2/analyze_multiview`
+- `POST /pp2/analyze_multiview_async`
+
+### Search
+
+- `POST /search/index_vector`
+- `POST /search/by-image`
+
+### Analytics
+
+- `POST /feedback/founder-prefill`
+
+## Request Lifecycle Summary
+
+### PP1 single-image request
+
+1. Node uploads one image.
+2. The pipeline stores a temporary file.
+3. YOLO selects the primary object.
+4. Florence extracts caption, OCR, and grounded details.
+5. Gemini may refine the result if enabled and applicable.
+6. DINO produces embeddings.
+7. The pipeline returns a structured result and may persist it.
+
+### PP2 multiview request
+
+1. Node uploads 2 or 3 images.
+2. The pipeline normalizes each view.
+3. The verifier checks whether the views likely belong to the same item.
+4. The fusion service creates a single item profile.
+5. The response includes fused OCR, attributes, descriptions, embeddings, and verification output.
+
+## Data And Persistence
+
+The pipeline persists or maintains:
+
+- analysis records in the configured database,
+- FAISS index data in `data/faiss.index`,
+- vector-to-item mappings in `data/faiss_mapping.json`,
+- pre-analysis jobs in Redis or memory,
+- founder correction analytics in the database.
+
+Generated files under `data/` and temporary uploads change during normal execution and should not be treated as hand-maintained documentation artifacts.
+
+## Testing
+
+Run targeted tests:
 
 ```bash
-python -m pytest
+python -m pytest tests/test_pp2_fusion_service.py -v
+python -m pytest tests/test_pp2_multiview_pipeline.py -v
 ```
 
-### Things to verify first when debugging
+Run the full suite:
 
-1. The pipeline is running on port `8002`.
-2. The Node backend points to the same `IMAGE_PIPELINE_URL`.
-3. Redis availability if async jobs seem to disappear.
-4. Database connectivity if storage fails.
-5. Model files exist in `app/models/`.
-6. `pillow-heif` is installed if iPhone images fail.
-7. Gemini credentials are present if PP1 reasoning quality unexpectedly degrades.
+```bash
+python -m pytest tests/ --tb=line
+```
 
-### Common failure patterns
+## Troubleshooting
 
-| Symptom | Likely cause |
-| --- | --- |
-| Node times out calling the pipeline | service down, wrong port, heavy model startup, or long inference |
-| Founder polling returns 404 | async job expired or wrong task id |
-| HEIC uploads fail | `pillow-heif` missing or conversion error |
-| Search returns no matches | vector not indexed, category filter too strict, or low similarity |
-| PP2 falls back manually | view mismatch, weak pair evidence, or verification failure |
-| Feedback analytics not stored | database issue or relay request failure from Node |
+### The backend cannot reach the pipeline
 
-## Final Notes
+Check:
 
-This Python service is one part of the broader FindAssure system:
-- the React Native app owns the user experience
-- the Node backend owns orchestration and business logic
-- this pipeline owns visual analysis, verification, embedding, retrieval, and correction analytics
+- the pipeline is running on port `8002`,
+- the backend `IMAGE_PIPELINE_URL` matches the running address,
+- large requests are not timing out against `IMAGE_PIPELINE_TIMEOUT_MS`.
 
-If you need the end-to-end product picture, read the system documentation at the repository root as the complement to this pipeline-specific guide. This README is intended to be complete enough to understand and operate the image pipeline without needing the older `OVERVIEW.md`.
+### Async pre-analysis jobs disappear
+
+Check Redis availability. If Redis is down, the service falls back to in-memory job tracking, which is fine for local development but not ideal for durable multi-process workflows.
+
+### Gemini behavior seems inconsistent
+
+Check:
+
+- `GOOGLE_API_KEY` or `GEMINI_API_KEY`,
+- `PP2_ENABLE_GEMINI`,
+- timeout settings such as `PP2_GEMINI_TIMEOUT_S`.
+
+### Search results are missing
+
+Check:
+
+- vectors were indexed through `/search/index_vector`,
+- `data/faiss.index` and `data/faiss_mapping.json` are present and current,
+- the category filter or `min_score` is not too restrictive.
+
+## Related Documents
+
+- `INTEGRATION_FLOW_README.md`: how the app, Node backend, and image pipeline connect.
+- `OVERVIEW.md`: older system overview and model summary.
+- `tests/`: best source of truth for expected behavior changes.

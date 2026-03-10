@@ -245,11 +245,13 @@ export const MAIN_LOCATIONS: MainLocation[] = [
 ];
 
 // Buildings that have floor/hall structure
-export const BUILDINGS_WITH_FLOORS = ['new_building'];
+export const BUILDINGS_WITH_FLOORS = ['new_building', 'main_building'];
 
 // Import floor data from separate file
 import { NEW_BUILDING_FLOORS } from './newBuildingFloors';
+import { MAIN_BUILDING_FLOORS } from './mainBuildingFloors';
 export { NEW_BUILDING_FLOORS };
+export { MAIN_BUILDING_FLOORS };
 
 // Helper functions
 export const hasFloors = (location: string): boolean => {
@@ -259,6 +261,9 @@ export const hasFloors = (location: string): boolean => {
 export const getFloorsForBuilding = (building: string): Floor[] => {
   if (building === 'new_building') {
     return NEW_BUILDING_FLOORS;
+  }
+  if (building === 'main_building') {
+    return MAIN_BUILDING_FLOORS;
   }
   return [];
 };

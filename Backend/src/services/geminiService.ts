@@ -35,6 +35,22 @@ interface GenerateSuggestedAnswersInput {
   questions: string[];
 }
 
+export type VerificationQuestionLevel = 'core' | 'strong' | 'supporting';
+export type VerificationQuestionType =
+  | 'boolean'
+  | 'numeric'
+  | 'color'
+  | 'brand_identifier'
+  | 'location'
+  | 'descriptive';
+
+export interface VerificationQuestionMetadata {
+  question: string;
+  type: VerificationQuestionType;
+  level: VerificationQuestionLevel;
+  weight: number;
+}
+
 type KnowledgeBaseCategory =
   | 'wallet'
   | 'handbag'
@@ -53,6 +69,9 @@ type KnowledgeBaseCategory =
 type KnowledgeBaseTemplate = {
   question: string;
   cues?: string[];
+  type?: VerificationQuestionType;
+  level?: VerificationQuestionLevel;
+  weight?: number;
 };
 
 const CATEGORY_ALIASES: Record<KnowledgeBaseCategory, string[]> = {
@@ -417,6 +436,90 @@ const DISALLOWED_QUESTION_PATTERNS: RegExp[] = [
   /\bwhy\b/i,
   /\bfirst\b|\bsecond\b|\bthird\b|\btop\b|\bbottom\b|\bleft\b|\bright\b/i,
 ];
+
+const QUESTION_LEVEL_WEIGHTS: Record<VerificationQuestionLevel, number> = {
+  core: 1.35,
+  strong: 1.15,
+  supporting: 1.0,
+};
+
+const inferQuestionType = (question: string): VerificationQuestionType => {
+  const q = question.toLowerCase();
+
+  if (/(is there|does it|did it|was it|were there|do you|has it|have you|is it|are there)/.test(q)) {
+    return 'boolean';
+  }
+  if (/(number|serial|digit|code|year|size|count|how many|last four|capacity)/.test(q)) {
+    return 'numeric';
+  }
+  if (/color/.test(q)) {
+    return 'color';
+  }
+  if (/(brand|logo|model|name|label|text|written|identifier|institute)/.test(q)) {
+    return 'brand_identifier';
+  }
+  if (/(where|location|place|building|floor|hall|room|area|side)/.test(q)) {
+    return 'location';
+  }
+  return 'descriptive';
+};
+
+const inferQuestionLevel = (question: string, type: VerificationQuestionType): VerificationQuestionLevel => {
+  const q = question.toLowerCase();
+
+  if (
+    type === 'brand_identifier' ||
+    type === 'numeric' ||
+    /last four|serial|engrav|pairing|login|wallpaper|department|holder name|bank name|model/.test(q)
+  ) {
+    return 'core';
+  }
+
+  if (
+    type === 'color' ||
+    type === 'boolean' ||
+    /compartment|zip|strap|case|camera|logo|lining|connector|material|port/.test(q)
+  ) {
+    return 'strong';
+  }
+
+  return 'supporting';
+};
+
+const buildQuestionMetadata = (
+  question: string,
+  template?: KnowledgeBaseTemplate | null
+): VerificationQuestionMetadata => {
+  const type = template?.type || inferQuestionType(question);
+  const level = template?.level || inferQuestionLevel(question, type);
+  const weight = template?.weight || QUESTION_LEVEL_WEIGHTS[level];
+
+  return {
+    question,
+    type,
+    level,
+    weight,
+  };
+};
+
+const buildTemplateLookup = () => {
+  const entries = Object.values(QUESTION_KNOWLEDGE_BASE).flat();
+  const map = new Map<string, KnowledgeBaseTemplate>();
+  for (const template of entries) {
+    map.set(template.question.trim().toLowerCase(), template);
+  }
+  return map;
+};
+
+const QUESTION_TEMPLATE_LOOKUP = buildTemplateLookup();
+
+export const deriveQuestionMetadata = (questions: string[]): VerificationQuestionMetadata[] =>
+  questions.map((question) =>
+    buildQuestionMetadata(
+      question,
+      QUESTION_TEMPLATE_LOOKUP.get(question.trim().toLowerCase()) || null
+    )
+  );
 
 const MIN_SECURE_KEYWORD_MATCHES = 2;
 

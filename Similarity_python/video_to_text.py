@@ -1,13 +1,6 @@
-import whisper
 import os
-import threading
 import subprocess
-
-# Load model once
-model = whisper.load_model("base")
-
-# Thread lock for Whisper model (model is not thread-safe)
-whisper_lock = threading.Lock()
+from transcription_backend import transcribe_audio
 
 def extract_text(file_path: str) -> str:
     """
@@ -41,29 +34,11 @@ def extract_text(file_path: str) -> str:
     if not os.path.exists(audio) or os.path.getsize(audio) == 0:
         raise Exception("Audio extraction failed - no audio file created")
 
-    # Transcribe audio using Whisper with thread lock
-    # Lock ensures only one thread uses the model at a time
-    # Force English language for better accuracy and faster processing
-    with whisper_lock:
-        try:
-            result = model.transcribe(
-                audio,
-                language="en",  # Force English language
-                task="transcribe",  # Transcription task (not translation)
-                fp16=False,  # Use FP32 for better accuracy on CPU
-                temperature=0.0,  # Deterministic output (no randomness)
-                best_of=5,  # Try 5 candidates, pick best one
-                beam_size=5,  # Beam search for better accuracy
-                patience=1.0,  # Patience for beam search
-                condition_on_previous_text=True,  # Use context from previous segments
-                initial_prompt="This is a clear English response to a question about a lost item.",  # Guide the model
-                compression_ratio_threshold=2.4,  # Default compression check
-                logprob_threshold=-1.0,  # Default log probability threshold
-                no_speech_threshold=0.6  # Higher threshold to avoid false positives
-            )
-            text = result["text"].strip()
-        except Exception as e:
-            raise Exception(f"Whisper transcription failed: {e}")
+    try:
+        result = transcribe_audio(audio, with_word_timestamps=False)
+        text = (result.get("text") or "").strip()
+    except Exception as e:
+        raise Exception(f"Whisper transcription failed: {e}")
 
     print("Transcription:", text)
 

@@ -21,7 +21,7 @@ type ReportFoundLocationRouteProp = RouteProp<RootStackParamList, 'ReportFoundLo
 const ReportFoundLocationScreen = () => {
   const navigation = useNavigation<ReportFoundLocationNavigationProp>();
   const route = useRoute<ReportFoundLocationRouteProp>();
-  const { images, preAnalysisToken, category, description, selectedQuestions, founderAnswers } = route.params;
+  const { images, preAnalysisToken, category, description, selectedQuestions, selectedQuestionMetadata, founderAnswers } = route.params;
   const { user } = useAuth();
   const { theme } = useAppTheme();
   const { showToast } = useToast();
@@ -63,6 +63,7 @@ const ReportFoundLocationScreen = () => {
         category,
         description,
         questions: selectedQuestions,
+        questionMetadata: selectedQuestionMetadata,
         founderAnswers,
         found_location: [
           {

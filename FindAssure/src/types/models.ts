@@ -209,7 +209,10 @@ export type RootStackParamList = {
   
   // Owner Flow
   FindLostStart: undefined;
-  FindLostResults: { foundItems: FoundItem[] };
+  FindLostResults: {
+    foundItems: FoundItem[];
+    ownerImageAttached?: boolean;
+  };
   ItemDetail: { foundItem: FoundItem };
   AnswerQuestionsVideo: { foundItem: FoundItem };
   VerificationPending: undefined;

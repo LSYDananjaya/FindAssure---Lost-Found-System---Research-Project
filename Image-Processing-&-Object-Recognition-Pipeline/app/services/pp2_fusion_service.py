@@ -13,8 +13,10 @@ class MultiViewFusionService:
     _TECH_STOPWORDS = {"HTTP", "HTTPS", "WWW", "COM", "NET", "LK", "ORG", "CO"}
     _ALPHA_ONLY_RE = re.compile(r"^[A-Z]+$")
     _META_DESCRIPTION_PATTERNS = [
+        re.compile(r"(?i)\b[a-z]?\s*answering\s+does\s+not\s+require\b"),
         re.compile(r"(?i)\banswering\s+does\s+not\s+require\b"),
         re.compile(r"(?i)\bdoes\s+not\s+require\s+reading\s+(?:the\s+)?text\b"),
+        re.compile(r"(?i)\b[a-z]?\s*reading\s+(?:the\s+)?text\s+in\s+the\s+image\b"),
         re.compile(r"(?i)\breading\s+(?:the\s+)?text\s+in\s+the\s+image\b"),
         re.compile(r"(?i)\b(?:name|text)\s+on\s+the\s+\w+\s+is\s+written\s+in\b"),
     ]
@@ -322,6 +324,29 @@ class MultiViewFusionService:
         return f"{', '.join(items[:-1])}, and {items[-1]}"
 
     @staticmethod
+    def _ensure_sentence(text: str) -> str:
+        cleaned = str(text or "").strip()
+        if not cleaned:
+            return ""
+        return cleaned if cleaned.endswith((".", "!", "?")) else f"{cleaned}."
+
+    @staticmethod
+    def _sentence_count(text: str) -> int:
+        return len([part for part in re.split(r"(?<=[.!?])\s+", str(text or "").strip()) if part.strip()])
+
+    @classmethod
+    def _collect_novel_values(cls, values: List[str], text: str, limit: int) -> List[str]:
+        haystack = str(text or "").lower()
+        novel: List[str] = []
+        for value in cls._dedupe_keep_order(values):
+            lowered = value.lower()
+            if lowered and lowered not in haystack:
+                novel.append(value)
+            if len(novel) >= limit:
+                break
+        return novel
+
+    @staticmethod
     def _pick_most_common(values: List[str]) -> Optional[str]:
         cleaned = [str(v).strip() for v in values if str(v).strip()]
         if not cleaned:
@@ -386,6 +411,145 @@ class MultiViewFusionService:
         return snippet
 
     @staticmethod
+    def _tokenize_words(text: str) -> List[str]:
+        return re.findall(r"\b[a-z0-9]+\b", str(text or "").lower())
+
+    @classmethod
+    def _contains_scene_or_meta_contamination(cls, text: str) -> bool:
+        raw = str(text or "").strip()
+        if not raw:
+            return False
+        if any(pattern.search(raw) for pattern in cls._META_DESCRIPTION_PATTERNS):
+            return True
+
+        lower = raw.lower()
+        scene_nouns = (
+            "cabinet", "cupboard", "drawer", "shelf", "desk", "table", "wall",
+            "floor", "keyboard", "laptop", "screen", "background", "window",
+            "counter", "surface", "foreground", "backdrop", "carpet", "mat",
+        )
+        scene_relations = (
+            "behind", "in front of", "under", "beneath", "next to", "beside",
+            "against", "on top of", "near", "on",
+        )
+        scene_noun_present = any(re.search(rf"\b{re.escape(noun)}\b", lower) for noun in scene_nouns)
+        if scene_noun_present:
+            if any(relation in lower for relation in scene_relations):
+                return True
+            if any(word in lower for word in ("person", "hand", "holding")):
+                return True
+        return False
+
+    @classmethod
+    def _is_generic_description(cls, text: str, category: str) -> bool:
+        cleaned = cls._sanitize_object_text(text)
+        if not cleaned:
+            return True
+
+        lower = cleaned.lower().strip().rstrip(".")
+        if lower in {"item", "object"}:
+            return True
+
+        category_text = cls._humanize_category(category).lower()
+        category_terms = set(re.findall(r"[a-z]+", category_text))
+        tokens = cls._tokenize_words(lower)
+        if not tokens:
+            return True
+
+        generic_tokens = {
+            "a", "an", "the", "this", "that", "small", "large", "black", "brown",
+            "blue", "red", "green", "white", "gray", "grey", "silver", "gold",
+            "front", "back", "side", "view", "closeup", "close", "up",
+        }
+        meaningful_tokens = [token for token in tokens if token not in generic_tokens and token not in category_terms]
+        if len(tokens) <= 3:
+            return True
+        if not meaningful_tokens:
+            return True
+        if len(tokens) <= 5 and not any(
+            marker in lower
+            for marker in ("with ", "has ", "includes ", "logo", "visor", "zipper", "strap", "pocket", "text")
+        ):
+            return True
+        return False
+
+    @classmethod
+    def _finalize_composed_description(cls, text: str) -> str:
+        raw = str(text or "").strip()
+        if not raw:
+            return ""
+        sentences: List[str] = []
+        for sentence in re.split(r"(?<=[.!?])\s+", raw):
+            cleaned = cls._sanitize_object_text(sentence)
+            if not cleaned:
+                continue
+            for fragment in re.split(r"(?<=[.!?])\s+", cleaned):
+                fragment = fragment.strip().rstrip(". ")
+                if not fragment:
+                    continue
+                if len(fragment.split()) < 3:
+                    continue
+                sentences.append(fragment)
+        deduped = cls._dedupe_keep_order(sentences)
+        return " ".join(f"{part}." for part in deduped).strip()
+
+    def _build_structured_detail_description(
+        self,
+        *,
+        category: str,
+        color: str,
+        brand: str,
+        features: List[str],
+        attachments: List[str],
+        defects: List[str],
+        ocr_tokens: List[str],
+    ) -> str:
+        category_text = self._humanize_category(category)
+        identity_parts: List[str] = ["This"]
+        if color:
+            identity_parts.append(color.lower())
+        if brand:
+            identity_parts.append(str(brand).strip())
+        identity_parts.append(category_text)
+        identity = " ".join(part for part in identity_parts if part).strip()
+
+        features_clean = self._filter_public_detail_values(features, category)
+        attachments_clean = self._filter_public_detail_values(attachments, category)
+        defects_clean = self._filter_public_detail_values(defects, category)
+        feature_focus = self._collect_novel_values(features_clean, "", 2)
+        attachment_focus = self._collect_novel_values(attachments_clean, "", 2)
+        defect_focus = self._collect_novel_values(defects_clean, "", 2)
+        ocr_focus = self._dedupe_keep_order([str(token).strip() for token in ocr_tokens if str(token).strip()])[:2]
+
+        lead_clauses: List[str] = []
+        if feature_focus:
+            lead_clauses.append(f"has {self._join_natural(feature_focus)}")
+        if attachment_focus and len(lead_clauses) < 2:
+            lead_clauses.append(f"includes {self._join_natural(attachment_focus)}")
+
+        sentences: List[str] = []
+        if lead_clauses:
+            sentences.append(self._ensure_sentence(f"{identity} {self._join_natural(lead_clauses)}"))
+        else:
+            sentences.append(self._ensure_sentence(identity))
+
+        leftover_features = self._collect_novel_values(features_clean, " ".join(sentences), 3)
+        if leftover_features:
+            sentences.append(self._ensure_sentence(f"Notable details include {self._join_natural(leftover_features)}"))
+
+        leftover_attachments = self._collect_novel_values(attachments_clean, " ".join(sentences), 2)
+        if leftover_attachments:
+            sentences.append(self._ensure_sentence(f"It also includes {self._join_natural(leftover_attachments)}"))
+
+        if defect_focus:
+            sentences.append(self._ensure_sentence(f"Visible wear includes {self._join_natural(defect_focus)}"))
+
+        if ocr_focus:
+            sentences.append(self._ensure_sentence(f'Visible text includes "{self._join_natural(ocr_focus)}"'))
+
+        return self._finalize_composed_description(" ".join(sentences))
+
+    @staticmethod
     def _sanitize_object_text(text: str) -> str:
         raw = str(text or "").strip()
         if not raw:
@@ -404,18 +568,23 @@ class MultiViewFusionService:
             r"(?i)^in\s+(?:this|the)\s+(?:image|photo|picture)\s*,?\s*",
             r"(?i)^there\s+is\s+",
             r"(?i)^(?:the\s+)?(?:inside|front|back|side|rear|top|bottom)\s+view\s+shows\s+",
+            r"(?i)^a\s+answering\s+does\s+not\s+require\b.*$",
+            r"(?i)^answering\s+does\s+not\s+require\b.*$",
+            r"(?i)^reading\s+(?:the\s+)?text\s+in\s+the\s+image\b.*$",
         ]
         tail_patterns = [
-            r"(?i)\s+(?:on|against|near|beside|above|over|below|beneath|next\s+to)\s+(?:a\s+|the\s+)?(?:\w+\s+){0,2}(?:table|desk|surface|floor|wall|carpet|mat|counter|shelf)\b.*$",
+            r"(?i)\s+(?:on|against|near|beside|above|over|below|beneath|under|behind|next\s+to|in\s+front\s+of|on\s+top\s+of)\s+(?:a\s+|the\s+)?(?:\w+\s+){0,3}(?:table|desk|surface|floor|wall|carpet|mat|counter|shelf|cabinet|cupboard|drawer|keyboard|laptop|screen|background|window)\b.*$",
             r"(?i)\s+sitting\s+on\s+(?:a\s+|the\s+)?(?:\w+\s+)?(?:table|desk|surface|floor)\b.*$",
             r"(?i)\s+lying\s+on\s+(?:a\s+|the\s+)?(?:\w+\s+)?(?:table|desk|surface|floor)\b.*$",
+            r"(?i)\s+with\s+(?:a\s+|the\s+)?(?:\w+\s+){0,3}(?:cabinet|cupboard|drawer|shelf|desk|table|wall|floor|keyboard|laptop|screen|background)\b.*$",
             r"(?i)\s+is\s+sitting\b.*$",
             r"(?i)\s+is\s+lying\b.*$",
         ]
         banned_terms = {
             "person", "hand", "finger", "selfie", "background", "holding",
             "table", "desk", "floor", "wall", "carpet", "mat",
-            "counter", "shelf", "foreground", "backdrop",
+            "counter", "shelf", "foreground", "backdrop", "cabinet",
+            "cupboard", "drawer", "keyboard", "laptop", "screen",
         }
         generic_phrases = {"wallet front", "wallet back", "helmet front", "helmet back", "wallet side", "helmet side"}
 
@@ -434,6 +603,8 @@ class MultiViewFusionService:
                 continue
 
             lower = candidate.lower()
+            if MultiViewFusionService._contains_scene_or_meta_contamination(candidate):
+                continue
             if any(term in re.findall(r"\b\w+\b", lower) for term in banned_terms):
                 continue
             if lower in generic_phrases:
@@ -1023,7 +1194,17 @@ class MultiViewFusionService:
             final_category,
         )
 
-        detailed_ocr_text = " ".join(merged_ocr_tokens[:2]).strip()
+        detailed_ocr_tokens = self._dedupe_keep_order(merged_ocr_tokens[:2])
+        detailed_ocr_text = " ".join(detailed_ocr_tokens).strip()
+        structured_detail_fallback = self._build_structured_detail_description(
+            category=final_category,
+            color=detailed_color or final_color or "",
+            brand=detailed_brand or final_brand or "",
+            features=public_features_for_description,
+            attachments=public_attachments_for_description,
+            defects=public_defects_for_description,
+            ocr_tokens=detailed_ocr_tokens,
+        )
         detailed_caption = ""
         if detail_best_view is not None:
             detailed_caption = self._sanitize_object_text(
@@ -1042,22 +1223,20 @@ class MultiViewFusionService:
         if not best_view_description:
             best_view_description = detailed_caption
 
-        if not best_view_description:
-            best_view_description = self.build_conservative_caption(
-                final_category,
-                detailed_color or final_color,
-                detailed_brand or final_brand,
-                merged_ocr_tokens,
-                public_features_for_description,
-                public_defects_for_description,
-                public_attachments_for_description,
-            )
+        best_view_was_rebuilt = False
+        if (
+            not best_view_description
+            or self._contains_scene_or_meta_contamination(best_view_description)
+            or self._is_generic_description(best_view_description, final_category)
+        ):
+            best_view_description = structured_detail_fallback
+            best_view_was_rebuilt = True
 
         # ── Ensure colour + category open the description ────────────
         # If the best-view text doesn't mention the item's colour in its
         # opening sentence, prepend a structured "A {colour} {category}."
         _obj_color = (detailed_color or final_color or "").strip()
-        if _obj_color and best_view_description:
+        if _obj_color and best_view_description and not best_view_was_rebuilt:
             _opening = best_view_description.split(".")[0].lower()
             if _obj_color.lower() not in _opening:
                 _obj_brand = (detailed_brand or final_brand or "").strip()
@@ -1114,6 +1293,7 @@ class MultiViewFusionService:
         merged_attributes["multi_angle_phrases_used"] = list(other_angle_phrases)
 
         detail_sentences: List[str] = []
+        detail_text_lower = best_view_description.lower()
 
         if other_angle_phrases:
             detail_sentences.extend(
@@ -1122,23 +1302,41 @@ class MultiViewFusionService:
             )
             detailed_description_filters.append("multi_angle_fusion")
 
-        if public_features_for_description:
+        feature_novel_values = self._collect_novel_values(
+            public_features_for_description,
+            " ".join([best_view_description] + other_angle_phrases),
+            4,
+        )
+        if feature_novel_values:
             detail_sentences.append(
-                f"Visible features include {self._join_natural(public_features_for_description[:4])}."
+                f"Notable details include {self._join_natural(feature_novel_values)}."
             )
+            detail_text_lower = f"{detail_text_lower} {' '.join(feature_novel_values).lower()}".strip()
 
-        if public_attachments_for_description:
+        attachment_novel_values = self._collect_novel_values(
+            public_attachments_for_description,
+            detail_text_lower,
+            3,
+        )
+        if attachment_novel_values:
             detail_sentences.append(
-                f"Attached parts include {self._join_natural(public_attachments_for_description[:3])}."
+                f"It also includes {self._join_natural(attachment_novel_values)}."
             )
+            detail_text_lower = f"{detail_text_lower} {' '.join(attachment_novel_values).lower()}".strip()
 
-        if public_defects_for_description:
+        defect_novel_values = self._collect_novel_values(
+            public_defects_for_description,
+            detail_text_lower,
+            3,
+        )
+        if defect_novel_values:
             detail_sentences.append(
-                f"Visible defects include {self._join_natural(public_defects_for_description[:3])}."
+                f"Visible wear includes {self._join_natural(defect_novel_values)}."
             )
+            detail_text_lower = f"{detail_text_lower} {' '.join(defect_novel_values).lower()}".strip()
 
         if detailed_ocr_text and detailed_ocr_text.lower() not in detail_text_lower:
-            detail_sentences.append(f'The text "{detailed_ocr_text}" is visible on the surface.')
+            detail_sentences.append(f'Visible text includes "{detailed_ocr_text}".')
 
         detailed_description_text = best_view_description.rstrip(". ")
         detailed_description_parts = [part for part in [detailed_description_text] if part]
@@ -1147,12 +1345,50 @@ class MultiViewFusionService:
             part if part.endswith(".") else f"{part}."
             for part in detailed_description_parts
         ).strip()
+        detailed_description_text = self._finalize_composed_description(detailed_description_text)
+        if (
+            not detailed_description_text
+            or self._is_generic_description(detailed_description_text, final_category)
+        ):
+            detailed_description_text = structured_detail_fallback
+
+        summary_sentences: List[str] = []
+        summary_base = main_caption.strip()
+        if summary_base:
+            summary_sentences.append(self._ensure_sentence(summary_base))
+        elif best_view_description:
+            first_best_sentence = re.split(r"(?<=[.!?])\s+", best_view_description.strip())[0].strip()
+            if first_best_sentence:
+                summary_sentences.append(self._ensure_sentence(first_best_sentence))
+
+        summary_enrichment_parts: List[str] = []
+        if feature_novel_values:
+            summary_enrichment_parts.append(self._join_natural(feature_novel_values[:2]))
+        if attachment_novel_values and len(summary_enrichment_parts) < 2:
+            summary_enrichment_parts.append(self._join_natural(attachment_novel_values[:1]))
+        if detailed_ocr_text and detailed_ocr_text.lower() not in " ".join(summary_sentences).lower():
+            summary_enrichment_parts.append(f'text "{detailed_ocr_text}"')
+
+        if summary_enrichment_parts:
+            summary_sentences.append(
+                self._ensure_sentence(f"Notable details include {self._join_natural(summary_enrichment_parts[:2])}")
+            )
+
+        summary_description = " ".join(part for part in summary_sentences[:2] if part).strip() or main_caption
+        summary_description = self._finalize_composed_description(summary_description)
+        if (
+            not summary_description
+            or self._is_generic_description(summary_description, final_category)
+        ):
+            summary_description = self._finalize_composed_description(main_caption) or structured_detail_fallback
 
         detailed_evidence: List[str] = []
         if best_view_description:
             detailed_evidence.append("best_view_description")
         elif detailed_caption:
             detailed_evidence.append("florence_caption")
+        if best_view_was_rebuilt:
+            detailed_evidence.append("structured_regeneration")
         if other_angle_phrases:
             detailed_evidence.append("multi_angle_views")
         if public_features_for_description:
@@ -1167,11 +1403,17 @@ class MultiViewFusionService:
         desc_source = "multi_angle_evidence_composer" if other_angle_phrases else "best_view_evidence_composer"
         detailed_description_bundle = {
             "detailed_description": detailed_description_text,
+            "final_description": summary_description,
             "detailed_description_source": desc_source,
-            "description_evidence_used": {"summary": detailed_evidence, "detailed": detailed_evidence},
+            "description_evidence_used": {
+                "summary": self._dedupe_keep_order(
+                    ["structured_summary"] + [e for e in detailed_evidence if e != "multi_angle_views"]
+                ),
+                "detailed": detailed_evidence,
+            },
             "description_filters_applied": ["best_view_evidence_composer"],
             "description_word_count": {
-                "final_description": len(detailed_description_text.split()),
+                "final_description": len(summary_description.split()),
                 "detailed_description": len(detailed_description_text.split()),
             },
             "description_timings_ms": {},
@@ -1189,7 +1431,7 @@ class MultiViewFusionService:
             category=final_category,
             brand=final_brand,
             color=final_color,
-            caption=main_caption,
+            caption=detailed_description_bundle.get("final_description") or main_caption,
             detailed_description=detailed_description_bundle.get("detailed_description"),
             description_source="consensus_conservative_caption",
             detailed_description_source=detailed_description_bundle.get("detailed_description_source"),

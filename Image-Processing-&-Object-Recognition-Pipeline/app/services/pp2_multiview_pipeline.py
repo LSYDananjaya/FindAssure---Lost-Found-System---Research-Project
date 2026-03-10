@@ -796,6 +796,13 @@ class MultiViewPipeline:
 
         return (score, len(text.split()))
 
+    @staticmethod
+    def _description_sentence_count(description: Any) -> int:
+        text = str(description or "").strip()
+        if not text:
+            return 0
+        return len([part for part in re.split(r"(?<=[.!?])\s+", text) if part.strip()])
+
     @classmethod
     def _should_prefer_phase2_description(
         cls,
@@ -829,10 +836,18 @@ class MultiViewPipeline:
             attachments=attachments,
             ocr_text=ocr_text,
         )
+        current_sentences = cls._description_sentence_count(current)
+        candidate_sentences = cls._description_sentence_count(candidate)
 
         if candidate_score > current_score:
             return True
-        if candidate_score == current_score and candidate_words >= current_words + 8:
+        if candidate_score == current_score and candidate_words >= current_words + 4:
+            return True
+        if (
+            candidate_score == current_score
+            and candidate_words >= current_words + 2
+            and candidate_sentences >= current_sentences + 1
+        ):
             return True
         return False
 

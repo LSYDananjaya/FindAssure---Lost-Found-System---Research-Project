@@ -312,6 +312,35 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
         self.assertEqual(fused.attributes["phase2_gemini"]["status"], "accepted_no_change")
         self.assertEqual(fused.attributes["phase2_gemini"]["fallback"], "pp2_native_fused")
 
+    def test_phase2_equal_fact_coverage_can_win_with_modestly_richer_grounded_detail(self):
+        fused = SimpleNamespace(
+            detailed_description="A black helmet with a clear visor.",
+            detailed_description_source="best_view_evidence_composer",
+            description_word_count={"final_description": 7, "detailed_description": 7},
+            description_evidence_used={"summary": ["pp2"], "detailed": ["pp2"]},
+            description_filters_applied=["pp2"],
+            merged_ocr_tokens=["ACTIVE", "GENERATION"],
+            attributes={"features": ["clear visor"], "attachments": ["chin strap"]},
+            defects=["surface scratches"],
+            color="black",
+        )
+
+        applied = self.pipeline._apply_phase2_gemini_result_to_fused(
+            fused=fused,
+            phase2_result={
+                "status": "accepted",
+                "final_description": (
+                    "A black helmet with a clear visor. The chin strap is visible and there are surface scratches."
+                ),
+                "color": "black",
+            },
+            timeout_s=4,
+        )
+
+        self.assertTrue(applied)
+        self.assertIn("chin strap", fused.detailed_description.lower())
+        self.assertEqual(fused.attributes["phase2_gemini"]["status"], "accepted")
+
 
 class TestHintScoringNegativeKeywords(unittest.TestCase):
     """Tests for the negative-keyword penalty in _infer_canonical_hint_with_signals."""

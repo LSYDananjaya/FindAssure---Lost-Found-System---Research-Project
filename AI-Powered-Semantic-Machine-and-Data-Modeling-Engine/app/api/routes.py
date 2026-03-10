@@ -14,11 +14,16 @@ from app.core.database import get_database
 from app.config import settings
 import logging
 import uuid
+import asyncio
 from datetime import datetime
 from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Lock to prevent concurrent auto-retraining runs
+_retrain_lock = asyncio.Lock()
+_retrain_in_progress = False
 
 # Dependency Injection
 def get_semantic():
@@ -255,7 +260,11 @@ def check_fraud(user_metadata: dict, fraud_engine: FraudDetectionEngine = Depend
 # ---------------------------------------------------------------------------
 
 @router.post("/log-verification", summary="Log Handover Verification (Yes/No)")
-async def log_verification(payload: VerificationLog, db=Depends(get_db)):
+async def log_verification(
+    payload: VerificationLog,
+    background_tasks: BackgroundTasks,
+    db=Depends(get_db),
+):
     """
     Called by the external handover/verification system to report whether
     a matched item was correctly verified (yes) or rejected (no).
@@ -265,6 +274,7 @@ async def log_verification(payload: VerificationLog, db=Depends(get_db)):
       - verified=false → SKIP pair (wrong match, discard from training)
 
     The other team calls this endpoint; we store and use during retraining.
+    Auto-triggers retraining when enough positive data is collected.
     """
     if db is None:
         return {"status": "skipped", "reason": "database unavailable"}
@@ -284,6 +294,11 @@ async def log_verification(payload: VerificationLog, db=Depends(get_db)):
             f"Verification logged: lost={payload.lost_id}, "
             f"found={payload.found_id}, verified={payload.verified}"
         )
+
+        # Auto-trigger retraining check in background
+        if payload.verified:
+            background_tasks.add_task(_maybe_auto_retrain, db)
+
         return {
             "status": "ok",
             "verification_id": doc["verification_id"],
@@ -299,7 +314,11 @@ async def log_verification(payload: VerificationLog, db=Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.post("/feedback", summary="User Feedback on Match Quality")
-async def submit_feedback(payload: FeedbackRequest, db=Depends(get_db)):
+async def submit_feedback(
+    payload: FeedbackRequest,
+    background_tasks: BackgroundTasks,
+    db=Depends(get_db),
+):
     """
     Lightweight feedback endpoint for the frontend.
     When a user selects an item from the list and says "Yes this is mine"
@@ -357,6 +376,9 @@ async def submit_feedback(payload: FeedbackRequest, db=Depends(get_db)):
                 await _collect_embedding_pair(db, payload)
             except Exception as ep_err:
                 logger.debug(f"Embedding pair collection skipped: {ep_err}")
+
+            # Auto-trigger retraining check in background
+            background_tasks.add_task(_maybe_auto_retrain, db)
 
         return {
             "status": "ok",
@@ -560,6 +582,98 @@ async def _collect_embedding_pair(db, payload: FeedbackRequest):
         f"Embedding training pair collected: lost={payload.query_id}, "
         f"found={payload.found_id} (total: {count})"
     )
+
+
+# ---------------------------------------------------------------------------
+# Auto-retrain: triggered in the background after positive feedback/verification
+# ---------------------------------------------------------------------------
+
+async def _maybe_auto_retrain(db):
+    """
+    Background task that checks if enough training data has been collected
+    and auto-triggers retraining when thresholds are met.
+
+    Called automatically after:
+      - POST /feedback (positive feedback)
+      - POST /log-verification (positive verification)
+
+    Uses a lock to prevent concurrent retraining runs.
+    """
+    global _retrain_in_progress
+
+    if db is None:
+        return
+
+    if _retrain_in_progress:
+        logger.debug("Auto-retrain: already in progress — skipping")
+        return
+
+    try:
+        # Count current data
+        positive_verifications = await db.handover_verifications.count_documents({"verified": True})
+        embedding_pairs = await db.embedding_training_pairs.count_documents({})
+        min_required = settings.MIN_TRAIN_POSITIVES
+
+        lgbm_ready = positive_verifications >= min_required
+        embedding_ready = embedding_pairs >= min_required
+
+        if not lgbm_ready and not embedding_ready:
+            return  # Not enough data yet
+
+        async with _retrain_lock:
+            _retrain_in_progress = True
+            try:
+                # --- Auto-trigger LightGBM re-ranker ---
+                if lgbm_ready:
+                    try:
+                        from app.core.trainer import build_training_dataset, train_reranker_model
+                        from app.core.scorer import reload_lgbm_model
+
+                        logger.info(
+                            f"AUTO-RETRAIN: LightGBM triggered "
+                            f"({positive_verifications}/{min_required} positive verifications)"
+                        )
+                        df = await build_training_dataset(db, min_date=None)
+                        if not df.empty and int((df["label"] == 1).sum()) >= min_required:
+                            await asyncio.to_thread(train_reranker_model, df)
+                            reload_lgbm_model()
+                            logger.info("AUTO-RETRAIN: LightGBM re-ranker retrained and deployed!")
+                        else:
+                            logger.debug("AUTO-RETRAIN: LightGBM skipped — not enough labeled data in dataset")
+                    except Exception as e:
+                        logger.warning(f"AUTO-RETRAIN: LightGBM failed: {e}")
+
+                # --- Auto-trigger embedding fine-tuning ---
+                if embedding_ready:
+                    try:
+                        from app.core.embedding_trainer import fine_tune_from_feedback
+
+                        logger.info(
+                            f"AUTO-RETRAIN: Embedding fine-tuning triggered "
+                            f"({embedding_pairs}/{min_required} pairs)"
+                        )
+                        cursor = db.embedding_training_pairs.find(
+                            {},
+                            {"anchor": 1, "positive": 1, "category": 1, "_id": 0},
+                        )
+                        pairs = await cursor.to_list(length=10000)
+                        if pairs:
+                            result = await asyncio.to_thread(fine_tune_from_feedback, pairs)
+                            try:
+                                engine = SemanticEngine()
+                                engine.reload_model()
+                                logger.info("AUTO-RETRAIN: Embedding model fine-tuned and reloaded!")
+                            except Exception as reload_err:
+                                logger.warning(f"AUTO-RETRAIN: Model reload deferred: {reload_err}")
+                            logger.info(f"AUTO-RETRAIN: Embedding fine-tuning stats: {result}")
+                    except Exception as e:
+                        logger.warning(f"AUTO-RETRAIN: Embedding fine-tuning failed: {e}")
+
+            finally:
+                _retrain_in_progress = False
+
+    except Exception as e:
+        logger.debug(f"Auto-retrain check failed: {e}")
 
 
 # ---------------------------------------------------------------------------

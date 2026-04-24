@@ -21,16 +21,18 @@ export type LocationType = typeof LOCATIONS[number];
 
 export const ITEM_CATEGORIES = [
   'Wallet',
-  'Laptop',
-  'Smartphone',
-  'Backpack',
   'Handbag',
+  'Backpack',
+  'Laptop',
+  'Smart Phone',
   'Helmet',
   'Key',
-  'Earbud/Earbud Case',
+  'Power Bank',
+  'Laptop/Mobile chargers & cables',
+  'Earbuds - Earbuds case',
+  'Headphone',
   'Student ID',
-  'Charger',
-  'Notebook',
+  'NIC / National ID Card',
 ] as const;
 
 export type ItemCategoryType = typeof ITEM_CATEGORIES[number];

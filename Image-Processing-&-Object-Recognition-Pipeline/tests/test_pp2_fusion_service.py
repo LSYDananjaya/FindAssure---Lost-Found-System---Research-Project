@@ -576,6 +576,42 @@ class TestPP2FusionOCRCleaning(unittest.TestCase):
         self.assertNotIn("visible text reads", fused.detailed_description.lower())
         self.assertNotIn("visible wear includes", fused.detailed_description.lower())
 
+    def test_summary_caption_stays_shorter_than_detailed_description(self):
+        per_view = [
+            _view_result(
+                0,
+                "BAELLERRY",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Wallet",
+                grounded_features={
+                    "color": "brown",
+                    "features": ["logo", "button clasp", "stitched edge"],
+                    "attachments": ["strap attached"],
+                    "defects": ["edge wear"],
+                },
+                caption="A brown wallet with a stitched logo and button clasp.",
+                detailed_description="A brown leather wallet with a stitched logo and button clasp on the front panel.",
+            ),
+            _view_result(
+                1,
+                "BAELLERRY",
+                quality_score=0.96,
+                confidence=0.97,
+                cls_name="Wallet",
+                grounded_features={"color": "brown", "features": ["coin pouch", "zipper"]},
+                caption="The inside view shows a coin pouch and zipper compartment.",
+                detailed_description="The inside view shows a coin pouch and zipper compartment.",
+            ),
+        ]
+
+        fused = self.service.fuse(per_view, self.vectors[:2], item_id=self.item_id, used_view_indices=[0, 1])
+
+        self.assertTrue(fused.caption)
+        self.assertTrue(fused.detailed_description)
+        self.assertLess(len(fused.caption.split()), len(fused.detailed_description.split()))
+        self.assertIn("notable details include", fused.caption.lower())
+
     def test_multi_angle_fusion_keeps_defects_from_other_views(self):
         per_view = [
             _view_result(
@@ -954,6 +990,68 @@ class TestBackgroundSuppression(unittest.TestCase):
         self.assertNotIn("desk", desc)
         self.assertIn("brown", desc)
 
+    def test_cabinet_behind_object_dropped(self):
+        per_view = [
+            _view_result(
+                0,
+                "",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Helmet",
+                grounded_features={"color": "black", "features": ["visor", "logo"]},
+                caption="a black helmet with a visor.",
+                detailed_description="a black helmet with a visor and logo. a brown cabinet behind the helmet.",
+            ),
+            _view_result(
+                1,
+                "",
+                quality_score=0.92,
+                confidence=0.95,
+                cls_name="Helmet",
+                grounded_features={"color": "black", "attachments": ["chin strap"]},
+                caption="a black helmet.",
+            ),
+        ]
+        fused = self.service.fuse(
+            per_view, self.vectors, item_id=self.item_id, used_view_indices=[0, 1]
+        )
+        desc = fused.detailed_description.lower()
+        self.assertNotIn("cabinet", desc)
+        self.assertNotIn("behind", desc)
+        self.assertIn("black helmet", desc)
+        self.assertTrue("visor" in desc or "logo" in desc)
+
+    def test_keyboard_front_object_dropped(self):
+        per_view = [
+            _view_result(
+                0,
+                "",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Helmet",
+                grounded_features={"color": "black", "features": ["clear visor", "logo"]},
+                caption="a black helmet with a clear visor.",
+                detailed_description="a black helmet with a clear visor in front of a keyboard.",
+            ),
+            _view_result(
+                1,
+                "",
+                quality_score=0.90,
+                confidence=0.95,
+                cls_name="Helmet",
+                grounded_features={"color": "black"},
+                caption="a black helmet.",
+            ),
+        ]
+        fused = self.service.fuse(
+            per_view, self.vectors, item_id=self.item_id, used_view_indices=[0, 1]
+        )
+        desc = fused.detailed_description.lower()
+        self.assertNotIn("keyboard", desc)
+        self.assertNotIn("front of", desc)
+        self.assertIn("black helmet", desc)
+        self.assertIn("clear visor", desc)
+
     def test_floor_surface_dropped(self):
         per_view = [
             _view_result(
@@ -1079,7 +1177,7 @@ class TestOCRSurfacePhrasing(unittest.TestCase):
             per_view, self.vectors, item_id=self.item_id, used_view_indices=[0, 1]
         )
         desc = fused.detailed_description
-        self.assertIn('visible on the surface', desc.lower())
+        self.assertIn('visible text includes', desc.lower())
         self.assertNotIn('text on it reads', desc.lower())
 
     def test_ocr_token_appears_in_description(self):
@@ -1109,7 +1207,7 @@ class TestOCRSurfacePhrasing(unittest.TestCase):
         )
         desc = fused.detailed_description.lower()
         self.assertIn("baellerry", desc)
-        self.assertIn("visible on the surface", desc)
+        self.assertIn("visible text includes", desc)
 
 
 class TestStructuredDescriptionCoverage(unittest.TestCase):
@@ -1154,12 +1252,10 @@ class TestStructuredDescriptionCoverage(unittest.TestCase):
         fused = self.service.fuse(per_view, self.vectors, item_id="structured-coverage")
 
         desc_lower = fused.detailed_description.lower()
-        self.assertIn("visible features include", desc_lower)
         self.assertIn("clear visor", desc_lower)
-        self.assertIn("attached parts include", desc_lower)
         self.assertTrue("chin strap" in desc_lower or "buckle strap" in desc_lower)
-        self.assertIn("visible defects include", desc_lower)
         self.assertTrue("surface scratches" in desc_lower or "scuff marks" in desc_lower)
+        self.assertIn("this black helmet", desc_lower)
 
     def test_detailed_description_strips_florence_meta_text(self):
         per_view = [
@@ -1194,6 +1290,120 @@ class TestStructuredDescriptionCoverage(unittest.TestCase):
         self.assertNotIn("answering", desc_lower)
         self.assertNotIn("does not require", desc_lower)
         self.assertNotIn("reading text in the image", desc_lower)
+
+    def test_detailed_description_strips_malformed_prefixed_meta_text(self):
+        per_view = [
+            _view_result(
+                0,
+                "BAELLERRY",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Wallet",
+                grounded_features={"color": "brown", "features": ["stitched logo", "button clasp"]},
+                caption="A brown wallet.",
+                detailed_description=(
+                    "A answering does not require reading text in the image wallet. "
+                    "A brown leather wallet with a stitched logo and button clasp."
+                ),
+            ),
+            _view_result(
+                1,
+                "BAELLERRY",
+                quality_score=0.93,
+                confidence=0.95,
+                cls_name="Wallet",
+                grounded_features={"color": "brown", "features": ["visible logo"]},
+                caption="A brown wallet.",
+            ),
+        ]
+
+        fused = self.service.fuse(per_view, self.vectors, item_id="wallet-meta-prefix-strip")
+
+        desc_lower = fused.detailed_description.lower()
+        self.assertIn("brown", desc_lower)
+        self.assertIn("wallet", desc_lower)
+        self.assertTrue("stitched logo" in desc_lower or "button clasp" in desc_lower)
+        self.assertNotIn("answering", desc_lower)
+        self.assertNotIn("does not require", desc_lower)
+        self.assertNotIn("reading text in the image", desc_lower)
+
+    def test_generic_best_view_description_is_rebuilt_from_grounded_details(self):
+        per_view = [
+            _view_result(
+                0,
+                "",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Helmet",
+                grounded_features={
+                    "color": "black",
+                    "features": ["clear visor", "front logo"],
+                    "attachments": ["chin strap"],
+                },
+                caption="A helmet.",
+                detailed_description="A helmet.",
+            ),
+            _view_result(
+                1,
+                "",
+                quality_score=0.92,
+                confidence=0.95,
+                cls_name="Helmet",
+                grounded_features={
+                    "color": "black",
+                    "features": ["chin vent"],
+                },
+                caption="A helmet with a chin vent.",
+            ),
+        ]
+
+        fused = self.service.fuse(per_view, self.vectors, item_id="helmet-generic-rebuild")
+
+        desc_lower = fused.detailed_description.lower()
+        self.assertIn("black helmet", desc_lower)
+        self.assertTrue("clear visor" in desc_lower or "front logo" in desc_lower)
+        self.assertTrue("chin strap" in desc_lower or "chin vent" in desc_lower)
+        self.assertNotEqual(desc_lower.strip(), "a helmet.")
+
+    def test_summary_and_detailed_descriptions_get_final_cleanup(self):
+        per_view = [
+            _view_result(
+                0,
+                "BAELLERRY",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Wallet",
+                grounded_features={
+                    "color": "brown",
+                    "features": ["stitched logo"],
+                    "attachments": ["button clasp"],
+                },
+                caption="A brown wallet on a desk near a laptop.",
+                detailed_description=(
+                    "A answering does not require reading text in the image wallet. "
+                    "A brown leather wallet with a stitched logo and button clasp on a desk near a laptop."
+                ),
+            ),
+            _view_result(
+                1,
+                "BAELLERRY",
+                quality_score=0.92,
+                confidence=0.95,
+                cls_name="Wallet",
+                grounded_features={"color": "brown"},
+                caption="A brown wallet.",
+            ),
+        ]
+
+        fused = self.service.fuse(per_view, self.vectors, item_id="wallet-final-cleanup")
+
+        for text in [fused.caption.lower(), fused.detailed_description.lower()]:
+            self.assertIn("brown", text)
+            self.assertIn("wallet", text)
+            self.assertNotIn("desk", text)
+            self.assertNotIn("laptop", text)
+            self.assertNotIn("answering", text)
+            self.assertNotIn("reading text in the image", text)
 
     def test_detailed_description_hides_internal_wallet_terms(self):
         per_view = [

@@ -1336,7 +1336,7 @@ export const createLostRequest = async (
       pythonSearchService.searchLostItemWithPython({
         text: description,
         category,
-        limit: 10,
+        limit: 20,
         session_id: req.user.id,
       }),
     ]);
@@ -1421,6 +1421,11 @@ export const createLostRequest = async (
             ? imageSearchResult.matches.map((match: any) => ({
                 item_id: match?.item_id ?? null,
                 score: typeof match?.score === 'number' ? Number(match.score) : null,
+                canonical_score:
+                  typeof match?.canonical_score === 'number' ? Number(match.canonical_score) : null,
+                best_hit_score:
+                  typeof match?.best_hit_score === 'number' ? Number(match.best_hit_score) : null,
+                score_source: match?.score_source ?? null,
                 vector_hits_count: match?.vector_hits_count ?? null,
               }))
             : [];

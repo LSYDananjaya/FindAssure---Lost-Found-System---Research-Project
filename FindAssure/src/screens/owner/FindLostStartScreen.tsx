@@ -158,6 +158,7 @@ const FindLostStartScreen = () => {
       });
       navigation.navigate('FindLostResults', {
         foundItems: lostRequestResponse.results || [],
+        ownerImageAttached: Boolean(ownerImage),
       });
     } catch (error: any) {
       showToast({

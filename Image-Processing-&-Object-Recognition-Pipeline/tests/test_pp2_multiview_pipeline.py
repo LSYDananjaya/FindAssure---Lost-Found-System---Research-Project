@@ -156,6 +156,46 @@ class TestMultiViewPipelineNormalization(unittest.TestCase):
 
         self.assertTrue(preferred)
 
+    def test_bypass_verification_result_forces_pass(self):
+        verification = PP2VerificationResult(
+            mode="two_view",
+            cosine_sim_matrix=[[1.0, 0.2], [0.2, 1.0]],
+            faiss_sim_matrix=[[1.0, 0.2], [0.2, 1.0]],
+            geometric_scores={"0-1": {"score": 0.2}},
+            passed=False,
+            failure_reasons=["verification failed"],
+            used_views=[0, 1],
+            dropped_views=[],
+        )
+
+        updated = self.pipeline._bypass_verification_result(
+            verification,
+            used_views=[0, 1],
+            decision_indices=[0, 1],
+            dropped_views=[],
+        )
+
+        self.assertTrue(updated.passed)
+        self.assertEqual(updated.failure_reasons, [])
+        self.assertEqual(updated.used_views, [0, 1])
+
+    def test_provisional_pair_verify_short_circuits_when_disabled(self):
+        original = self.pipeline._multiview_verification_disabled
+        self.pipeline._multiview_verification_disabled = MagicMock(return_value=True)
+        try:
+            passed, verification = self.pipeline._run_provisional_pair_verify(
+                pair_indices=(0, 1),
+                stage1_results_by_index={},
+                request_id="req-disabled",
+                item_id="item-disabled",
+                decision_label="Wallet",
+            )
+        finally:
+            self.pipeline._multiview_verification_disabled = original
+
+        self.assertFalse(passed)
+        self.assertIsNone(verification)
+
 
 class TestPP2Phase2GeminiBundle(unittest.TestCase):
     def setUp(self):
@@ -215,6 +255,91 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
         self.assertEqual(phase1_output["category_details"]["features"], ["white writing", "clear visor"])
         self.assertEqual(phase1_output["category_details"]["defects"], ["surface scratches"])
         self.assertEqual(phase1_output["category_details"]["attachments"], ["chin strap"])
+
+    def test_phase2_timeout_falls_back_to_native_pp2_details(self):
+        fused = SimpleNamespace(
+            detailed_description="PP2 native helmet description.",
+            detailed_description_source="best_view_evidence_composer",
+            description_word_count={"final_description": 4, "detailed_description": 4},
+            description_evidence_used={"summary": ["pp2"], "detailed": ["pp2"]},
+            description_filters_applied=["pp2"],
+            merged_ocr_tokens=["ACTIVE", "GENERATION"],
+            attributes={"features": ["clear visor"], "attachments": ["chin strap"]},
+            defects=["surface scratches"],
+            color="black",
+        )
+
+        applied = self.pipeline._apply_phase2_gemini_result_to_fused(
+            fused=fused,
+            phase2_result={"status": "timeout"},
+            timeout_s=4,
+        )
+
+        self.assertFalse(applied)
+        self.assertEqual(fused.detailed_description, "PP2 native helmet description.")
+        self.assertEqual(fused.detailed_description_source, "best_view_evidence_composer")
+        self.assertEqual(fused.attributes["phase2_gemini"]["status"], "timeout")
+        self.assertEqual(fused.attributes["phase2_gemini"]["fallback"], "pp2_native_fused")
+
+    def test_phase2_no_change_keeps_native_pp2_details(self):
+        fused = SimpleNamespace(
+            detailed_description=(
+                "A black helmet with a clear visor. Visible features include white writing and chin strap. "
+                "Visible defects include surface scratches."
+            ),
+            detailed_description_source="best_view_evidence_composer",
+            description_word_count={"final_description": 18, "detailed_description": 18},
+            description_evidence_used={"summary": ["pp2"], "detailed": ["pp2"]},
+            description_filters_applied=["pp2"],
+            merged_ocr_tokens=["ACTIVE", "GENERATION"],
+            attributes={"features": ["clear visor", "white writing"], "attachments": ["chin strap"]},
+            defects=["surface scratches"],
+            color="black",
+        )
+
+        applied = self.pipeline._apply_phase2_gemini_result_to_fused(
+            fused=fused,
+            phase2_result={
+                "status": "accepted",
+                "final_description": "A black helmet.",
+                "color": "black",
+            },
+            timeout_s=4,
+        )
+
+        self.assertFalse(applied)
+        self.assertIn("clear visor", fused.detailed_description.lower())
+        self.assertEqual(fused.attributes["phase2_gemini"]["status"], "accepted_no_change")
+        self.assertEqual(fused.attributes["phase2_gemini"]["fallback"], "pp2_native_fused")
+
+    def test_phase2_equal_fact_coverage_can_win_with_modestly_richer_grounded_detail(self):
+        fused = SimpleNamespace(
+            detailed_description="A black helmet with a clear visor.",
+            detailed_description_source="best_view_evidence_composer",
+            description_word_count={"final_description": 7, "detailed_description": 7},
+            description_evidence_used={"summary": ["pp2"], "detailed": ["pp2"]},
+            description_filters_applied=["pp2"],
+            merged_ocr_tokens=["ACTIVE", "GENERATION"],
+            attributes={"features": ["clear visor"], "attachments": ["chin strap"]},
+            defects=["surface scratches"],
+            color="black",
+        )
+
+        applied = self.pipeline._apply_phase2_gemini_result_to_fused(
+            fused=fused,
+            phase2_result={
+                "status": "accepted",
+                "final_description": (
+                    "A black helmet with a clear visor. The chin strap is visible and there are surface scratches."
+                ),
+                "color": "black",
+            },
+            timeout_s=4,
+        )
+
+        self.assertTrue(applied)
+        self.assertIn("chin strap", fused.detailed_description.lower())
+        self.assertEqual(fused.attributes["phase2_gemini"]["status"], "accepted")
 
 
 class TestHintScoringNegativeKeywords(unittest.TestCase):

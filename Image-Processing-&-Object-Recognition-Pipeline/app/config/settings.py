@@ -29,10 +29,12 @@ class Settings(BaseSettings):
     FLORENCE_USE_FP16: bool = True
     PP2_USE_FLORENCE_LITE: bool = False
     PP2_FORCE_GROUNDING: bool = False
+    PP2_DISABLE_MULTIVIEW_VERIFICATION: bool = False
     PP2_OCR_FIRST_TINY_BBOX_AREA_RATIO: float = 0.05
     PP2_ENABLE_GEMINI: bool = False
     PP2_GEMINI_ON_NEAR_MISS: bool = True
-    PP2_GEMINI_TIMEOUT_S: int = 12
+    PP2_GEMINI_TIMEOUT_S: int = 4
+    PP2_PHASE2_TIMEOUT_S: int = 4
     DINO_MODEL_PATH: str | None = None
     DINO_INPUT_SIZE: int = 224
     DINO_ENABLE_AMP: bool = True

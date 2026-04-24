@@ -123,6 +123,14 @@ async def search_items(
         logger.debug(f"Grammar correction skipped: {gc_err}")
 
     # --- Full pipeline (Gemini normalizer + hybrid retrieval + scoring) ---
+    engine = SemanticEngine()
+    if db is not None:
+        try:
+            refreshed_count = await engine.load_from_mongodb()
+            logger.info(f"Search-time MongoDB refresh completed: {refreshed_count} indexed items")
+        except Exception as refresh_error:
+            logger.warning(f"Search-time MongoDB refresh failed: {refresh_error}")
+
     try:
         pipeline_result = await inference_rerank(
             db=db,
@@ -138,7 +146,6 @@ async def search_items(
     # --- Fallback to legacy SemanticEngine if pipeline fails ---
     if pipeline_result is None or not pipeline_result.get("ranked_results"):
         logger.warning("Pipeline returned empty — using legacy SemanticEngine fallback")
-        engine = SemanticEngine()
         raw_results = engine.search(
             search_text,
             limit=query.limit or 10,

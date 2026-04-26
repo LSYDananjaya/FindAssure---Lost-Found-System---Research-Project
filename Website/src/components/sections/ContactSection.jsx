@@ -57,9 +57,9 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
     <section className="section-anchor section-shell" id="contact">
       <div className="shell">
         <SectionIntro
-          description="The contact area is ready for final institutional details. Until then, it keeps the structure visible without inventing phone numbers, addresses, or personal contacts."
+          description="Have questions about the FindAssure platform or want to explore potential deployments in your institution? Reach out to our research team for technical and operational discussions."
           eyebrow="Contact Us"
-          title="A clear inquiry path, ready for real project contacts."
+          title="Get in touch with the project team."
         />
 
         <div className="mt-12 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
@@ -92,10 +92,10 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
             <Reveal className="mt-8" delay={220} distance={14} variant="scale-soft">
               <div className="rounded-[1.5rem] border border-dashed border-[color:var(--line)] bg-[var(--canvas)] p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                  EmailJS Configuration
+                  System Status
                 </p>
                 <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  The form is connected to EmailJS. Make sure to set your Service ID, Template ID, and Public Key for emails to be delivered.
+                  The inquiry system is fully active and directly connected to our core research team for prompt review.
                 </p>
               </div>
             </Reveal>
@@ -112,7 +112,7 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
                 </h3>
               </div>
               <span className="rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">
-                EmailJS Ready
+                Active
               </span>
             </div>
 
@@ -172,7 +172,7 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
 
               <div className="flex flex-col gap-4 border-t border-[color:var(--line)] pt-4 md:flex-row md:items-center md:justify-between">
                 <p className="max-w-xl text-sm leading-7 text-[var(--muted)]">
-                   Connect this form to your EmailJS account for production handling by configuring the environment variables.
+                   Your message will be sent securely to our research team for review and response.
                 </p>
                 <button 
                   className="button-primary" 
@@ -201,10 +201,10 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
             <div className="mt-8 grid gap-4 md:grid-cols-3">
               <div className="rounded-[1.4rem] bg-[var(--card-soft)] p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                  Email
+                  Location
                 </p>
                 <p className="mt-2 text-sm text-[var(--ink)]">
-                  {contactDetails.email}
+                  {contactDetails.location}
                 </p>
               </div>
               <div className="rounded-[1.4rem] bg-[var(--card-soft)] p-4">

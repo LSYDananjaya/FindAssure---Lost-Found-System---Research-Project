@@ -143,13 +143,16 @@ function Header({
         <div className="shell">
           <div className="mobile-header-wrapper">
             <div className="mobile-header-shell">
-              <a className="min-w-0" href="#home">
-                <p className="truncate font-display text-lg font-semibold tracking-[-0.04em] text-[var(--ink-strong)]">
-                  {projectTitle}
-                </p>
-                <p className="mt-0.5 text-xs font-medium tracking-[0.02em] text-[var(--muted)]">
-                  Research project website
-                </p>
+              <a className="min-w-0 flex items-center gap-3" href="#home">
+                <img src="/logo.png" alt="FindAssure Logo" className="h-[2.2rem] w-auto shrink-0" />
+                <div className="flex flex-col justify-center">
+                  <p className="truncate font-display text-lg leading-tight font-semibold tracking-[-0.04em] text-[var(--ink-strong)]">
+                    {projectTitle}
+                  </p>
+                  <p className="mt-0.5 text-xs font-medium tracking-[0.02em] text-[var(--muted)]">
+                    Research project website
+                  </p>
+                </div>
               </a>
 
               <button
@@ -171,7 +174,7 @@ function Header({
           <div className="desktop-header-wrapper">
             <div className="header-shell" data-scrolled={isScrolled}>
               <a className="header-brand-shell" href="#home">
-                <span className="header-brand-mark">FA</span>
+                <img src="/logo.png" alt="FindAssure Logo" className="h-[2.2rem] w-auto shrink-0" />
                 <div className="min-w-0">
                   <p className="truncate font-display text-[1.05rem] font-semibold tracking-[-0.045em] text-[var(--ink-strong)]">
                     {projectTitle}
@@ -236,13 +239,16 @@ function Header({
         <div className="mobile-nav-panel">
           <div className="shell mobile-nav-sheet">
             <div className="mobile-nav-top">
-              <div className="min-w-0">
-                <p className="font-display text-2xl font-semibold tracking-[-0.05em] text-[var(--ink-strong)]">
-                  {projectTitle}
-                </p>
-                <p className="mt-2 max-w-xs text-sm leading-6 text-[var(--muted)]">
-                  Academic project showcase with an immersive section navigator.
-                </p>
+              <div className="min-w-0 flex flex-col gap-4">
+                <img src="/logo.png" alt="FindAssure Logo" className="h-10 w-auto shrink-0 self-start" />
+                <div>
+                  <p className="font-display text-2xl font-semibold tracking-[-0.05em] text-[var(--ink-strong)]">
+                    {projectTitle}
+                  </p>
+                  <p className="mt-2 max-w-xs text-sm leading-6 text-[var(--muted)]">
+                    Academic project showcase with an immersive section navigator.
+                  </p>
+                </div>
               </div>
               <button
                 className="mobile-menu-toggle"

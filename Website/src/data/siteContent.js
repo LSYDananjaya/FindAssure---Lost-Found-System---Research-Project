@@ -442,24 +442,24 @@ export const teamMembers = [
 export const contactCards = [
   {
     label: 'General Contact',
-    value: 'Content will be updated',
-    note: 'Use this slot for the final public-facing contact person or project office once confirmed.',
+    value: 'FindAssure Research Team',
+    note: 'Primary inquiries regarding the platform, research collaborations, or system deployments go here.',
   },
   {
-    label: 'Email',
-    value: 'Email placeholder',
-    note: 'Replace with the final institutional or team contact email.',
+    label: 'Location',
+    value: 'SLIIT Malabe Campus',
+    note: 'New Kandy Road, Malabe, Sri Lanka.',
   },
   {
     label: 'Phone',
-    value: 'Phone placeholder',
-    note: 'Replace with a verified contact number only when you are ready to publish it.',
+    value: '+94 72 082 6642',
+    note: 'Available during regular university office hours (9:00 AM - 5:00 PM LKT).',
   },
 ]
 
 export const contactDetails = {
-  email: 'Email placeholder',
-  phone: 'Phone placeholder',
+  location: 'SLIIT Malabe Campus',
+  phone: '+94 72 082 6642',
 }
 
 export const footerLinks = [

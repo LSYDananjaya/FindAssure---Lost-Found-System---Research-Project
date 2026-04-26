@@ -528,6 +528,15 @@ img {
   transform: scale(0.97);
 }
 
+.contact-submit-button {
+  min-width: 9.25rem;
+  min-height: 3.25rem;
+  flex: 0 0 auto;
+  padding-inline: 1.45rem;
+  white-space: nowrap;
+  line-height: 1;
+}
+
 .button-secondary {
   display: inline-flex;
   align-items: center;
@@ -707,6 +716,10 @@ img {
   gap: 1.5rem;
 }
 
+.document-card--with-download-grid {
+  gap: 1.25rem;
+}
+
 .document-card-rail {
   display: grid;
   gap: 1rem;
@@ -725,6 +738,24 @@ img {
 
 .document-card-actions .download-placeholder-button {
   width: min(100%, 13.5rem);
+}
+
+.document-card-download-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11.25rem, 1fr));
+  gap: 0.75rem;
+  align-items: stretch;
+  padding-top: 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+}
+
+.document-card-download-grid .download-placeholder-button {
+  width: 100%;
+  min-width: 0;
+}
+
+.document-card-download-grid .download-placeholder-button-inner {
+  justify-content: flex-start;
 }
 
 .document-card-main {
@@ -768,6 +799,23 @@ img {
     justify-self: end;
     align-self: start;
   }
+
+  .document-card--with-download-grid {
+    grid-template-columns: 4.25rem minmax(0, 1fr);
+    gap: 1.5rem clamp(1.5rem, 2vw, 2.25rem);
+  }
+
+  .document-card--with-download-grid .document-card-rail {
+    justify-items: center;
+  }
+
+  .document-card--with-download-grid .document-card-main {
+    grid-template-columns: minmax(14rem, 0.95fr) minmax(20rem, 1.2fr) minmax(16rem, 0.85fr);
+  }
+
+  .document-card--with-download-grid .document-card-download-grid {
+    grid-column: 2;
+  }
 }
 
 @media (max-width: 899px) {
@@ -779,9 +827,17 @@ img {
     grid-template-columns: repeat(auto-fit, minmax(11rem, max-content));
     gap: 0.75rem;
   }
+
+  .document-card-download-grid {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
+  .contact-submit-button {
+    width: 100%;
+  }
+
   .document-card {
     gap: 1.25rem;
   }
@@ -791,9 +847,14 @@ img {
   }
 
   .document-card-actions .download-placeholder-button,
+  .document-card-download-grid .download-placeholder-button,
   .document-card-link {
     width: 100%;
     max-width: none;
+  }
+
+  .document-card-download-grid {
+    grid-template-columns: 1fr;
   }
 }
 

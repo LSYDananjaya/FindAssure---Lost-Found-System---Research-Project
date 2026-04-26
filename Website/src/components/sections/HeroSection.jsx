@@ -44,7 +44,7 @@ function HeroSection({
               </p>
             </Reveal>
 
-            <Reveal delay={180}>
+            <Reveal className="hero-actions-wrap" delay={180}>
               <div className="mt-8 flex flex-wrap gap-4">
                 <a className="button-primary" href="#domain">
                   Explore research domain

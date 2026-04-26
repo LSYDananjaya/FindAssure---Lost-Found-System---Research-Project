@@ -1,20 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 
+function prefersReducedMotion() {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
 function Reveal({
   children,
   className = '',
   delay = 0,
   distance = 18,
-  once = false,
+  once = true,
   threshold = 0.14,
   variant = 'fade-up',
 }) {
   const ref = useRef(null)
-  const [visible, setVisible] = useState(false)
+  const [visible, setVisible] = useState(prefersReducedMotion)
 
   useEffect(() => {
     const node = ref.current
     if (!node) {
+      return undefined
+    }
+
+    if (prefersReducedMotion()) {
       return undefined
     }
 

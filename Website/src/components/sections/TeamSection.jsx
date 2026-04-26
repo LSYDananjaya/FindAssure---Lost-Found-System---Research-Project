@@ -6,25 +6,26 @@ function TeamSection({ teamMembers }) {
     <section className="section-anchor section-shell" id="about">
       <div className="shell">
         <SectionIntro
-          description="A clear roster structure is already in place, ready for final portraits, biographies, and project responsibilities."
+          description="Meet the people behind FindAssure — a multidisciplinary team combining AI research, platform engineering, and evaluation expertise."
           eyebrow="About Us"
-          title="A research team roster designed for final profile details."
+          title="The research team behind FindAssure."
         />
 
         <div className="team-roster mt-12">
           {teamMembers.map((member, index) => (
-            <Reveal delay={index * 55} distance={22} key={member.role}>
+            <Reveal delay={index * 55} distance={22} key={member.name}>
               <article className="team-profile surface card-lift rounded-[2rem] p-5 md:p-6">
-                <div className="team-profile-media team-placeholder-shell rounded-[1.6rem] p-4">
-                  <div className="team-placeholder-frame team-profile-frame rounded-[1.3rem] border border-dashed border-[color:var(--line)] p-4">
-                    <div className="team-placeholder-stage team-profile-stage rounded-[1rem] p-4">
-                      <div className="team-profile-media-top">
-                        <span className="team-profile-badge">Profile reserve</span>
+                <div className="team-profile-media rounded-[1.6rem] overflow-hidden">
+                  <div className="team-profile-frame rounded-[1.3rem] overflow-hidden">
+                    <div className="team-profile-image-wrapper">
+                      <img
+                        src={member.image}
+                        alt={`${member.name} — ${member.role}`}
+                        className="team-profile-image"
+                        loading="lazy"
+                      />
+                      <div className="team-profile-image-overlay">
                         <span className="team-profile-index">0{index + 1}</span>
-                      </div>
-                      <div className="team-profile-media-bottom">
-                        <p className="team-profile-media-label">Portrait slot</p>
-                        <p className="team-profile-media-note">Ready for final academic profile imagery.</p>
                       </div>
                     </div>
                   </div>
@@ -32,22 +33,69 @@ function TeamSection({ teamMembers }) {
 
                 <div className="team-profile-main">
                   <header className="team-profile-header">
-                    <p className="team-profile-role">{member.role}</p>
                     <h3 className="team-profile-name">{member.name}</h3>
                   </header>
 
                   <p className="team-profile-bio">{member.bio}</p>
 
-                  <dl className="team-profile-meta" aria-label={`${member.role} profile details`}>
+                  <dl className="team-profile-meta" aria-label={`${member.name} profile details`}>
                     <div className="team-profile-meta-item">
                       <dt className="team-profile-meta-label">Email</dt>
-                      <dd className="team-profile-meta-value">{member.email}</dd>
+                      <dd className="team-profile-meta-value">
+                        <a href={`mailto:${member.email}`} className="team-profile-link">
+                          {member.email}
+                        </a>
+                      </dd>
                     </div>
                     <div className="team-profile-meta-item">
-                      <dt className="team-profile-meta-label">Contribution</dt>
+                      <dt className="team-profile-meta-label">Component</dt>
                       <dd className="team-profile-meta-value">{member.contribution}</dd>
                     </div>
                   </dl>
+
+                  <div className="team-profile-socials">
+                    {member.github && (
+                      <a
+                        href={member.github}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="team-social-link"
+                        aria-label={`${member.name} GitHub profile`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
+                          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                        </svg>
+                        <span>GitHub</span>
+                      </a>
+                    )}
+                    {member.linkedin && (
+                      <a
+                        href={member.linkedin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="team-social-link"
+                        aria-label={`${member.name} LinkedIn profile`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
+                          <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                        </svg>
+                        <span>LinkedIn</span>
+                      </a>
+                    )}
+                    {member.email && (
+                      <a
+                        href={`mailto:${member.email}`}
+                        className="team-social-link"
+                        aria-label={`Email ${member.name}`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="18" height="18" aria-hidden="true">
+                          <rect x="2" y="4" width="20" height="16" rx="2"/>
+                          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                        </svg>
+                        <span>Email</span>
+                      </a>
+                    )}
+                  </div>
                 </div>
               </article>
             </Reveal>

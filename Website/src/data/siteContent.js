@@ -234,14 +234,14 @@ export const milestoneItems = [
     title: 'Progress Presentation 2',
     date: 'To be updated',
     marks: '18%',
-    status: 'Ongoing',
+    status: 'Completed',
     note: 'Progress Presentation 2 is weighted at 18% and covers the 90% completion review stage.',
   },
   {
     title: 'Final Report (Group)',
     date: 'To be updated',
     marks: '4%',
-    status: 'Upcoming',
+    status: 'Completed',
     note: 'Final group report submission contributes 4% in the provided breakdown.',
   },
   {
@@ -255,14 +255,14 @@ export const milestoneItems = [
     title: 'Website',
     date: 'To be updated',
     marks: '2%',
-    status: 'Upcoming',
+    status: 'Completed',
     note: 'Project website assessment contributes 2% in the provided breakdown.',
   },
   {
     title: 'Check Lists',
     date: 'To be updated',
     marks: '2%',
-    status: 'Upcoming',
+    status: 'Completed',
     note: 'Checklist submission contributes 2% in the provided breakdown.',
   },
   {
@@ -334,9 +334,31 @@ export const documents = [
     type: 'Submission',
     status: 'Placeholder',
     fileUrl: null,
+    downloads: [
+      {
+        label: 'Group Report',
+        fileUrl: null,
+      },
+      {
+        label: 'Yehara Report',
+        fileUrl: 'https://drive.google.com/file/d/1BvEYDpmWbKeK6DEFC7murQyhyjvALnk4/view?usp=sharing',
+      },
+      {
+        label: 'Osanda Report',
+        fileUrl: 'https://drive.google.com/file/d/1_V3FvIGRaG2kL214b2X36XLKyTZsS_d9/view?usp=sharing',
+      },
+      {
+        label: 'Pawara Report',
+        fileUrl: 'https://drive.google.com/file/d/1HZzktQ7UxGRg3Syij6V7Ma5kDojEbFUG/view?usp=sharing',
+      },
+      {
+        label: 'Sankalani Report',
+        fileUrl: 'https://drive.google.com/file/d/1ViZzVhQNvaeEsHbu3wMtzdlAf6ZV2Z48/view?usp=sharing',
+      },
+    ],
     description:
-      'Final report placeholder structured for later attachment without redesigning the page.',
-    linkLabel: 'Document link to be added',
+      'Final submission prepared with one group report and four individual report download slots.',
+    linkLabel: 'Group report and individual report links to be added',
     actionLabel: 'Link will be added',
   },
   {

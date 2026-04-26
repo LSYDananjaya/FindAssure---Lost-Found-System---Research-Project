@@ -175,7 +175,7 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
                    Your message will be sent securely to our research team for review and response.
                 </p>
                 <button 
-                  className="button-primary" 
+                  className="button-primary contact-submit-button" 
                   type="submit"
                   disabled={isSubmitting}
                 >

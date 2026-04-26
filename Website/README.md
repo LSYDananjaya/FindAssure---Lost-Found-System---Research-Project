@@ -6,6 +6,8 @@
 
 FindAssure is a Smart Lost and Found System designed for university campuses, initially targeting SLIIT Marakech Campus (10-20 buildings). The system uses AI, machine learning, and NLP to reunite lost items with owners through intelligent matching and video-based verification.
 
+**Deployed Website:** [https://findassure.vercel.app/](https://findassure.vercel.app/)
+
 **Key Capabilities:**
 - AI-powered image recognition and categorization
 - Smart question generation for ownership verification  

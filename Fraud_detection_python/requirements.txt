@@ -1,13 +1,14 @@
 # Web Framework
 flask==3.1.1
-
-# Computer Vision
-opencv-python==4.11.0.86
-numpy==1.26.4
-mediapipe==0.10.21
+flask-cors==6.0.0
 
 # Database
 pymongo==4.10.1
+
+# Video / Vision
+opencv-python==4.11.0.86
+numpy==1.26.4
+mediapipe==0.10.21
 
 # HTTP / API
 requests==2.32.3

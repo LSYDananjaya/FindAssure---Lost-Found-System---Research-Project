@@ -1,9 +1,16 @@
-# bifi_scorer.py  (with classification labels)
+"""BiFI similarity scorer for face and mesh feature streams.
+
+Module overview:
+- Measures frame-to-frame consistency with cosine similarity.
+- Combines face and behavior confidence with explicit weights.
+- Converts the final score into truthful, uncertain, or suspicious labels.
+"""
 
 import numpy as np
 from scipy.spatial.distance import cosine
 
 class BiFIScorer:
+    """Score consistency across face and mesh vectors for a single video."""
 
     def similarity(self, v1, v2):
         if v1 is None or v2 is None:
@@ -22,6 +29,7 @@ class BiFIScorer:
             return "suspicious"
 
     def score_single_video(self, face_vecs, mesh_vecs):
+        """Fuse face and behavior vector stability into one compact result."""
         def avg_sim(vectors):
             sims = []
             for i in range(len(vectors) - 1):

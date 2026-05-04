@@ -612,6 +612,46 @@ class TestPP2FusionOCRCleaning(unittest.TestCase):
         self.assertLess(len(fused.caption.split()), len(fused.detailed_description.split()))
         self.assertIn("notable details include", fused.caption.lower())
 
+    def test_minimum_detail_richness_boost_adds_supported_facts(self):
+        per_view = [
+            _view_result(
+                0,
+                "BRANDX",
+                quality_score=0.99,
+                confidence=0.98,
+                cls_name="Helmet",
+                grounded_features={
+                    "color": "black",
+                    "features": ["clear visor", "white writing", "chin vent"],
+                    "attachments": ["chin strap"],
+                    "defects": ["surface scratches"],
+                },
+                caption="A helmet.",
+                detailed_description="A black helmet.",
+            ),
+            _view_result(
+                1,
+                "BRANDX",
+                quality_score=0.95,
+                confidence=0.96,
+                cls_name="Helmet",
+                grounded_features={
+                    "color": "black",
+                    "features": ["rear logo"],
+                    "attachments": ["buckle strap"],
+                },
+                caption="A helmet with a rear logo.",
+                detailed_description="A helmet with a rear logo.",
+            ),
+        ]
+
+        fused = self.service.fuse(per_view, self.vectors[:2], item_id=self.item_id, used_view_indices=[0, 1])
+
+        desc_lower = fused.detailed_description.lower()
+        self.assertIn("clear visor", desc_lower)
+        self.assertTrue("chin strap" in desc_lower or "buckle strap" in desc_lower)
+        self.assertGreaterEqual(len(fused.detailed_description.split()), 18)
+
     def test_multi_angle_fusion_keeps_defects_from_other_views(self):
         per_view = [
             _view_result(

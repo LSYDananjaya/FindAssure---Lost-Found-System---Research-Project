@@ -10,6 +10,11 @@ Why projection?
 - You asked for vector_128d; in production you'd ideally train a projection head
   or use PCA fitted on your dataset. This deterministic random projection is a
   pragmatic placeholder that is stable across runs.
+
+Module overview:
+- DINO produces visual embeddings used by PP2 verification and image search.
+- 768d vectors retain richer detail for reranking; 128d vectors keep FAISS
+  storage smaller and faster.
 """
 
 from __future__ import annotations
@@ -30,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 
 class DINOEmbedder:
+    """Shared DINO model loader and embedding generator."""
+
     _shared_model = None
     _shared_processor = None
     _shared_model_key = None
@@ -107,6 +114,12 @@ class DINOEmbedder:
         )
 
     def load_model(self) -> None:
+        """Load or reuse the local DINO model.
+
+        Operational note: shared model caching prevents duplicate GPU/CPU memory use
+        when PP1, PP2, and search all need embeddings.
+        """
+
         if self._model is not None and self._processor is not None:
             logger.debug("DINO_MODEL_LOAD_SKIP_ALREADY_LOADED")
             return
@@ -189,6 +202,8 @@ class DINOEmbedder:
         return self._proj
 
     def _prepare_embedding_image(self, image: Image.Image) -> Image.Image:
+        """Resize/crop consistently before embedding for stable vector quality."""
+
         if not isinstance(image, Image.Image):
             return image
         target = max(32, int(getattr(self, "input_size", 224)))

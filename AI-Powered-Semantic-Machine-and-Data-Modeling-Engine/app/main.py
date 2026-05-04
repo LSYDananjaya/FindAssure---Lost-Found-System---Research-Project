@@ -1,3 +1,11 @@
+"""FastAPI entrypoint for the semantic matching and data-modeling service.
+
+Module overview:
+- Starts the API server and registers routes.
+- Connects to MongoDB, loads the semantic index, and warms optional AI components.
+- Falls back gracefully when MongoDB, Gemini, or the trained reranker is unavailable.
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import routes
@@ -30,7 +38,8 @@ async def startup_event():
     """Startup: Connect to MongoDB, load semantic engine, and initialize AI components."""
     logger.info("Starting AI Semantic Engine...")
 
-    # STEP 1: Establish MongoDB connection with retry logic
+    # STEP 1: Establish MongoDB connection with retry logic.
+    # The service can still run in cache-only mode when MongoDB is unreachable.
     logger.info("Step 1/4: Connecting to MongoDB...")
     connection_success = await connect_to_mongo()
 
@@ -39,7 +48,8 @@ async def startup_event():
     else:
         logger.info("MongoDB connection established")
 
-    # STEP 2: Initialize Semantic Engine (loads model and creates FAISS index)
+    # STEP 2: Initialize Semantic Engine (loads model and creates FAISS index).
+    # This singleton owns vectorization and local FAISS state.
     logger.info("Step 2/4: Initializing Semantic Engine...")
     semantic_engine = SemanticEngine()
     logger.info("Semantic Engine initialized")

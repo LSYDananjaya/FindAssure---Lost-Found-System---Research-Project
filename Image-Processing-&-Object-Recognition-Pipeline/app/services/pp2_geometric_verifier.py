@@ -1,9 +1,18 @@
+"""Geometry-based consistency checks for PP2.
+
+Module overview: embeddings can say two crops look visually similar, while ORB/RANSAC
+checks whether local image features also agree geometrically. This is useful
+for textured objects and gives another signal against unrelated photos.
+"""
+
 import cv2
 import numpy as np
 from PIL import Image
 from typing import List, Dict, Union
 
 class GeometricVerifier:
+    """Runs ORB feature matching and RANSAC homography checks."""
+
     # Thresholds
     MIN_GOOD_MATCHES = 30
     MIN_INLIERS = 15
@@ -17,6 +26,10 @@ class GeometricVerifier:
     def verify_pair(self, img_a: Union[np.ndarray, Image.Image], img_b: Union[np.ndarray, Image.Image]) -> Dict[str, Union[float, int, bool]]:
         """
         Verifies geometric consistency between two images using ORB + RANSAC.
+
+        Design note: this does not replace DINO similarity. It is an additional
+        signal that asks whether matched keypoints form a plausible transform
+        between two views.
         """
         img_a = self._ensure_numpy(img_a)
         img_b = self._ensure_numpy(img_b)
@@ -75,7 +88,8 @@ class GeometricVerifier:
                 num_inliers = sum(matchesMask)
                 inlier_ratio = num_inliers / max(1, num_good)
         
-        # 6. Check Pass Condition
+        # 6. Check Pass Condition. All three gates avoid accepting pairs with
+        # many accidental matches but too few stable inliers.
         passed = (
             num_good >= self.MIN_GOOD_MATCHES and
             num_inliers >= self.MIN_INLIERS and

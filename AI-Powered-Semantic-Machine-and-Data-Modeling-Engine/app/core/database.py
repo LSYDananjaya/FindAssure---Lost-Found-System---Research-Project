@@ -1,3 +1,11 @@
+"""MongoDB connection and index setup for the semantic engine.
+
+Module overview:
+- Manages the shared async Motor client used by FastAPI routes.
+- Creates indexes needed for vector metadata, keyword search, cache, and feedback logs.
+- Returns connection state explicitly so the service can fall back when MongoDB is down.
+"""
+
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ASCENDING, DESCENDING, TEXT
 from app.config import settings
@@ -25,6 +33,8 @@ if "MONGOB_SRV_RESOLVER" not in os.environ:
 logger = logging.getLogger(__name__)
 
 class MongoDB:
+    """Small state container for the process-wide MongoDB client and database."""
+
     client: AsyncIOMotorClient = None
     db = None
     _connected: bool = False
@@ -59,7 +69,8 @@ async def connect_to_mongo(max_retries: int = 3, retry_delay: int = 2) -> bool:
             )
             mongodb.db = mongodb.client[settings.DATABASE_NAME]
 
-            # Test connection with ping - THIS IS CRITICAL
+            # Test connection with ping before creating indexes so startup can
+            # fail gracefully on bad credentials or network problems.
             await mongodb.client.admin.command('ping')
             logger.info("MongoDB ping successful")
 

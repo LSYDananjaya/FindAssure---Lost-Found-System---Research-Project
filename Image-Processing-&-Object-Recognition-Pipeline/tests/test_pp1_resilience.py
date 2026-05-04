@@ -86,8 +86,18 @@ def _build_test_pipeline(gemini_behavior):
         pipeline.gemini.run_phase1.side_effect = gemini_behavior
     else:
         pipeline.gemini.run_phase1.return_value = gemini_behavior
-    pipeline.dino.embed_768.return_value = np.array([0.1, 0.2, 0.3], dtype=float)
-    pipeline.dino.embed_128.return_value = np.array([0.4, 0.5, 0.6], dtype=float)
+    vec_768 = np.array([0.1, 0.2, 0.3], dtype=float)
+    vec_128 = np.array([0.4, 0.5, 0.6], dtype=float)
+    pipeline.dino.embed_768.return_value = vec_768
+    pipeline.dino.embed_128.return_value = vec_128
+    pipeline.dino.embed_both.return_value = (vec_768, vec_128)
+    pipeline._pp1_thread_pool = MagicMock()
+    pipeline._pp1_thread_pool.submit.side_effect = RuntimeError("thread pool disabled for test")
+    pipeline.perf_profile = "balanced"
+    pipeline.max_detections = 1
+    pipeline.include_gemini_image = False
+    pipeline._gemini_fail_count = 0
+    pipeline._gemini_open_until = 0.0
     return pipeline
 
 
@@ -159,6 +169,42 @@ class TestUnifiedPipelineGeminiFallback(unittest.TestCase):
         self.assertEqual(row["status"], "accepted")
         self.assertEqual(row["message"], "Extracted successfully")
         self.assertNotIn("gemini_error", row["raw"])
+
+    def test_pp1_timing_log_includes_stage_breakdown_and_reasoner_label(self):
+        pipeline = _build_test_pipeline(
+            {
+                "status": "accepted",
+                "message": "Extracted successfully",
+                "label": "Wallet",
+                "color": "black",
+                "category_details": {"features": ["logo"], "defects": [], "attachments": []},
+                "key_count": None,
+                "final_description": "black wallet",
+                "detailed_description": "black wallet with a visible logo",
+                "tags": ["wallet"],
+                "reasoning_meta": {
+                    "provider": "gemini",
+                    "selected_model": "gemini-2.5-flash",
+                },
+            }
+        )
+        path = _write_temp_image()
+        try:
+            with self.assertLogs("app.services.unified_pipeline", level="INFO") as captured:
+                pipeline.process_pp1(path)
+        finally:
+            os.remove(path)
+
+        timing_lines = [line for line in captured.output if "PP1_TIMING" in line]
+        self.assertEqual(len(timing_lines), 1)
+        timing_line = timing_lines[0]
+        self.assertIn("florence_ms=", timing_line)
+        self.assertIn("florence_od_ms=", timing_line)
+        self.assertIn("label_rerank_ms=", timing_line)
+        self.assertIn("reasoner_label=gemini-2.5-flash", timing_line)
+        self.assertIn("reasoner_ms=", timing_line)
+        self.assertIn("embeddings_ms=", timing_line)
+        self.assertIn("total_ms=", timing_line)
 
 
 class TestGeminiReasonerRetry(unittest.TestCase):
@@ -239,7 +285,6 @@ class TestCaptionConfirmsYoloLabel(unittest.TestCase):
     def test_unknown_label_defaults_to_confirmed(self):
         analysis = {"raw_output": {"caption_primary": "some object"}, "ocr_text": ""}
         self.assertTrue(self.pipeline._caption_confirms_yolo_label("UnknownCategory", analysis))
-
 
 class TestPP1OCRSubstringFallback(unittest.TestCase):
     """Tests for OCR substring fallback in _score_label_keywords."""

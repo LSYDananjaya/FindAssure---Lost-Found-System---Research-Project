@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""
-Hard Negative Mining Script
-============================
+"""Mine hard negatives from MongoDB logs for reranker training.
 
-Mines hard negatives from MongoDB logs to generate challenging training pairs.
+Module overview:
+- Extracts failed verifications, high-ranked rejects, and cross-category confusions.
+- Writes challenging negative pairs for the training pipeline.
+- Improves reranker learning by focusing on mistakes the current model nearly made.
 
 Strategy:
   1. **Verification failures**: Pairs where user selected an item but verification

@@ -177,11 +177,23 @@ The service uses environment-backed settings from `app/config/settings.py` and `
 - `FAISS_INDEX_PATH`: default `./data/faiss.index`
 - `FAISS_MAPPING_PATH`: default `./data/faiss_mapping.json`
 - `GOOGLE_API_KEY` or `GEMINI_API_KEY`: optional Gemini access
-- `PP2_ENABLE_GEMINI`: default `False`
+- `PP2_ENABLE_REASONER`: default `False`
+- `PP2_REASONER_MODEL`: default `models/gemini-3.1-flash-lite-preview`
+- `PP2_REASONER_FALLBACK_MODEL`: default `gemini-2.5-flash`
+- `PP2_REASONER_THINKING_BUDGET`: default `256`
+- `PP2_REASONER_THINKING_LEVEL`: default `medium`
+- `PP2_REASONER_MAX_OUTPUT_TOKENS`: default `320`
+- `PP2_REASONER_TEMPERATURE`: default `0.2`
+- `PP2_REASONER_ALWAYS_ENRICH`: default `True`
+- `PP2_REASONER_INCLUDE_IMAGES`: default `True`
+- `PP2_REASONER_MIN_WORDS`: default `24`
+- `PP2_REASONER_ON_NEAR_MISS`: default `True`
+- `PP2_REASONER_TIMEOUT_S`: default `4`
 
 ### Important behavior defaults
 
-- PP2 Gemini enrichment is disabled by default.
+- PP2 reasoning enrichment is disabled by default.
+- `PP2_ENABLE_REASONER` controls whether PP2 Gemini reasoning runs.
 - PP2 multiview verification is enabled by default; disable it only in local or dev `.env` files with `PP2_DISABLE_MULTIVIEW_VERIFICATION=true`.
 - Async pre-analysis jobs use Redis when available and fall back to in-memory storage when Redis is unavailable.
 - The pipeline can run with SQLite locally, but production-like flows should use a proper database and stable Redis.
@@ -206,9 +218,9 @@ Create a local `.env` file if needed. Typical values:
 PORT=8002
 DATABASE_URL=sqlite:///./data/app.db
 REDIS_URL=redis://localhost:6379/0
-PP2_ENABLE_GEMINI=false
+PP2_ENABLE_REASONER=false
 PP2_DISABLE_MULTIVIEW_VERIFICATION=false
-PP2_GEMINI_TIMEOUT_S=4
+PP2_REASONER_TIMEOUT_S=4
 PP2_PHASE2_TIMEOUT_S=4
 GOOGLE_API_KEY=
 ```
@@ -226,6 +238,16 @@ Expected local URL:
 ### 5. Make sure the Node backend points here
 
 The backend uses `IMAGE_PIPELINE_URL`, and its default already points to `http://127.0.0.1:8002`.
+
+### Reasoning configuration
+
+Gemini is the only supported reasoner. Configure it with:
+
+```env
+GOOGLE_API_KEY=...
+PP2_ENABLE_REASONER=true
+PP2_REASONER_MODEL=gemini-2.5-flash
+```
 
 ## API Surface
 
@@ -320,8 +342,8 @@ Check Redis availability. If Redis is down, the service falls back to in-memory 
 Check:
 
 - `GOOGLE_API_KEY` or `GEMINI_API_KEY`,
-- `PP2_ENABLE_GEMINI`,
-- timeout settings such as `PP2_GEMINI_TIMEOUT_S`.
+- `PP2_ENABLE_REASONER`,
+- timeout settings such as `PP2_REASONER_TIMEOUT_S`.
 
 ### Search results are missing
 
@@ -336,3 +358,13 @@ Check:
 - `INTEGRATION_FLOW_README.md`: how the app, Node backend, and image pipeline connect.
 - `OVERVIEW.md`: older system overview and model summary.
 - `tests/`: best source of truth for expected behavior changes.
+
+## IT22137500 Report Code Segments
+
+The individual report uses short code excerpts instead of full source files. The screenshot-ready snippets are stored at:
+
+`../output/doc/sliit-individual-report-generator/IT22137500/code-segments/`
+
+The implementation explanation that references those snippets is:
+
+`../output/doc/sliit-individual-report-generator/IT22137500/10-implementation.md`

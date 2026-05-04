@@ -1,3 +1,11 @@
+"""Owner-level fraud summary from verification and behavior history.
+
+Module overview:
+- Reads identity-verification sessions and suspicion behavior sessions.
+- Combines trend rules, repeated suspicious events, and AI notes into a risk level.
+- Supports both current user documents and a legacy owners collection fallback.
+"""
+
 from bson import ObjectId
 
 
@@ -5,6 +13,7 @@ from bson import ObjectId
 # HELPERS
 # =====================
 def safe_avg(values):
+    """Return an average only when the source list has values."""
     return sum(values) / len(values) if values else None
 
 def build_user_selector(owner_id):
@@ -15,6 +24,7 @@ def build_user_selector(owner_id):
     return {"$or": selectors}
 
 def find_owner_profile(owner_id, users_col, owners_col=None):
+    """Resolve owner identity across current and legacy collections."""
     owner = users_col.find_one(build_user_selector(owner_id))
     if owner:
         return owner
@@ -27,6 +37,7 @@ def find_owner_profile(owner_id, users_col, owners_col=None):
 # CORE FRAUD ENGINE
 # =====================
 def analyze_fraud_for_owner(owner_id, users_col, verification_col, behavior_col, owners_col=None):
+    """Build a compact fraud-risk summary for one owner."""
     owner_id = str(owner_id).strip()
     owner = find_owner_profile(owner_id, users_col, owners_col)
     if not owner:
@@ -77,6 +88,7 @@ def analyze_fraud_for_owner(owner_id, users_col, verification_col, behavior_col,
 
     # -------------------
     # Numeric rules
+    # These rules explain why risk changed instead of relying on a black-box model.
     # -------------------
     if avg_identity is not None and avg_behavior is not None:
         if avg_behavior - avg_identity > 0.25:
@@ -102,6 +114,7 @@ def analyze_fraud_for_owner(owner_id, users_col, verification_col, behavior_col,
 
     # -------------------
     # Gemini enrichment
+    # Existing AI notes are included as context, but numeric rules still own the level.
     # -------------------
     if verification_sessions:
         ai = verification_sessions[-1].get("AI_recommendations")

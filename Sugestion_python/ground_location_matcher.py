@@ -1,11 +1,22 @@
+"""Ground-location expansion rules for campus map matching.
+
+Module overview:
+- Starts from the exact reported ground location.
+- Adds directly adjacent locations at broader confidence stages.
+- Adds reverse-neighbor matches so nearby paths can still find relevant items.
+"""
+
 from typing import Dict, Set
 
 
 class GroundLocationMatcher:
+    """Expands ground locations according to owner-location confidence stage."""
+
     def __init__(self, ground_lookup: Dict):
         self.ground_lookup = ground_lookup
 
     def match(self, location: str, stage: int) -> Set[str]:
+        """Return all ground locations allowed by the requested confidence stage."""
         matched = set()
 
         if location and location != "n/a":
@@ -28,6 +39,7 @@ class GroundLocationMatcher:
         return matched
 
     def get_adjacent(self, location: str) -> Set[str]:
+        """Read adjacent locations from map directions while ignoring placeholders."""
         adjacent = set()
         loc_info = self.ground_lookup.get(location)
         if loc_info:

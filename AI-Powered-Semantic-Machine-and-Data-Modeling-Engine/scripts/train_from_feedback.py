@@ -1,5 +1,9 @@
-"""
-Fine-tune sentence-transformer from user feedback pairs.
+"""Fine-tune the embedding model from confirmed user feedback pairs.
+
+Module overview:
+- Fetches confirmed lost/found text pairs from MongoDB.
+- Merges feedback with curated training data through app.core.embedding_trainer.
+- Saves the updated sentence-transformer for online semantic search.
 
 Usage:
     python scripts/train_from_feedback.py [--epochs 10] [--force]
@@ -26,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 async def main():
+    """Parse options, fetch feedback pairs, and run embedding fine-tuning."""
     parser = argparse.ArgumentParser(description="Fine-tune embeddings from user feedback")
     parser.add_argument("--epochs", type=int, default=10, help="Training epochs (default: 10)")
     parser.add_argument("--lr", type=float, default=1e-5, help="Learning rate (default: 1e-5)")

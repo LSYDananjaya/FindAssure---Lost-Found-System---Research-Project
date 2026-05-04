@@ -1,3 +1,11 @@
+"""Audio confidence and hesitation-risk analysis for answer videos.
+
+Module overview:
+- Extracts audio from uploaded videos and transcribes speech with timestamps.
+- Measures confidence from ASR quality, pauses, fillers, speech rate, and pitch stability.
+- Returns both a confidence score and a guessing-risk score for verification fusion.
+"""
+
 import os
 import re
 import uuid
@@ -29,7 +37,8 @@ QUESTIONING_PATTERNS = [
     "maybe it is", "i guess it is", "perhaps"
 ]
 
-# Gap-focused tuning
+# Gap-focused tuning. These values separate normal conversational pauses from
+# unusually long hesitations that can indicate uncertainty or guessing.
 LONG_PAUSE_SEC = 0.60
 VERY_LONG_PAUSE_SEC = 1.00
 ABNORMAL_WORD_GAP_SEC = 0.45
@@ -44,6 +53,7 @@ def _safe_round(v, n=3):
 
 
 def extract_audio_from_video(video_path: str) -> str:
+    """Convert a video file into mono 16 kHz WAV for speech processing."""
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"File not found: {video_path}")
 
@@ -177,6 +187,7 @@ def _estimate_pitch_autocorr(frame: np.ndarray, sr: int) -> float:
 
 
 def _acoustic_instability_metrics(audio_path: str) -> Dict[str, float]:
+    """Estimate voice stability from short audio frames."""
     try:
         sr, sig = _load_wav_mono(audio_path)
         if sig.size < max(400, int(0.2 * sr)):
@@ -406,6 +417,7 @@ def _start_latency_score(start_latency_sec: float) -> float:
 
 
 def analyze_audio_confidence(video_path: str) -> Dict[str, Any]:
+    """Compute owner-answer confidence from transcript and acoustic evidence."""
     audio_path = None
     try:
         audio_path = extract_audio_from_video(video_path)
@@ -455,7 +467,8 @@ def analyze_audio_confidence(video_path: str) -> Dict[str, Any]:
         latency_score = _start_latency_score(start_latency_sec)
         asr_score = _asr_confidence_score(segments)
 
-        # Gap-focused overall weighting.
+        # Gap-focused overall weighting: pauses and ASR confidence are the
+        # strongest inputs because they are harder to fake than filler counts.
         confidence_score = (
             0.40 * pause_score +
             0.14 * filler_score +

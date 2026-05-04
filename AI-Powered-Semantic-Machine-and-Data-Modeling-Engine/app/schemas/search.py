@@ -1,3 +1,5 @@
+"""Pydantic schemas for search, logging, feedback, and retraining routes."""
+
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 

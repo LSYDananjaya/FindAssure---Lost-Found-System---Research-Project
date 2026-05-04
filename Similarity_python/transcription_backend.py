@@ -1,3 +1,11 @@
+"""Shared Whisper transcription backend for Similarity services.
+
+Module overview:
+- Lazily loads faster-whisper once and reuses the model across requests.
+- Selects CUDA or CPU settings from environment variables with a CPU fallback.
+- Normalizes segment and word timing output for audio confidence analysis.
+"""
+
 import os
 import threading
 from typing import Any, Dict, List, Tuple
@@ -31,6 +39,7 @@ def _resolve_compute_type(device: str) -> str:
 
 
 def _get_model() -> tuple[WhisperModel, str, str]:
+    """Return a cached Whisper model, rebuilding it only when config changes."""
     global _model_instance, _model_config
 
     model_name = os.getenv("WHISPER_MODEL", "small").strip() or "small"
@@ -45,6 +54,8 @@ def _get_model() -> tuple[WhisperModel, str, str]:
         last_error: Exception | None = None
         candidates = [desired_config]
         if device == "cuda":
+            # GPU setup can fail on machines without compatible drivers; CPU
+            # int8 keeps the service usable with lower performance.
             candidates.append((model_name, "cpu", "int8"))
 
         for candidate_model, candidate_device, candidate_compute_type in candidates:
@@ -63,6 +74,7 @@ def _get_model() -> tuple[WhisperModel, str, str]:
 
 
 def transcribe_audio(audio_path: str, with_word_timestamps: bool = False) -> Dict[str, Any]:
+    """Transcribe audio and return plain Python metadata for downstream scoring."""
     model, device, compute_type = _get_model()
     segments_iter, info = model.transcribe(
         audio_path,

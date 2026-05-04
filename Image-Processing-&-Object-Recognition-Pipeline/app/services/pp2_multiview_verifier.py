@@ -1,3 +1,11 @@
+"""Cross-view verifier for PP2.
+
+Module overview: this service decides whether uploaded views likely show the same
+physical item. It combines embedding similarity, geometric checks, category
+group thresholds, color/OCR consistency, and special rescue rules for hard
+front/back cases such as phones.
+"""
+
 from typing import List, Dict, Any, Optional, Tuple, Set
 import numpy as np
 import re
@@ -13,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 class MultiViewVerifier:
+    """Applies PP2 pair selection and verification rules."""
+
     # Legacy baseline threshold used only when mode/group thresholds cannot be resolved.
     LEGACY_BASE_THRESHOLD = settings.PP2_SIM_THRESHOLD
     TWO_VIEW_DECISION_PAIRS = 1
@@ -732,6 +742,12 @@ class MultiViewVerifier:
         candidate_indices: Optional[List[int]] = None,
         embedding_variants_by_index: Optional[Dict[int, Dict[str, np.ndarray]]] = None,
     ) -> Tuple[Optional[Tuple[int, int]], Dict[str, float]]:
+        """Choose the strongest candidate pair among eligible views.
+
+        Design note: for three uploads, PP2 can salvage the two views that best
+        agree instead of failing because one extra angle is weak or unrelated.
+        """
+
         n = len(vectors)
         if candidate_indices is None:
             indices = list(range(n))
@@ -824,9 +840,13 @@ class MultiViewVerifier:
         item_id: Optional[str] = None,
         canonical_hints: Optional[Dict[int, str]] = None,
     ) -> PP2VerificationResult:
+        """Run the final PP2 verification decision for selected views."""
+
         n = len(vectors)
         all_pairs = [(i, j) for i in range(n) for j in range(i + 1, n)]
 
+        # used_views_override is supplied when the pipeline has already chosen
+        # the best pair. Otherwise the verifier considers all eligible views.
         if used_views_override is not None:
             decision_indices = sorted(
                 {

@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-"""
-train_reranker.py
-==================
-Standalone script to build a training dataset from MongoDB and train the
-LightGBM lambdarank re-ranking model.
+"""Train the LightGBM lambdarank reranker from MongoDB feedback logs.
+
+Module overview:
+- Builds a labeled dataset from impressions, selections, and verifications.
+- Trains a versioned reranker artifact and refreshes the active model pointer.
+- Supports dry-run mode for checking data volume before training.
 
 Usage:
     cd AI-Powered-Semantic-Machine-and-Data-Modeling-Engine
@@ -41,6 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 async def run_training(days: int = None, dry_run: bool = False):
+    """Connect to MongoDB, build the reranker dataset, and optionally train."""
     logger.info("=" * 60)
     logger.info(" FindAssure Re-Ranker Training Script")
     logger.info("=" * 60)

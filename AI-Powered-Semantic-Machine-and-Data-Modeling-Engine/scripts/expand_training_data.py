@@ -1,4 +1,10 @@
-"""Expand the training dataset to 105 pairs total."""
+"""Append curated high-detail pairs to the English training dataset.
+
+Module overview:
+- Loads the existing English pair dataset.
+- Adds source-maintained anchor/positive pairs for richer item descriptions.
+- Writes the expanded dataset back for embedding training.
+"""
 import json, os
 
 # Load existing pairs

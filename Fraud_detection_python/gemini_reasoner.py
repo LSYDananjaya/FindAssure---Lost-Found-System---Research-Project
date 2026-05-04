@@ -1,3 +1,11 @@
+"""Gemini explanation helper for suspicion-analysis decisions.
+
+Module overview:
+- Builds a constrained prompt from deterministic behavior features and XAI output.
+- Asks Gemini to explain the existing decision without overriding it.
+- Keeps generative text separate from the actual suspicion score.
+"""
+
 import os
 import requests
 import json
@@ -6,6 +14,7 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 
 def build_prompt(owner_id, features, decision, xai):
+   """Create a prompt that limits Gemini to explanation, not decision making."""
    return f"""You are an AI auditor verifying suspicious behavior detection.
 
 Context:
@@ -41,6 +50,7 @@ Return only the explanation.
 
 
 def gemini_reason(owner_id, features, decision, xai):
+    """Return a short natural-language explanation for stored behavior evidence."""
     prompt = build_prompt(owner_id, features, decision, xai)
 
     body = {

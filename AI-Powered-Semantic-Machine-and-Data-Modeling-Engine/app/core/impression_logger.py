@@ -1,9 +1,9 @@
-"""
-ImpressionLogger — async MongoDB writer for match impressions and selections.
+"""Async MongoDB writer for match impressions and selections.
 
-Implements DESIGN_DOC §H5, §D2, §D3.
-Fire-and-forget: impression logging runs as an asyncio task (non-blocking).
-Selection logging is awaited since it's smaller and user-initiated.
+Module overview:
+- Records ranked results shown to a user for later learning.
+- Records the selected item and verification feedback.
+- Keeps impression writes non-blocking so search latency stays low.
 """
 
 import logging

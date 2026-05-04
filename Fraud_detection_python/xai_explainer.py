@@ -1,3 +1,11 @@
+"""Contribution-style explanation for suspicion scores.
+
+Module overview:
+- Mirrors the deterministic suspicion weights as feature contributions.
+- Reports the strongest positive and negative factors for API responses.
+- Keeps explanations aligned with the actual rule score.
+"""
+
 def explain_with_shap(features, score):
     """
     Model-agnostic SHAP-style contribution explanation
@@ -12,7 +20,8 @@ def explain_with_shap(features, score):
         "face_missing_ratio": 0.9,
         "avg_video_duration": -0.1
     }
-    # Calculate contributions based on weights and feature values
+    # Calculate contributions based on weights and feature values so the
+    # explanation tracks the same arithmetic used by the decision function.
     
     for k, w in weights.items():
         contributions[k] = round(w * features.get(k, 0), 4)

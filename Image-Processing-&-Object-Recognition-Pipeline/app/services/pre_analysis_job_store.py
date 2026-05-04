@@ -1,3 +1,10 @@
+"""Async pre-analysis job storage.
+
+Module overview: mobile users receive a task id immediately while PP1/PP2 continues in
+the background. Redis is preferred for shared state, but the in-memory fallback
+keeps local/demo runs working when Redis is unavailable.
+"""
+
 import json
 import logging
 import threading
@@ -25,6 +32,45 @@ def _ttl_seconds() -> int:
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def _normalize_job_value(value: Any) -> Any:
+    """Convert numpy/model values into JSON-safe job payload values."""
+
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+
+    if isinstance(value, dict):
+        return {str(key): _normalize_job_value(item) for key, item in value.items()}
+
+    if isinstance(value, list):
+        return [_normalize_job_value(item) for item in value]
+
+    if isinstance(value, (tuple, set)):
+        return [_normalize_job_value(item) for item in value]
+
+    item_method = getattr(value, "item", None)
+    if callable(item_method):
+        try:
+            return _normalize_job_value(item_method())
+        except Exception:
+            pass
+
+    tolist_method = getattr(value, "tolist", None)
+    if callable(tolist_method):
+        try:
+            return _normalize_job_value(tolist_method())
+        except Exception:
+            pass
+
+    return str(value)
+
+
+def _payload_updated_at_ms(payload: Optional[Dict[str, Any]]) -> int:
+    if not isinstance(payload, dict):
+        return -1
+    value = payload.get("updatedAtMs")
+    return int(value) if isinstance(value, int) else -1
 
 
 def _log_redis_fallback(reason: Optional[str] = None) -> None:
@@ -81,12 +127,16 @@ def _get_memory_job(task_id: str) -> Optional[Dict[str, Any]]:
 
 
 def save_job(task_id: str, payload: Dict[str, Any], ttl_s: Optional[int] = None) -> Dict[str, Any]:
+    """Create the initial async job record in memory and Redis when available."""
+
     ttl = ttl_s or _ttl_seconds()
-    stored = {
+    stored = _normalize_job_value({
         **payload,
         "taskId": task_id,
         "updatedAtMs": _now_ms(),
-    }
+    })
+
+    _save_memory_job(task_id, stored, ttl)
 
     redis_client = _get_usable_redis_client()
     if redis_client is not None:
@@ -96,19 +146,26 @@ def save_job(task_id: str, payload: Dict[str, Any], ttl_s: Optional[int] = None)
         except Exception as exc:
             _log_redis_fallback(str(exc))
 
-    return _save_memory_job(task_id, stored, ttl)
+    return stored
 
 
 def get_job(task_id: str) -> Optional[Dict[str, Any]]:
+    memory_job = _get_memory_job(task_id)
+    redis_job = None
     redis_client = _get_usable_redis_client()
     if redis_client is not None:
         try:
             raw = redis_client.get(_job_key(task_id))
-            return json.loads(raw) if raw else None
+            redis_job = json.loads(raw) if raw else None
         except Exception as exc:
             _log_redis_fallback(str(exc))
 
-    return _get_memory_job(task_id)
+    if redis_job is None:
+        return memory_job
+    if memory_job is None:
+        return redis_job
+
+    return memory_job if _payload_updated_at_ms(memory_job) >= _payload_updated_at_ms(redis_job) else redis_job
 
 
 def update_job(task_id: str, patch: Dict[str, Any], ttl_s: Optional[int] = None) -> Dict[str, Any]:

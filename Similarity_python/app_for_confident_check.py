@@ -1,3 +1,12 @@
+"""Owner verification service for answer-video confidence scoring.
+
+Module overview:
+- Receives expected answers plus owner video answers through a Flask route.
+- Extracts transcript, audio-confidence, face-confidence, and NLP similarity signals.
+- Fuses local rules with optional Gemini scoring to decide match quality.
+- Forwards behavior evidence to the suspicion service asynchronously.
+"""
+
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 import os
@@ -36,6 +45,8 @@ nlp = LocalNLP()
 
 TMP_DIR = tempfile.gettempdir()
 MAX_WORKERS = 5
+# These thresholds keep the scoring policy explicit: low audio confidence and
+# high guessing-risk reduce trust even when text similarity appears strong.
 LOW_AUDIO_OWNER_THRESHOLD = 0.50
 HIGH_GUESSING_RISK_THRESHOLD = 0.70
 AVG_GUESSING_RISK_REJECT_THRESHOLD = 0.40
@@ -44,6 +55,7 @@ PER_QUESTION_AUDIO_WEIGHT = 0.15
 
 # -----------------------------
 def classify_status(score):
+    """Map a normalized similarity score into the public verification label."""
     if score >= 0.70:
         return "match"
     if score >= 0.40:
@@ -101,6 +113,7 @@ def touch_owner(owner_id):
 
 
 def trigger_suspicion_async(data, saved_paths):
+    """Send saved answer videos to the suspicion service without blocking the response."""
     expected_keys = []
     for a in data.get("answers", []):
         key = a.get("video_key")
@@ -193,10 +206,14 @@ def verify_owner():
             saved_paths[key] = path
 
         # Trigger behavior analysis in parallel for direct calls to :5000.
+        # The verification route owns identity matching; behavior analysis is
+        # a side effect used for risk tracking, so it runs independently.
         trigger_suspicion_async(data, saved_paths)
 
         # -----------------------------
         # FACE CONFIDENCE (ANTI-SPOOF)
+        # Face signals do not replace answer matching; they add a separate
+        # behavioral check for spoofing, stress, or missing-face cases.
         # -----------------------------
         face_confidence_result = None
         face_check_status = "not_provided"

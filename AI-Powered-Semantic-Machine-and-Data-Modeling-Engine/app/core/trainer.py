@@ -1,12 +1,9 @@
-"""
-TrainingPipeline — builds labeled training datasets from MongoDB logs and
-trains a LightGBM lambdarank re-ranker.
+"""Training pipeline for the LightGBM reranker.
 
-Implements DESIGN_DOC §E (Feedback-to-Training Dataset Builder) and §F (Model Training).
-
-Workflow (run by scripts/train_reranker.py):
-  1. build_training_dataset()  — joins impressions + selections + verifications
-  2. train_reranker_model()    — LightGBM lambdarank, saves versioned model
+Module overview:
+- Builds labeled lost/found training rows from impressions, selections, and verifications.
+- Adds hard negatives from highly ranked but unselected/wrong candidates.
+- Trains and saves a versioned reranker model for online inference.
 """
 
 import logging
@@ -20,7 +17,8 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Feature columns — must match scorer.py FEATURE_COLUMNS exactly
+# Feature columns must match scorer.py FEATURE_COLUMNS exactly because the
+# trained model and inference path share this column order.
 # ---------------------------------------------------------------------------
 from app.core.scorer import FEATURE_COLUMNS, compute_features
 

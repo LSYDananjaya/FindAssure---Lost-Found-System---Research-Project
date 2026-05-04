@@ -1,3 +1,11 @@
+"""Train the semantic embedding model from curated English-only pairs.
+
+Module overview:
+- Uses the English pair dataset when maximum English accuracy is preferred.
+- Fine-tunes a sentence-transformer with a held-out evaluation split.
+- Saves into the same model path consumed by the semantic service.
+"""
+
 from sentence_transformers import SentenceTransformer, InputExample, losses, evaluation
 from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator
 from torch.utils.data import DataLoader
@@ -11,6 +19,7 @@ DATA_PATH = os.path.join(BASE_DIR, '../data/raw/text_pairs_english.json')
 MODEL_SAVE_PATH = os.path.join(BASE_DIR, '../data/models/fine_tuned_bert')
 
 def train_model():
+    """Run English-only embedding fine-tuning and save the model artifact."""
     print("=" * 70)
     print("ENGLISH-ONLY SEMANTIC FINE-TUNING FOR MAXIMUM ACCURACY")
     print("=" * 70)

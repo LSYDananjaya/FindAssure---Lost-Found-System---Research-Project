@@ -1,3 +1,10 @@
+"""Founder correction analytics for AI-generated prefill data.
+
+Module overview: this module measures how much the founder changed the pipeline's
+category, description, color, and evidence-derived suggestions. It is analytics
+only; it does not change the saved found-item workflow.
+"""
+
 import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -41,6 +48,8 @@ def _levenshtein_distance(left: str, right: str) -> int:
 
 
 def _normalized_levenshtein_pct(left: str, right: str) -> Optional[float]:
+    """Character-level change percentage for edited descriptions."""
+
     if not left and not right:
         return 0.0
     if not left or not right:
@@ -52,6 +61,8 @@ def _normalized_levenshtein_pct(left: str, right: str) -> Optional[float]:
 
 
 def _token_jaccard_change_pct(left_tokens: Sequence[str], right_tokens: Sequence[str]) -> Optional[float]:
+    """Token-level change percentage that is less sensitive to word order."""
+
     left_set = set(left_tokens)
     right_set = set(right_tokens)
     if not left_set and not right_set:

@@ -1,3 +1,10 @@
+"""FAISS vector index service for visual search.
+
+Module overview: FAISS stores normalized DINO vectors and returns fast nearest-neighbor
+candidates. It is recall-oriented; final owner-facing ranking is refined by the
+image search reranker using metadata such as category, color, OCR, and brand.
+"""
+
 import os
 import json
 import logging
@@ -11,6 +18,8 @@ from typing import List, Dict, Any
 logger = logging.getLogger(__name__)
 
 class FaissService:
+    """Thread-safe wrapper around a FAISS index plus metadata mapping."""
+
     def __init__(self, dim: int, index_path: str, mapping_path: str):
         """
         Initialize the FAISS service.
@@ -70,7 +79,9 @@ class FaissService:
             else:
                 self.mapping = {}
                 
-            # Verify consistency
+            # Verify consistency. A FAISS id is only useful when the metadata
+            # mapping has the same number of entries, so mismatches are treated
+            # as corrupt index state and rebuilt.
             if self.index.ntotal != len(self.mapping):
                 logger.error(
                     f"FAISS consistency mismatch: index has {self.index.ntotal} vectors but mapping has {len(self.mapping)} entries. "
@@ -90,7 +101,7 @@ class FaissService:
                 logger.info("FAISS index and mapping reset to empty.")
 
     def _normalize(self, vector: np.ndarray) -> np.ndarray:
-        """Normalize vector to L2 unit length."""
+        """Normalize vector to L2 unit length so inner product acts like cosine."""
         if vector.ndim == 1:
             vector = vector.reshape(1, -1)
         # Faiss expects float32

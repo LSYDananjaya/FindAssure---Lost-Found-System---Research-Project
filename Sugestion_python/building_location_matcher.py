@@ -1,12 +1,23 @@
+"""Building-level location expansion rules.
+
+Module overview:
+- Matches halls, floors, and building-only locations using campus building JSON.
+- Broadens from exact hall/floor to nearby halls or whole-building candidates by stage.
+- Leaves item filtering to the API coordinator so this class stays map-focused.
+"""
+
 from typing import Dict, List, Set
 
 
 class BuildingLocationMatcher:
+    """Expands building locations according to the owner's confidence stage."""
+
     def __init__(self, building_lookup: Dict, building_data: Dict):
         self.building_lookup = building_lookup
         self.building_data = building_data
 
     def match_with_hall(self, building: str, floor: int, hall_name: str, stage: int) -> Set[str]:
+        """Match a named hall, then optionally adjacent and reverse-adjacent halls."""
         matched = set()
 
         if hall_name and hall_name != "n/a":
@@ -35,6 +46,7 @@ class BuildingLocationMatcher:
         return matched
 
     def match_with_floor(self, building: str, floor: int, stage: int) -> Set[str]:
+        """Match halls on the same floor, nearby floors, or the whole building."""
         matched = set()
         floor_str = str(floor)
 
@@ -56,14 +68,16 @@ class BuildingLocationMatcher:
         return matched
 
     def match_building_only(self, building: str, stage: int, ground_lookup: Dict, get_adjacent_fn) -> Set[str]:
+        """Handle requests that know the building but not the exact floor or hall."""
         matched = set()
 
-        # STAGE 1 → STRICT
+        # Stage 1 is strict: only the named building is considered.
         if stage == 1:
             matched.add(building)
             return matched
 
-        # STAGE 2
+        # Stage 2 adds the entrance because users often report the building
+        # instead of the nearest precise ground location.
         if stage == 2:
             matched.add(building)
             # Add ONLY the entrance, not the whole halls
@@ -72,7 +86,7 @@ class BuildingLocationMatcher:
                     matched.add(info["actual_location"])
             return matched
 
-        # STAGE 3
+        # Stage 3 includes nearby ground points while still avoiding all halls.
         if stage == 3:
             matched.add(building)
 
@@ -86,4 +100,3 @@ class BuildingLocationMatcher:
                 matched.update(get_adjacent_fn(building))
 
             return matched
-

@@ -1,3 +1,5 @@
+"""Pydantic schema for adding found items to the semantic index."""
+
 from pydantic import BaseModel
 
 class ItemCreate(BaseModel):

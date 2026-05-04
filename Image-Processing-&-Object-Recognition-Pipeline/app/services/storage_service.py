@@ -1,3 +1,11 @@
+"""Persistence boundary for pipeline outputs.
+
+Module overview: model services produce evidence, but this service owns durable writes:
+item profile records, per-view evidence, embedding metadata, and optional Redis
+cache entries. Keeping storage here prevents vision code from mixing DB logic
+with detection/fusion decisions.
+"""
+
 import json
 import logging
 import uuid
@@ -10,6 +18,8 @@ from app.core.redis_client import get_redis_client
 logger = logging.getLogger(__name__)
 
 class StorageService:
+    """Stores PP1/PP2 results using the request-scoped database session."""
+
     def __init__(self, db: Session):
         self.db = db
         self.redis_client = get_redis_client()
@@ -17,6 +27,9 @@ class StorageService:
     def store_multiview_result(self, item_id, per_view_results, fused_profile, fused_vector, faiss_id) -> dict:
         """
         Stores the processed item data into PostgreSQL and caches the profile in Redis.
+
+        Design note: PP2 stores both the fused profile and per-view evidence so we
+        can explain which views contributed to the final searchable item.
         """
         try:
             # --- 1. DB Transaction ---
@@ -52,8 +65,8 @@ class StorageService:
                 )
                 self.db.add(evidence)
 
-            # Create EmbeddingRecord
-            # Note: fused_vector is typically a numpy array or list
+            # Create EmbeddingRecord. This links database metadata to the FAISS
+            # id so visual search can return app-level item information.
             dim = len(fused_vector) if fused_vector is not None else 0
             
             vec_bytes = None
@@ -97,6 +110,9 @@ class StorageService:
     def store_pp1_result(self, item_id, result: dict) -> dict:
         """
         Stores a PP1 single-image analysis result into PostgreSQL and caches in Redis.
+
+        Design note: PP1 has only one view, so best_view_index is always 0 and
+        the accepted detection becomes the stored item profile.
         """
         try:
             if isinstance(item_id, str):

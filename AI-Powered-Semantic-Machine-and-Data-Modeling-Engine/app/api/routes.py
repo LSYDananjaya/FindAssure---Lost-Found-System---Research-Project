@@ -1,3 +1,11 @@
+"""HTTP routes for indexing, semantic search, feedback, and retraining.
+
+Module overview:
+- Validates FastAPI request/response schemas at the boundary.
+- Delegates model work to semantic, normalizer, scorer, trainer, and fraud services.
+- Logs impressions and feedback so ranking can improve from confirmed outcomes.
+"""
+
 from fastapi import APIRouter, BackgroundTasks, Depends
 from app.schemas.item import ItemCreate
 from app.schemas.search import (
@@ -21,6 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Dependency Injection
+# Factories keep route code thin and make tests able to replace services.
 def get_semantic():
     return SemanticEngine()
 
@@ -123,6 +132,8 @@ async def search_items(
         logger.debug(f"Grammar correction skipped: {gc_err}")
 
     # --- Full pipeline (Gemini normalizer + hybrid retrieval + scoring) ---
+    # Retrieval and ranking are intentionally behind inference_rerank so the
+    # route remains responsible only for HTTP concerns and fallback handling.
     engine = SemanticEngine()
     if db is not None:
         try:
@@ -144,6 +155,8 @@ async def search_items(
         pipeline_result = None
 
     # --- Fallback to legacy SemanticEngine if pipeline fails ---
+    # The legacy path keeps search usable even if Gemini, MongoDB text search,
+    # or the trained reranker fails at runtime.
     if pipeline_result is None or not pipeline_result.get("ranked_results"):
         logger.warning("Pipeline returned empty — using legacy SemanticEngine fallback")
         raw_results = engine.search(

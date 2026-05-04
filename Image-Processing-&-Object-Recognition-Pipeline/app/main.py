@@ -1,3 +1,13 @@
+"""FastAPI entrypoint for the image-processing pipeline.
+
+Module overview:
+- PP1 routes in this file handle the single-image founder pre-analysis flow.
+- PP2 and image-search routes are mounted from routers so multi-view and
+  retrieval logic stay separate from request bootstrapping.
+- The app lifespan builds shared model services once; routes reuse app.state
+  instead of loading YOLO, Florence, or DINO for every request.
+"""
+
 import asyncio
 import datetime
 import io
@@ -26,6 +36,9 @@ app = FastAPI(title="Vision Core Backend", lifespan=lifespan)
 logger = logging.getLogger(__name__)
 pipeline = None
 
+# These routers are the public internal API surface used by the Node backend.
+# main.py owns orchestration and route mounting; algorithm details stay inside
+# service classes so they can be explained and tested independently.
 app.include_router(pp2_router.router, prefix="/pp2", tags=["Phase 2"])
 app.include_router(search_router.router, prefix="/search", tags=["Search"])
 
@@ -66,6 +79,13 @@ PRE_ANALYSIS_STAGE_META = {
 
 
 class FounderPrefillFeedbackPayload(BaseModel):
+    """Founder correction payload for measuring AI prefill usefulness.
+
+    Design note: this endpoint is the feedback loop. It compares what the image
+    pipeline predicted with what the founder finally submitted, without
+    blocking the main found-item creation workflow.
+    """
+
     eventId: str
     foundItemId: str
     createdBy: str | None = None
@@ -172,6 +192,12 @@ def _terminal_payload(
 
 
 def _save_upload_to_temp(file: UploadFile) -> tuple[str, str]:
+    """Persist the uploaded stream before model processing.
+
+    Model wrappers expect stable local file paths, and async jobs cannot rely
+    on the original request stream after the HTTP response returns.
+    """
+
     filename = file.filename or "image.jpg"
     file_ext = filename.split(".")[-1] if "." in filename else "jpg"
     temp_filename = f"{uuid.uuid4()}.{file_ext}"
@@ -234,6 +260,8 @@ def _select_accepted_pp1_detection(result: dict | list) -> dict | None:
 
 
 async def _run_pp1_analysis_job(app: FastAPI, task_id: str, temp_path: str) -> None:
+    """Run PP1 after the app has already received a task id."""
+
     try:
         pipeline = getattr(app.state, "unified_pipeline", None)
         if pipeline is None:
@@ -245,6 +273,7 @@ async def _run_pp1_analysis_job(app: FastAPI, task_id: str, temp_path: str) -> N
         detection = _select_accepted_pp1_detection(result)
         if not detection:
             update_job(task_id, _terminal_payload("manual_fallback", "pp1", 1, result=result))
+            logger.debug("PP1 async job terminal status emitted task_id=%s status=manual_fallback", task_id)
             return
 
         update_job(task_id, _stage_payload("reasoning", "pp1", 1))
@@ -264,9 +293,11 @@ async def _run_pp1_analysis_job(app: FastAPI, task_id: str, temp_path: str) -> N
             logger.warning("PP1 async storage failed (non-fatal)", exc_info=True)
 
         update_job(task_id, _terminal_payload("completed", "pp1", 1, result=result))
+        logger.debug("PP1 async job terminal status emitted task_id=%s status=completed", task_id)
     except Exception as exc:
         logger.exception("PP1 async job failed for task %s", task_id)
         update_job(task_id, _terminal_payload("failed", "pp1", 1, error=str(exc)))
+        logger.debug("PP1 async job terminal status emitted task_id=%s status=failed", task_id)
     finally:
         _cleanup_temp_paths([temp_path])
 
@@ -344,7 +375,11 @@ async def analyze_pp1(
     files: List[UploadFile] = File(...),
 ):
     """
-    Phase 1 Analysis: Single Image -> YOLO -> Florence -> Gemini
+    Phase 1 Analysis: Single Image -> YOLO -> Florence -> Gemini.
+
+    Design note: one photo goes through PP1 because there is no cross-view
+    verification to perform. Two or three photos are routed to PP2 by the Node
+    backend so the pipeline can check whether all views show the same item.
     """
     if len(files) != 1:
         raise HTTPException(status_code=400, detail="PP1 requires exactly one image.")
@@ -398,7 +433,9 @@ async def analyze_pp1(
                 logger.error("PP1_HEIC_CONVERT_FAILED: %r", str(_heic_err))
                 raise HTTPException(status_code=422, detail=f"Failed to convert HEIC image: {_heic_err}")
 
-        # Call the pipeline from app state (shared service instances)
+        # Call the pipeline from app state (shared service instances). This is
+        # why expensive model objects are initialized once at startup instead
+        # of being recreated for every upload.
         try:
             pipeline = getattr(request.app.state, "unified_pipeline", None)
             if pipeline is None:

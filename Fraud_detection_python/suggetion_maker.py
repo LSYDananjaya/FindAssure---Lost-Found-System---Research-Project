@@ -1,3 +1,10 @@
+"""Small Gemini connectivity script kept separate from the production API.
+
+Module overview:
+- Sends a minimal prompt to confirm the configured Gemini endpoint responds.
+- Does not participate in fraud scoring or request handling.
+"""
+
 import requests
 import json
 

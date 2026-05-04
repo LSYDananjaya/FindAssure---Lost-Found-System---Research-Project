@@ -1,0 +1,4105 @@
+
+
+--- PAGE 1 ---
+ 
+Viva Defense Dossier
+ 
+Image
+-
+Processing
+-
+&
+-
+Object
+-
+Recognition
+-
+Pipeline
+ 
+FindAssure Final Presentation and Viva Support Document
+ 
+Prepared from the current repository implementation
+ 
+Date: 2026
+-
+04
+-
+16
+ 
+ 
+ 
+Table of Contents
+ 
+Update this field in Word to render the contents.
+ 
+ 
+ 
+
+
+--- PAGE 2 ---
+Viva Defense Dossier
+ 
+Image
+-
+Processing
+-
+&
+-
+Object
+-
+Recognition
+-
+Pipeline
+ 
+ 
+FindAssure final presentation and viva support document.
+ 
+ 
+ 
+ 
+Title Page Notes
+ 
+ 
+Use this document as the main defense file for your component. It is written to help you:
+ 
+ 
+
+ 
+explain the architecture clearly
+ 
+
+ 
+defend why each model and service exists
+ 
+
+ 
+explain code segments in your own words
+ 
+
+ 
+answer code ownership questions
+ 
+
+ 
+show the panel where to change logic and how to change it
+ 
+ 
+ 
+ 
+1. Executive Summary
+ 
+ 
+Image
+-
+Processing
+-
+&
+-
+Object
+-
+Recognition
+-
+Pipeline
+ 
+is the Python computer
+-
+vision backend of 
+FindAssure. It runs behind the Node backend and supports four main capabilities:
+ 
+ 
+
+ 
+PP1 single
+-
+image analysis
+ 
+
+ 
+PP2 multi
+-
+view verification and fusion
+ 
+
+ 
+image
+-
+based retrieval with FAISS
+ 
+
+ 
+founder feedback analytics after final item submission
+ 
+ 
+The core engineering idea is simple: the mobile app should not directly handle raw model logic. The app sends 
+images to the Node backend, Node decides which analysis path to use, the Python pipeline performs vision 
+processing, and Node returns a stable app
+-
+facing response.
+ 
+ 
+The strongest way to defend this component is not to say it is perfect. The strongest defense is:
+ 
+ 
+
+ 
+it has a clear architecture
+ 
+
+ 
+each model has a specific responsibility
+ 
+
+ 
+failure handling is built in
+ 
+
+ 
+manual fallback exists when AI output is weak
+ 
+
+ 
+the code paths are understandable and modifiable
+ 
+ 
+ 
+ 
+2. System Role and Flow
+ 
+ 
+2.1 What problem this component solves
+ 
+ 
+In a lost
+-
+and
+-
+found system, users often upload images that are:
+ 
+ 
+
+ 
+low quality
+ 
+
+ 
+taken from different angles
+ 
+
+ 
+incomplete
+ 
+
+ 
+visually similar to other items
+ 
+ 
+A simple upload
+-
+and
+-
+store backend would not be enough. This component exists to turn raw images into useful 
+structured evidence:
+ 
+ 
+
+ 
+object category
+ 
+
+ 
+cropped object region
+ 
+
+ 
+OCR text
+ 
+
+ 
+visual features
+ 
+
+ 
+defects
+ 
+
+ 
+attachments
+ 
+
+ 
+similarity vectors
+ 
+ 
+2.2 Why this service sits behind Node
+ 
+ 
+
+
+--- PAGE 3 ---
+The Node backend exists as the orchestration layer. It handles:
+ 
+ 
+
+ 
+app
+-
+facing API stability
+ 
+
+ 
+business workflow decisions
+ 
+
+ 
+PP1 vs PP2 routing
+ 
+
+ 
+fallback responses
+ 
+
+ 
+pre
+-
+analysis token creation
+ 
+
+ 
+final integration with the rest of FindAssure
+ 
+ 
+The Python service focuses only on vision and retrieval logic.
+ 
+ 
+2.3 High
+-
+level architecture
+ 
+ 
+flowchart LR
+ 
+    
+App["React Native App"]
+ 
+    
+Node["Node.js Backend"]
+ 
+    
+Pipe["Python FastAPI Vision Service"]
+ 
+    
+Models["YOLO + Florence + DINO + Gemini"]
+ 
+    
+Redis["Redis / in
+-
+memory jobs"]
+ 
+    
+SQL["SQLite / PostgreSQL"]
+ 
+    
+Faiss["FAISS"]
+ 
+ 
+    
+App 
+--
+> Node
+ 
+    
+Node 
+--
+> Pipe
+ 
+    
+Pipe 
+--
+> Models
+ 
+    
+Pipe 
+--
+> Redis
+ 
+    
+Pipe 
+--
+> SQL
+ 
+    
+Pipe 
+--
+> Faiss
+ 
+    
+Pipe 
+--
+> Node
+ 
+    
+Node 
+--
+> App
+ 
+ 
+ 
+2.4 Main founder pre
+-
+analysis flow
+ 
+ 
+1.
+ 
+The app uploads 1 to 3 images to Node.
+ 
+2.
+ 
+Node validates the image count.
+ 
+3.
+ 
+Node chooses PP1 if there is 1 image.
+ 
+4.
+ 
+Node chooses PP2 if there are 2 or 3 images.
+ 
+5.
+ 
+Python analyzes the image or image set.
+ 
+6.
+ 
+Node normalizes the result into app
+-
+facing fields.
+ 
+7.
+ 
+The founder can accept or edit the AI suggestion.
+ 
+8.
+ 
+After final submission, Node sends the final edited data back to the pipeline for analytics.
+ 
+ 
+2.5 Short viva answer
+ 
+ 
+This component is the internal vision backend of FindAssure. It does object understanding, multi
+-
+view verification, 
+retrieval embedding generation, and feedback analytics, while the Node backend manages workflow and safe 
+fallback behavior.
+ 
+ 
+ 
+ 
+ 
+3. Main Models and Why They Were Chosen
+ 
+ 
+3.1 YOLOv8
+ 
+ 
+Purpose in this system
+ 
+ 
+YOLOv8 is used first for object detection. It finds the main object and returns the bounding box and class label.
+ 
+ 
+Why it was chosen
+ 
+ 
+
+ 
+it is fast enough for practical use
+ 
+
+ 
+it reduces noise by focusing later stages on the object crop
+ 
+
+ 
+the repo uses a local checkpoint 
+final_master_model.pt
+ 
+ 
+Why not use only a vision
+-
+language model
+ 
+ 
+Because the first problem is not full reasoning. The first problem is locating the object correctly. A detector is a 
+better fit for that first step.
+ 
+ 
+Limitations
+ 
+ 
+
+
+--- PAGE 4 ---
+
+ 
+poor crops hurt later stages
+ 
+
+ 
+small or occluded objects may be missed
+ 
+
+ 
+wrong first
+-
+stage labels can affect downstream logic
+ 
+ 
+Status
+ 
+ 
+
+ 
+Confirmed from repo
+: local YOLO checkpoint exists
+ 
+
+ 
+Inferred from repo
+: likely project
+-
+adapted or fine
+-
+tuned
+ 
+
+ 
+Must verify personally before viva
+: exact training dataset and mAP
+ 
+ 
+Reference: [Ultralytics YOLOv8 docs](https://docs.ultralytics.com/models/yolov8/)
+ 
+ 
+3.2 Florence
+-
+2
+ 
+ 
+Purpose in this system
+ 
+ 
+Florence
+-
+2 is used after detection for richer crop understanding:
+ 
+ 
+
+ 
+captioning
+ 
+
+ 
+OCR
+ 
+
+ 
+grounding
+ 
+
+ 
+category detail extraction
+ 
+ 
+Why it was chosen
+ 
+ 
+
+ 
+one model supports multiple visual
+-
+language tasks
+ 
+
+ 
+it is useful for structured evidence, not only class prediction
+ 
+ 
+Why not use OCR
+-
+only tools
+ 
+ 
+Because OCR
+-
+only tools cannot explain non
+-
+text visual details like features, defects, or attachments.
+ 
+ 
+Limitations
+ 
+ 
+
+ 
+OCR can fail on blur or glare
+ 
+
+ 
+captions can become too generic
+ 
+
+ 
+grounding quality depends on crop quality
+ 
+ 
+Status
+ 
+ 
+
+ 
+Confirmed from repo
+: local Florence model path is used
+ 
+
+ 
+Inferred from repo
+: 
+-
+ft
+ 
+naming suggests local tuning or adapted weights
+ 
+
+ 
+Must verify personally before viva
+: exact fine
+-
+tuning history and dataset
+ 
+ 
+Reference: [Microsoft Florence
+-
+2 model card](https://huggingface.co/microsoft/Florence
+-
+2
+-
+large)
+ 
+ 
+3.3 DINOv2
+ 
+ 
+Purpose in this system
+ 
+ 
+DINOv2 generates embeddings for similarity and retrieval.
+ 
+ 
+Why it was chosen
+ 
+ 
+
+ 
+better fit for visual similarity than a detector
+ 
+
+ 
+useful for search and multi
+-
+view comparison
+ 
+ 
+Important repo fact
+ 
+ 
+The repo explicitly says the 128d vector is a deterministic projection and not a trained projection head. That is a 
+good point to mention honestly in the viva.
+ 
+ 
+Limitations
+ 
+ 
+
+ 
+visually similar items can still be confused
+ 
+
+
+--- PAGE 5 ---
+
+ 
+embedding similarity alone is not enough for final trust
+ 
+ 
+Status
+ 
+ 
+
+ 
+Confirmed from repo
+: local DINO model loading is implemented
+ 
+
+ 
+Confirmed from repo
+: 128d projection is a pragmatic stable projection
+ 
+
+ 
+Must verify personally before viva
+: whether the base weights were adapted
+ 
+ 
+Reference: [Meta DINOv2 official repo](https://github.com/facebookresearch/dinov2)
+ 
+ 
+3.4 FAISS
+ 
+ 
+Purpose in this system
+ 
+ 
+FAISS stores and searches dense vectors for image retrieval.
+ 
+ 
+Why it was chosen
+ 
+ 
+
+ 
+efficient nearest
+-
+neighbor search
+ 
+
+ 
+natural fit for image embeddings
+ 
+ 
+Limitations
+ 
+ 
+
+ 
+search quality depends on embedding quality
+ 
+
+ 
+retrieval alone does not understand business meaning
+ 
+ 
+Status
+ 
+ 
+
+ 
+Confirmed from repo
+: FAISS is the vector
+-
+search layer
+ 
+ 
+Reference: [Faiss documentation](https://faiss.ai/)
+ 
+ 
+3.5 Gemini reasoner
+ 
+ 
+Purpose in this system
+ 
+ 
+Gemini is an optional reasoning and enrichment layer. It should not invent facts. It should summarize and 
+structure evidence already extracted by the earlier stages.
+ 
+ 
+Why it was chosen
+ 
+ 
+
+ 
+useful for turning many evidence fields into a cleaner structured answer
+ 
+
+ 
+can be turned off
+ 
+
+ 
+fallback logic exists if it fails
+ 
+ 
+Why it is not trusted blindly
+ 
+ 
+
+ 
+PP1 resilience tests show the system can return 
+accepted_degraded
+ 
+
+ 
+Node still supports manual fallback
+ 
+
+ 
+reasoning is treated as helpful, not authoritative
+ 
+ 
+Status
+ 
+ 
+
+ 
+Confirmed from repo
+: API
+-
+backed optional reasoner with timeout and fallback behavior
+ 
+
+ 
+Must verify personally before viva
+: exact live model name used in your demo environment
+ 
+ 
+ 
+ 
+4. How the Pipeline Works Internally
+ 
+ 
+4.1 PP1 internal path
+ 
+ 
+PP1 is used when there is exactly one image.
+ 
+ 
+
+
+--- PAGE 6 ---
+Internal flow:
+ 
+ 
+9.
+ 
+Validate the upload count.
+ 
+10.
+ 
+Save the image temporarily.
+ 
+11.
+ 
+Convert HEIC to JPEG if needed.
+ 
+12.
+ 
+Detect the main object with YOLO.
+ 
+13.
+ 
+Analyze the crop with Florence.
+ 
+14.
+ 
+Optionally call Gemini to structure the evidence.
+ 
+15.
+ 
+Generate embeddings with DINOv2.
+ 
+16.
+ 
+Build a structured result.
+ 
+17.
+ 
+Store accepted results.
+ 
+18.
+ 
+Clean up the temp file.
+ 
+ 
+4.2 PP2 internal path
+ 
+ 
+PP2 is used when there are 2 or 3 images.
+ 
+ 
+Internal flow:
+ 
+ 
+19.
+ 
+Validate that the input contains 2 or 3 images.
+ 
+20.
+ 
+Process each view separately.
+ 
+21.
+ 
+Generate per
+-
+view detections, evidence, and embeddings.
+ 
+22.
+ 
+Run cross
+-
+view verification.
+ 
+23.
+ 
+If verification passes, fuse the evidence.
+ 
+24.
+ 
+Return or store the fused profile.
+ 
+ 
+4.3 Why PP2 is stronger than “run PP1 multiple times”
+ 
+ 
+Because PP2 adds cross
+-
+view logic:
+ 
+ 
+
+ 
+cosine similarity
+ 
+
+ 
+FAISS
+-
+based similarity comparison
+ 
+
+ 
+geometric consistency checks
+ 
+
+ 
+semantic consistency checks
+ 
+
+ 
+category
+-
+aware threshold selection
+ 
+ 
+That makes it a verification pipeline, not just a repetition of PP1.
+ 
+ 
+4.4 Retrieval internal path
+ 
+ 
+Image search does not depend on a single vector only. The search flow:
+ 
+ 
+
+ 
+prepares multiple crops
+ 
+
+ 
+gets embeddings
+ 
+
+ 
+searches FAISS
+ 
+
+ 
+deduplicates hits
+ 
+
+ 
+groups hits per item
+ 
+
+ 
+reranks by category, OCR, brand, color, and vector quality
+ 
+ 
+This is important because it shows the retrieval path is not “just nearest vector wins.”
+ 
+ 
+ 
+ 
+5. Code Segment Explanations
+ 
+ 
+This is the most important chapter for viva defense.
+ 
+ 
+ 
+ 
+5.1 Code Segment: `app/main.py:345` `analyze_pp1`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This route receives one uploaded image and runs the synchronous PP1 analysis flow.
+ 
+ 
+Input 
+-
+> processing 
+-
+> output
+ 
+ 
+
+
+--- PAGE 7 ---
+Input
+ 
+ 
+
+ 
+HTTP request
+ 
+
+ 
+one uploaded file
+ 
+ 
+Processing
+ 
+ 
+
+ 
+validate that there is exactly one image
+ 
+
+ 
+save the file to a temporary path
+ 
+
+ 
+inspect file type
+ 
+
+ 
+convert HEIC if needed
+ 
+
+ 
+call the shared pipeline instance
+ 
+
+ 
+store accepted results
+ 
+
+ 
+clean up the temporary file
+ 
+ 
+Output
+ 
+ 
+
+ 
+PP1 structured analysis response
+ 
+ 
+Why this logic exists
+ 
+ 
+This route is responsible for API
+-
+safe input handling. It does not contain heavy vision logic itself. That logic is 
+delegated to the pipeline service.
+ 
+ 
+Pseudocode explanation
+ 
+ 
+if number_of_files != 1:
+ 
+    
+reject request
+ 
+ 
+save file temporarily
+ 
+ 
+if uploaded file is HEIC:
+ 
+    
+convert to JPEG
+ 
+ 
+run pipeline.process_pp1(temp_path)
+ 
+ 
+if accepted:
+ 
+    
+store result
+ 
+ 
+return response
+ 
+finally:
+ 
+    
+delete temp file
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+First, I validate that PP1 receives exactly one image.
+ 
+
+ 
+Then I save the upload temporarily because the service pipeline expects a usable local path.
+ 
+
+ 
+I inspect the file header because iPhone gallery images may be HEIC even if the extension is misleading.
+ 
+
+ 
+I convert HEIC to JPEG so downstream libraries can process it more reliably.
+ 
+
+ 
+I call the shared pipeline object instead of rebuilding models per request.
+ 
+
+ 
+I store accepted results, but storage failure is treated as non
+-
+fatal.
+ 
+
+ 
+Finally, I delete temporary files to avoid leaks.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why does PP1 require exactly one image?
+ 
+
+ 
+Why convert HEIC instead of rejecting it?
+ 
+
+ 
+Why is cleanup inside 
+finally
+?
+ 
+
+ 
+Why does this route not directly contain model logic?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to allow 2 images here
+ 
+ 
+
+ 
+this route should still stay PP1
+-
+only unless the architecture changes
+ 
+
+ 
+the correct change is not just here; Node routing and PP2 route logic must stay aligned
+ 
+ 
+If the panel asks to reject HEIC instead of converting
+ 
+ 
+
+ 
+remove or bypass the HEIC conversion block
+ 
+
+ 
+replace it with an HTTP 422 error for unsupported format
+ 
+
+ 
+explain that this would simplify handling but reduce user friendliness
+ 
+ 
+
+
+--- PAGE 8 ---
+ 
+ 
+5.2 Code Segment: `app/main.py:441` `analyze_pp1_async`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This route starts the asynchronous PP1 flow. It queues the work, saves a task id, and returns immediately.
+ 
+ 
+Why this logic exists
+ 
+ 
+PP1 can take enough time that a queued job model is safer for user experience than holding a request open.
+ 
+ 
+Pseudocode explanation
+ 
+ 
+validate one image
+ 
+save upload to temp path
+ 
+create task id
+ 
+save initial queued status
+ 
+schedule background task
+ 
+return task id and queued metadata
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+This route does not perform the whole analysis immediately.
+ 
+
+ 
+It creates a task id and stores the job state.
+ 
+
+ 
+It schedules background processing and returns a status object.
+ 
+
+ 
+The client can then poll the job endpoint instead of waiting for a long request.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why do you need async PP1?
+ 
+
+ 
+Why not always use synchronous mode?
+ 
+
+ 
+What happens if the queued job fails later?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to change polling behavior
+ 
+ 
+
+ 
+keep this route mostly the same
+ 
+
+ 
+adjust the job
+-
+store behavior and Node polling interval
+ 
+
+ 
+explain that async behavior is a contract across multiple layers, not one route only
+ 
+ 
+ 
+ 
+5.3 Code Segment: `app/services/unified_pipeline.py:797` `process_pp1`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This is the core PP1 orchestrator. It coordinates detection, analysis, reasoning, embedding generation, and 
+fallback behavior.
+ 
+ 
+Why this logic exists
+ 
+ 
+This method exists so the route stays thin and the full PP1 lifecycle stays in one service.
+ 
+ 
+Internal step flow
+ 
+ 
+25.
+ 
+Run object detection.
+ 
+26.
+ 
+Select the most relevant detection.
+ 
+27.
+ 
+Crop the object.
+ 
+28.
+ 
+Run Florence analysis on the crop.
+ 
+29.
+ 
+Optionally rerank or confirm the label.
+ 
+30.
+ 
+Use the reasoner if enabled.
+ 
+31.
+ 
+Validate the description against evidence.
+ 
+
+
+--- PAGE 9 ---
+32.
+ 
+Generate embeddings.
+ 
+33.
+ 
+Return accepted or accepted_degraded output.
+ 
+ 
+Why the structure matters
+ 
+ 
+This structure is good engineering because:
+ 
+ 
+
+ 
+each stage has a clear responsibility
+ 
+
+ 
+fallback logic is centralized
+ 
+
+ 
+stage
+-
+level timing and failure handling are easier to maintain
+ 
+ 
+Pseudocode explanation
+ 
+ 
+detections = yolo.detect_objects(image)
+ 
+if no detection:
+ 
+    
+return empty response
+ 
+ 
+crop = best detection crop
+ 
+analysis = florence.analyze_crop(crop)
+ 
+ 
+if needed:
+ 
+    
+rerank label using text evidence
+ 
+ 
+try:
+ 
+    
+reason over evidence
+ 
+except:
+ 
+    
+build degraded fallback
+ 
+ 
+embed item image
+ 
+validate embeddings
+ 
+return structured result
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+The function begins by detecting the object because downstream logic depends on a good crop.
+ 
+
+ 
+It then uses Florence to build structured evidence from the crop.
+ 
+
+ 
+It may rerank the label if textual evidence suggests the top label needs correction.
+ 
+
+ 
+The reasoner is optional and controlled, not mandatory.
+ 
+
+ 
+If reasoning fails, the method still tries to return a usable degraded result.
+ 
+
+ 
+Embeddings are generated near the end because they depend on the final crop.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why do you validate embeddings for NaN, Inf, or zeros?
+ 
+
+ 
+Why not fail completely if Gemini is down?
+ 
+
+ 
+How do you stop unsupported text from entering the final description?
+ 
+
+ 
+Why is description validation tied to evidence?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to become stricter when no strong evidence exists
+ 
+ 
+
+ 
+tighten response conditions before returning accepted or accepted_degraded
+ 
+
+ 
+possibly return manual
+-
+entry
+-
+style empty output sooner
+ 
+
+ 
+explain that this improves precision but reduces automation coverage
+ 
+ 
+If the panel asks to disable reasoning
+ 
+ 
+
+ 
+disable the reasoner through settings
+ 
+
+ 
+or short
+-
+circuit reasoner use in this service
+ 
+
+ 
+explain that the pipeline will still work, but descriptions may be less polished
+ 
+ 
+ 
+ 
+5.4 Code Segment: `app/services/pp2_multiview_verifier.py:232` `get_thresholds`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This function resolves the verification thresholds used in PP2. It selects thresholds based on:
+ 
+ 
+
+ 
+two
+-
+view vs three
+-
+view mode
+ 
+
+
+--- PAGE 10 ---
+
+ 
+resolved category group
+ 
+
+ 
+settings overrides
+ 
+
+ 
+fallback legacy threshold behavior
+ 
+ 
+Why this logic exists
+ 
+ 
+Different item categories behave differently. For example:
+ 
+ 
+
+ 
+a smartphone front and back may look very different
+ 
+
+ 
+a wallet may rely more on texture and color
+ 
+
+ 
+small ambiguous items need stricter rules
+ 
+ 
+Because of that, one global threshold would be too simplistic.
+ 
+ 
+Pseudocode explanation
+ 
+ 
+resolve category group
+ 
+ 
+if mode invalid or group unknown:
+ 
+    
+return legacy threshold
+ 
+ 
+if two
+-
+view:
+ 
+    
+load two
+-
+view overrides
+ 
+else:
+ 
+    
+load three
+-
+view overrides
+ 
+ 
+resolve cosine threshold
+ 
+resolve faiss threshold
+ 
+ 
+if missing:
+ 
+    
+return legacy threshold
+ 
+ 
+return thresholds + margin + threshold source label
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+The function first decides whether this is a 2
+-
+view or 3
+-
+view case.
+ 
+
+ 
+Then it maps the category to a verifier group.
+ 
+
+ 
+If no valid group is found, it falls back to a legacy threshold.
+ 
+
+ 
+If overrides exist in settings, it uses them.
+ 
+
+ 
+Otherwise it uses default group
+-
+specific thresholds.
+ 
+
+ 
+It also returns the threshold source so the decision path can be explained or logged.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why are there separate thresholds for two
+-
+view and three
+-
+view cases?
+ 
+
+ 
+Why do you keep a legacy fallback threshold?
+ 
+
+ 
+Why return the threshold
+-
+entry label as well?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to make PP2 stricter
+ 
+ 
+
+ 
+increase group thresholds or base overrides
+ 
+
+ 
+explain that this reduces false positives but may reject valid multi
+-
+angle item sets
+ 
+ 
+If the panel asks to simplify verification
+ 
+ 
+
+ 
+you could collapse group logic toward a single global threshold
+ 
+
+ 
+but explain clearly that this is easier to implement and worse for category
+-
+specific behavior
+ 
+ 
+ 
+ 
+5.5 Code Segment: `app/routers/search_router.py:146` `search_by_image`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This route accepts a query image and performs image search using embeddings and reranking.
+ 
+ 
+Input 
+-
+> processing 
+-
+> output
+ 
+
+
+--- PAGE 11 ---
+ 
+Input
+ 
+ 
+
+ 
+query image
+ 
+
+ 
+top_k
+ 
+
+ 
+min_score
+ 
+
+ 
+optional category filter
+ 
+
+ 
+optional candidate count and debug flags
+ 
+ 
+Processing
+ 
+ 
+
+ 
+validate input sizes and ranges
+ 
+
+ 
+read the image
+ 
+
+ 
+prepare search crops
+ 
+
+ 
+extract query context
+ 
+
+ 
+embed crops
+ 
+
+ 
+search FAISS
+ 
+
+ 
+deduplicate results
+ 
+
+ 
+group hits by item
+ 
+
+ 
+rerank using category, OCR, brand, color, and vector scores
+ 
+ 
+Output
+ 
+ 
+
+ 
+ranked 
+matches
+ 
+ 
+Why this logic exists
+ 
+ 
+Direct nearest
+-
+neighbor retrieval is often not enough. This route improves reliability by:
+ 
+ 
+
+ 
+using multiple crops
+ 
+
+ 
+grouping hits per item
+ 
+
+ 
+reranking with metadata
+ 
+ 
+Pseudocode explanation
+ 
+ 
+validate request fields
+ 
+load image
+ 
+prepare crops
+ 
+extract query context
+ 
+for each crop:
+ 
+    
+embed crop
+ 
+    
+search FAISS
+ 
+ 
+deduplicate hits
+ 
+group hits by item
+ 
+rerank each item
+ 
+filter by min_score
+ 
+sort and return top_k
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+First, I validate search limits so the endpoint cannot be abused with unrealistic inputs.
+ 
+
+ 
+Then I prepare multiple search views, not just one crop.
+ 
+
+ 
+I search FAISS with each view and collect candidates.
+ 
+
+ 
+I deduplicate hits by FAISS id.
+ 
+
+ 
+I regroup them by item id because multiple vectors may belong to the same item.
+ 
+
+ 
+I rerank using richer evidence so the result is not based only on one similarity score.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why use multiple crops?
+ 
+
+ 
+Why do you rerank after FAISS?
+ 
+
+ 
+Why are 
+top_k
+ 
+and 
+min_score
+ 
+validated?
+ 
+
+ 
+Why group by item id instead of returning raw vector hits only?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to return more results
+ 
+ 
+
+ 
+increase the allowed 
+top_k
+ 
+range
+ 
+
+ 
+explain that this improves recall but may reduce the practical usefulness of the first page
+ 
+ 
+If the panel asks to make search stricter
+ 
+
+
+--- PAGE 12 ---
+ 
+
+ 
+raise the default 
+min_score
+ 
+
+ 
+possibly raise the ANN floor logic as well
+ 
+
+ 
+explain that this reduces weak matches but can miss true positives
+ 
+ 
+ 
+ 
+5.6 Code Segment: `Backend/src/controllers/itemController.ts:754` 
+`preAnalyzeFoundImages`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This controller receives uploaded founder images and decides whether to call PP1 or PP2. It is the main 
+orchestration point between the app and the Python pipeline.
+ 
+ 
+Internal behavior
+ 
+ 
+34.
+ 
+Read uploaded files.
+ 
+35.
+ 
+Reject invalid image counts.
+ 
+36.
+ 
+Convert uploaded files into temp paths.
+ 
+37.
+ 
+If image count is 1, call PP1.
+ 
+38.
+ 
+If image count is 2 or 3, call PP2.
+ 
+39.
+ 
+Build an analysis snapshot.
+ 
+40.
+ 
+Return either:
+ 
+
+ 
+ok
+ 
+
+ 
+manual_fallback
+ 
+ 
+Why this logic exists
+ 
+ 
+This is where product behavior is decided. The Python pipeline does vision logic, but Node decides how that 
+logic is used inside the user flow.
+ 
+ 
+Pseudocode explanation
+ 
+ 
+if image_count not in 1..3:
+ 
+    
+reject
+ 
+ 
+if image_count == 1:
+ 
+    
+run PP1
+ 
+    
+if valid:
+ 
+        
+build PP1 snapshot
+ 
+        
+maybe index vector
+ 
+        
+return ok
+ 
+    
+else:
+ 
+        
+return manual_fallback
+ 
+ 
+else:
+ 
+    
+run PP2
+ 
+    
+if verification passed and fused result exists:
+ 
+        
+build PP2 snapshot
+ 
+        
+return ok
+ 
+    
+else:
+ 
+        
+return manual_fallback
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+This function is the app
+-
+facing orchestration point.
+ 
+
+ 
+It first validates image count because the rest of the flow depends on that contract.
+ 
+
+ 
+One image goes to PP1 because that is the single
+-
+view pipeline.
+ 
+
+ 
+Two or three images go to PP2 because that is the verification
+-
+and
+-
+fusion pipeline.
+ 
+
+ 
+The controller does not expose raw Python output directly.
+ 
+
+ 
+If the result is weak or invalid, it returns manual fallback instead of breaking the product flow.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why is routing based on image count?
+ 
+
+ 
+Why does Node return 
+manual_fallback
+ 
+rather than failing the request?
+ 
+
+ 
+Why is PP1 vector indexing non
+-
+fatal?
+ 
+
+ 
+Why is verification required before accepting PP2 output?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to route 2 images to PP1 instead of PP2
+ 
+
+
+--- PAGE 13 ---
+ 
+
+ 
+change the branching condition here
+ 
+
+ 
+also review async start route and the Python
+-
+side assumptions
+ 
+
+ 
+explain that this would be a product choice, not just a syntax change
+ 
+ 
+If the panel asks to accept 4 images
+ 
+ 
+
+ 
+update validation here
+ 
+
+ 
+update corresponding Python route validation
+ 
+
+ 
+update UI and product assumptions if needed
+ 
+
+ 
+explain that PP2 currently assumes 2 to 3 images, so wider support needs aligned changes
+ 
+ 
+ 
+ 
+5.7 Code Segment: `app/routers/pp2_router.py:221` `analyze_multiview`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This route is the synchronous PP2 entry point. It receives 2 or 3 uploaded images, validates the request, pulls the 
+multiview pipeline from app state, and runs the analysis with a scoped storage service.
+ 
+ 
+Input 
+-
+> processing 
+-
+> output
+ 
+ 
+Input
+ 
+ 
+
+ 
+request object
+ 
+
+ 
+uploaded image list
+ 
+
+ 
+database session
+ 
+ 
+Processing
+ 
+ 
+
+ 
+normalize 
+files
+ 
+
+ 
+validate that the count is 2 or 3
+ 
+
+ 
+create or read a request id
+ 
+
+ 
+fetch the multiview pipeline from app state
+ 
+
+ 
+create 
+StorageService
+ 
+
+ 
+call 
+pipeline.analyze(...)
+ 
+
+ 
+log success or failure timing
+ 
+ 
+Output
+ 
+ 
+
+ 
+PP2Response
+ 
+ 
+Why this logic exists
+ 
+ 
+This route keeps PP2 request validation and storage wiring at the API layer while leaving the actual vision logic 
+inside the multiview pipeline service.
+ 
+ 
+Pseudocode explanation
+ 
+ 
+normalize files
+ 
+if file_count not in 2..3:
+ 
+    
+reject
+ 
+ 
+get pipeline from app state
+ 
+create storage service
+ 
+call multiview pipeline
+ 
+return structured pp2 result
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+First, the route ensures PP2 only accepts 2 or 3 images.
+ 
+
+ 
+Then it creates a request id so the whole pipeline run can be traced in logs.
+ 
+
+ 
+It uses app state to access the already initialized multiview pipeline.
+ 
+
+ 
+It creates a scoped storage service because PP2 can persist results.
+ 
+
+ 
+It logs both success and failure timing so PP2 behavior can be diagnosed later.
+ 
+ 
+
+
+--- PAGE 14 ---
+Likely panel questions
+ 
+ 
+
+ 
+Why does PP2 accept only 2 or 3 images?
+ 
+
+ 
+Why inject a DB session here?
+ 
+
+ 
+Why create a request id?
+ 
+
+ 
+Why keep pipeline logic out of the route?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to support 4 images
+ 
+ 
+
+ 
+update the count validation here
+ 
+
+ 
+then confirm the pipeline logic can actually handle 4 views
+ 
+
+ 
+explain that simply changing the route condition is not enough if the service assumes max 3 views
+ 
+ 
+ 
+ 
+5.8 Code Segment: `app/routers/pp2_router.py:280` `analyze_multiview_async`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This route starts the asynchronous PP2 flow. It validates the number of images, persists uploads first, saves a 
+queued job payload, and schedules background processing.
+ 
+ 
+Why this logic exists
+ 
+ 
+PP2 can be slower than PP1 because it processes multiple views and performs verification and fusion. Async 
+handling prevents the mobile
+-
+facing workflow from waiting too long on one request.
+ 
+ 
+Pseudocode explanation
+ 
+ 
+normalize files
+ 
+validate count
+ 
+persist uploads
+ 
+create task id
+ 
+save queued job payload
+ 
+schedule async pp2 job
+ 
+return task id + queued state
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+This route is designed for production
+-
+style responsiveness.
+ 
+
+ 
+It saves the uploads before returning so the background worker still has valid files.
+ 
+
+ 
+It returns a task id so Node can poll job status later.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why persist uploads first instead of using temp request objects only?
+ 
+
+ 
+Why is PP2 async more useful than sync in some cases?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to change retry or queue behavior
+ 
+ 
+
+ 
+adjust the async job payload flow and related job
+-
+store settings
+ 
+
+ 
+explain that upload persistence and job tracking must remain aligned
+ 
+ 
+ 
+ 
+5.9 Code Segment: `Backend/src/services/imageProcessingService.ts:67` 
+`analyzePP1` and `:91` `analyzePP2`
+ 
+ 
+ 
+What this code segment does
+ 
+
+
+--- PAGE 15 ---
+ 
+This service is the Node
+-
+side client for the Python pipeline. It converts local file paths into multipart form
+-
+data 
+requests and sends them to the internal Python endpoints.
+ 
+ 
+Why this logic exists
+ 
+ 
+Node should not build raw pipeline HTTP calls everywhere in controllers. Centralizing the internal client:
+ 
+ 
+
+ 
+reduces duplication
+ 
+
+ 
+keeps endpoint URLs in one place
+ 
+
+ 
+standardizes timeout and error logging behavior
+ 
+ 
+Internal behavior
+ 
+ 
+
+ 
+builds 
+FormData
+ 
+
+ 
+appends one file for PP1 or many files for PP2
+ 
+
+ 
+posts to the internal Python endpoint
+ 
+
+ 
+logs pipeline errors consistently
+ 
+ 
+Pseudocode explanation
+ 
+ 
+create FormData
+ 
+append file(s)
+ 
+send request to Python service
+ 
+if error:
+ 
+    
+log useful details
+ 
+return data
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+This service is a dedicated internal API client, not business logic.
+ 
+
+ 
+Controllers call this service instead of building raw HTTP requests themselves.
+ 
+
+ 
+The service also standardizes timeout handling and error logging.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why not call Python directly from the controller every time?
+ 
+
+ 
+Why keep timeout handling here?
+ 
+
+ 
+Why use multipart form
+-
+data?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to change Python service URL or timeout
+ 
+ 
+
+ 
+update 
+IMAGE_PIPELINE_URL
+ 
+or 
+IMAGE_PIPELINE_TIMEOUT_MS
+ 
+
+ 
+explain that this changes connectivity behavior, not model behavior
+ 
+ 
+If the panel asks to add a new internal endpoint
+ 
+ 
+
+ 
+add one function here first
+ 
+
+ 
+then call it from the controller
+ 
+
+ 
+explain that this preserves clean layering
+ 
+ 
+ 
+ 
+5.10 Code Segment: `app/services/yolo_service.py:83` `detect_objects`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This method runs YOLO detection, sorts detections by confidence, canonicalizes class labels, and returns 
+structured 
+YoloDetection
+ 
+objects.
+ 
+ 
+Why this logic exists
+ 
+ 
+The raw model output is not convenient for downstream logic. This wrapper normalizes it into a clean internal 
+format.
+ 
+
+
+--- PAGE 16 ---
+ 
+Pseudocode explanation
+ 
+ 
+ensure model is loaded
+ 
+run warmup if needed
+ 
+run prediction
+ 
+for each result box:
+ 
+    
+read class id
+ 
+    
+read confidence
+ 
+    
+canonicalize label
+ 
+    
+build structured detection object
+ 
+sort detections by confidence
+ 
+return detections
+ 
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+The method ensures the model is ready.
+ 
+
+ 
+It optionally runs warmup so first
+-
+request latency and setup behavior are controlled.
+ 
+
+ 
+It converts raw YOLO output into structured detection objects that other services can use safely.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why canonicalize labels here?
+ 
+
+ 
+Why sort by confidence?
+ 
+
+ 
+Why have a warmup path?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to return more detections
+ 
+ 
+
+ 
+adjust 
+max_detections
+ 
+usage or calling code
+ 
+
+ 
+explain that more detections may help recall but can increase downstream noise
+ 
+ 
+ 
+ 
+5.11 Code Segment: `app/services/dino_embedder.py:210` `embed_768` and `:249` 
+`embed_128`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+These methods generate embeddings for item images.
+ 
+ 
+
+ 
+embed_768
+ 
+produces the richer DINO feature vector
+ 
+
+ 
+embed_128
+ 
+gives the lower
+-
+dimensional retrieval vector
+ 
+ 
+Why this logic exists
+ 
+ 
+The pipeline needs one representation suitable for richer similarity work and one smaller representation 
+suitable for storage and FAISS indexing.
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+The embedder first ensures the model is loaded.
+ 
+
+ 
+It prepares the image into a stable input size and crop.
+ 
+
+ 
+It generates a high
+-
+dimensional representation.
+ 
+
+ 
+Then it derives a lower
+-
+dimensional vector for indexing efficiency.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why use both 768d and 128d?
+ 
+
+ 
+Why not index the 768d vector directly?
+ 
+
+ 
+Why is the 128d projection described as pragmatic in the repo?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to change embedding dimensionality
+ 
+ 
+
+
+--- PAGE 17 ---
+
+ 
+update projection
+-
+related logic carefully
+ 
+
+ 
+then check FAISS index assumptions and any stored
+-
+vector compatibility
+ 
+
+ 
+explain that dimensionality changes affect storage, search, and compatibility together
+ 
+ 
+ 
+ 
+5.12 Code Segment: `app/config/settings.py:3` `Settings`
+ 
+ 
+ 
+What this code segment does
+ 
+ 
+This is the central configuration object for the image pipeline. It defines thresholds, timeouts, model settings, 
+FAISS paths, database settings, and PP2 verifier overrides.
+ 
+ 
+Why this logic exists
+ 
+ 
+Hardcoding these values throughout the codebase would make tuning and deployment harder. Central 
+configuration allows safer experimentation and environment
+-
+specific behavior.
+ 
+ 
+Key settings the panel may care about
+ 
+ 
+
+ 
+PP2_SIM_THRESHOLD
+ 
+
+ 
+PP2_ENABLE_REASONER
+ 
+
+ 
+PP2_REASONER_MODE
+ 
+
+ 
+PP2_VERIFIER_*
+ 
+
+ 
+FLORENCE_*
+ 
+timeouts
+ 
+
+ 
+DINO_*
+ 
+settings
+ 
+
+ 
+FAISS_INDEX_PATH
+ 
+ 
+What to say if asked line by line
+ 
+ 
+
+ 
+This class is where important runtime behavior becomes configurable.
+ 
+
+ 
+It separates tuning from core logic.
+ 
+
+ 
+It is especially important for verifier thresholds and reasoner control.
+ 
+ 
+Likely panel questions
+ 
+ 
+
+ 
+Why keep thresholds in settings instead of hardcoding them?
+ 
+
+ 
+What setting would you change first if PP2 is too strict?
+ 
+
+ 
+What setting would you change if the service is timing out?
+ 
+ 
+How to modify this code
+ 
+ 
+If the panel asks to tune behavior without touching business logic
+ 
+ 
+
+ 
+change settings first
+ 
+
+ 
+explain that configuration
+-
+level changes are safer than rewriting core logic when tuning is the goal
+ 
+ 
+ 
+ 
+6. Exact Change Drills
+ 
+ 
+This chapter is designed for live code
+-
+modification questions.
+ 
+ 
+Change 
+request
+ 
+Main file(s)
+ 
+What to change
+ 
+Expected 
+effect
+ 
+Risk you 
+should 
+mention
+ 
+ 
+Change 
+PP1 vs 
+PP2 
+routing
+ 
+ 
+Backend/src/controllers/itemController
+.ts
+ 
+ 
+edit 
+if 
+(tempImagePaths.le
+ngth === 1)
+ 
+branching
+ 
+ 
+different 
+image 
+counts 
+will 
+follow 
+different 
+pipelines
+ 
+ 
+product 
+behavior 
+changes 
+across 
+app flow
+ 
+ 
+Change 
+allowed 
+image 
+counts
+ 
+ 
+Backend/src/controllers/itemController
+.ts
+, 
+app/main.py
+, 
+app/routers/pp2_router.py
+ 
+ 
+update request 
+validation conditions
+ 
+ 
+more or 
+fewer 
+images 
+accepted
+ 
+ 
+Node and 
+Python 
+validation 
+can 
+become 
+inconsiste
+nt if only 
+
+
+--- PAGE 18 ---
+one side 
+changes
+ 
+ 
+Tighten 
+PP2 
+threshol
+ds
+ 
+ 
+app/config/settings.py
+, 
+app/services/pp2_multiview_verifier.py
+ 
+ 
+raise threshold values
+ 
+ 
+fewer 
+false 
+matches, 
+more 
+false 
+rejects
+ 
+ 
+stricter 
+verificatio
+n may 
+reject real 
+multi
+-
+angle 
+images
+ 
+ 
+Loosen 
+PP2 
+threshol
+ds
+ 
+ 
+same as above
+ 
+ 
+lower thresholds
+ 
+ 
+more 
+passes, 
+higher 
+false
+-
+match 
+risk
+ 
+ 
+unsafe 
+fusion risk 
+increases
+ 
+ 
+Change 
+search 
+top_k
+ 
+ 
+app/routers/search_router.py
+ 
+ 
+raise or lower 
+range/default
+ 
+ 
+changes 
+result list 
+size
+ 
+ 
+larger 
+result sets 
+may 
+reduce 
+precision 
+usefulness
+ 
+ 
+Change 
+search 
+min_sco
+re
+ 
+ 
+app/routers/search_router.py
+ 
+ 
+increase or decrease 
+default filter
+ 
+ 
+stricter or 
+looser 
+result 
+acceptan
+ce
+ 
+ 
+low 
+threshold
+s can 
+increase 
+noise
+ 
+ 
+Change 
+PP1 
+fallback 
+behavior
+ 
+ 
+app/services/unified_pipeline.py
+, 
+Backend/src/controllers/itemController
+.ts
+ 
+ 
+tighten or loosen 
+empty/degraded 
+acceptance path
+ 
+ 
+more or 
+fewer AI 
+prefills 
+returned
+ 
+ 
+may 
+reduce 
+automatio
+n if too 
+strict
+ 
+ 
+Disable 
+Gemini
+ 
+ 
+settings or reasoner flow
+ 
+ 
+set reasoner off
+ 
+ 
+faster 
+and safer 
+but less 
+enriched 
+descriptio
+ns
+ 
+ 
+output 
+quality 
+may 
+become 
+less 
+descriptiv
+e
+ 
+ 
+Change 
+async 
+behavior
+ 
+ 
+Backend/src/services/imageProcessingSe
+rvice.ts
+, job
+-
+store settings, async routes
+ 
+ 
+adjust timeout and 
+polling assumptions
+ 
+ 
+different 
+UX for 
+long
+-
+running 
+analysis
+ 
+ 
+changing 
+only one 
+layer can 
+break 
+polling 
+expectatio
+ns
+ 
+ 
+Add new 
+item 
+category
+ 
+ 
+app/domain/category_specs.py
+, keyword 
+maps, possibly verifier grouping
+ 
+ 
+add canonical label, 
+details, and mappings
+ 
+ 
+new class 
+supporte
+d
+ 
+ 
+detection, 
+grounding
+, and 
+verifier 
+logic all 
+need 
+alignment
+ 
+ 
+ 
+6.1 Drill: change PP1 / PP2 routing
+ 
+ 
+Where
+ 
+ 
+
+ 
+Backend/src/controllers/itemController.ts
+ 
+ 
+Current idea
+ 
+ 
+
+ 
+1 image 
+-
+> PP1
+ 
+
+ 
+2 or 3 images 
+-
+> PP2
+ 
+ 
+If asked to change
+ 
+ 
+
+ 
+update the branch in 
+preAnalyzeFoundImages
+ 
+
+ 
+update the async version in 
+startPreAnalyzeFoundImages
+ 
+
+ 
+explain whether the Python endpoints still match the new rule
+ 
+ 
+What to say
+ 
+ 
+This change belongs to the orchestration layer first, because routing is a product
+-
+flow decision. But I also need to 
+keep the Python
+-
+side validation consistent.
+ 
+ 
+ 
+6.2 Drill: change image
+-
+count validation
+ 
+
+
+--- PAGE 19 ---
+ 
+Where
+ 
+ 
+
+ 
+Node controller
+ 
+
+ 
+PP1 route
+ 
+
+ 
+PP2 route
+ 
+ 
+What to say
+ 
+ 
+Validation must stay aligned at both layers. If Node accepts something Python rejects, the user flow becomes 
+inconsistent.
+ 
+ 
+ 
+6.3 Drill: change PP2 thresholds
+ 
+ 
+Where
+ 
+ 
+
+ 
+app/services/pp2_multiview_verifier.py
+ 
+
+ 
+app/config/settings.py
+ 
+ 
+What to say
+ 
+ 
+Threshold changes are not only coding changes. They change the precision
+-
+recall balance of multi
+-
+view verification.
+ 
+ 
+ 
+6.4 Drill: change search strictness
+ 
+ 
+Where
+ 
+ 
+
+ 
+app/routers/search_router.py
+ 
+ 
+What to say
+ 
+ 
+Increasing `top_k` helps recall, but increasing `min_score` helps precision. The right choice depends on whether the 
+product wants broader search or cleaner top results.
+ 
+ 
+ 
+6.5 Drill: change fallback behavior
+ 
+ 
+Where
+ 
+ 
+
+ 
+app/services/unified_pipeline.py
+ 
+
+ 
+Backend/src/controllers/itemController.ts
+ 
+ 
+What to say
+ 
+ 
+Fallback behavior is a safety decision. If we tighten it, fewer wrong AI suggestions reach users, but more users will 
+need manual entry.
+ 
+ 
+ 
+6.6 Drill: change async polling and timeout behavior
+ 
+ 
+Where
+ 
+ 
+
+ 
+Backend/src/services/imageProcessingService.ts
+ 
+
+ 
+Python async job settings
+ 
+ 
+What to say
+ 
+ 
+Timeouts and polling are cross
+-
+service behavior. I would not change only the client timeout without checking the 
+queue and job
+-
+store expectations.
+ 
+ 
+
+
+--- PAGE 20 ---
+ 
+ 
+ 
+7. Validation and Honest Claims
+ 
+ 
+7.1 What is already validated in the repo
+ 
+ 
+The repo includes tests for:
+ 
+ 
+
+ 
+PP1 resilience
+ 
+
+ 
+PP2 API
+ 
+
+ 
+PP2 verifier logic
+ 
+
+ 
+PP2 fusion
+ 
+
+ 
+geometric verification
+ 
+
+ 
+search reranking
+ 
+
+ 
+OCR and caption sanitization
+ 
+
+ 
+founder prefill analytics
+ 
+ 
+Important files:
+ 
+ 
+
+ 
+tests/test_pp1_resilience.py
+ 
+
+ 
+tests/test_pp2_api.py
+ 
+
+ 
+tests/test_pp2_verifier.py
+ 
+
+ 
+tests/test_pp2_multiview_pipeline.py
+ 
+
+ 
+tests/test_pp2_fusion_service.py
+ 
+
+ 
+tests/test_search_router.py
+ 
+ 
+7.2 Strong viva point from resilience tests
+ 
+ 
+The PP1 resilience tests show that if Gemini fails, the pipeline can still return 
+accepted_degraded
+ 
+instead of 
+collapsing completely. This is a strong engineering point because it shows reliability planning, not just model 
+chaining.
+ 
+ 
+7.3 Current local metric snapshot
+ 
+ 
+From the local search evaluation script:
+ 
+ 
+Metric
+ 
+Value
+ 
+ 
+Precision@1
+ 
+ 
+1.0
+ 
+ 
+Precision@5
+ 
+ 
+0.2
+ 
+ 
+False positive rate
+ 
+ 
+0.6667
+ 
+ 
+Case count
+ 
+ 
+4
+ 
+ 
+ 
+7.4 Correct interpretation
+ 
+ 
+This should be presented honestly:
+ 
+ 
+
+ 
+good top
+-
+1 result on a very small fixture set
+ 
+
+ 
+not strong enough to claim benchmark
+-
+grade performance
+ 
+
+ 
+still clear room for improving deeper ranking quality
+ 
+ 
+7.5 Safe viva answer
+ 
+ 
+Our current search metrics come from a very small internal fixture set, so I treat them as early validation, not a final 
+benchmark.
+ 
+ 
+ 
+ 
+ 
+8. Pretrained Models, Data, Bias, and Ethics
+ 
+ 
+Component
+ 
+Status
+ 
+Safe claim
+ 
+ 
+YOLO checkpoint
+ 
+ 
+Inferred from repo
+ 
+ 
+local checkpoint exists and 
+appears project
+-
+adapted
+ 
+ 
+Florence local weights
+ 
+ 
+Inferred from repo
+ 
+ 
+local tuned
+-
+looking model path 
+
+
+--- PAGE 21 ---
+exists
+ 
+ 
+DINOv2
+ 
+ 
+Confirmed from repo
+ 
+ 
+local embedding model loading is 
+implemented
+ 
+ 
+Gemini
+ 
+ 
+Confirmed from repo
+ 
+ 
+optional external reasoner
+ 
+ 
+FAISS
+ 
+ 
+Confirmed from repo
+ 
+ 
+vector
+-
+search infrastructure
+ 
+ 
+ 
+8.1 Risks you should mention
+ 
+ 
+
+ 
+pretrained models can carry source
+-
+dataset bias
+ 
+
+ 
+OCR may perform worse on poor text conditions
+ 
+
+ 
+class imbalance can hurt some categories
+ 
+
+ 
+visually similar items can confuse retrieval
+ 
+ 
+8.2 Why human correction still matters
+ 
+ 
+
+ 
+AI output can be wrong
+ 
+
+ 
+multi
+-
+view verification can reject true cases
+ 
+
+ 
+OCR can misread text
+ 
+
+ 
+final product safety improves when the user can edit and confirm
+ 
+ 
+8.3 Safe ethics answer
+ 
+ 
+This system uses pretrained and adapted components, so I do not treat AI output as final truth. The design keeps a 
+human in the loop and records edits for later analysis.
+ 
+ 
+ 
+ 
+ 
+9. AI Usage and Academic Integrity
+ 
+ 
+9.1 Safe direct answer
+ 
+ 
+Yes, I used AI tools during development, but I did not treat them as authoritative. I used them to accelerate drafting, 
+idea exploration, and troubleshooting. Final architecture, integration, testing, debugging, and validation decisions 
+remained my responsibility.
+ 
+ 
+ 
+9.2 Where AI may have helped
+ 
+ 
+
+ 
+drafting explanations
+ 
+
+ 
+suggesting code ideas
+ 
+
+ 
+comparing implementation options
+ 
+
+ 
+generating document structure
+ 
+ 
+9.3 What remained your responsibility
+ 
+ 
+
+ 
+deciding final architecture
+ 
+
+ 
+integrating Node and Python correctly
+ 
+
+ 
+deciding which outputs are trusted
+ 
+
+ 
+testing fallback behavior
+ 
+
+ 
+understanding and explaining the code
+ 
+ 
+9.4 Best defense line
+ 
+ 
+I used AI as an assistant, not as a substitute for understanding. If I cannot explain a part clearly, I should not claim 
+ownership of it.
+ 
+ 
+ 
+ 
+ 
+10. Python and Node Interfaces the Panel Can Ask About
+ 
+ 
+Interface
+ 
+Purpose
+ 
+ 
+POST /pp1/analyze
+ 
+ 
+sync single
+-
+image analysis
+ 
+
+
+--- PAGE 22 ---
+ 
+POST /pp1/analyze_async
+ 
+ 
+async single
+-
+image analysis
+ 
+ 
+POST /pp2/analyze_multiview
+ 
+ 
+sync multi
+-
+view analysis
+ 
+ 
+POST /pp2/analyze_multiview_async
+ 
+ 
+async multi
+-
+view analysis
+ 
+ 
+POST /search/by
+-
+image
+ 
+ 
+image retrieval
+ 
+ 
+POST /search/index_vector
+ 
+ 
+vector indexing
+ 
+ 
+POST /feedback/founder
+-
+prefill
+ 
+ 
+analytics callback
+ 
+ 
+GET /jobs/pre
+-
+analysis/{task_id}
+ 
+ 
+async job status
+ 
+ 
+ 
+Important Node orchestration behavior:
+ 
+ 
+
+ 
+route by image count
+ 
+
+ 
+normalize raw Python results
+ 
+
+ 
+return manual fallback when needed
+ 
+
+ 
+keep the app insulated from raw model complexity
+ 
+ 
+ 
+ 
+11. Viva Questions With Model Answers
+ 
+ 
+Q1. Explain your component in your own words.
+ 
+ 
+This component is the internal vision backend of FindAssure. It analyzes uploaded item images, extracts 
+structured evidence, verifies multi
+-
+view consistency, supports image retrieval, and reports the results back 
+through the Node backend.
+ 
+ 
+Q2. Why is the app not calling the Python service directly?
+ 
+ 
+Because Node owns workflow, product rules, and safe fallback behavior. The Python service is specialized for 
+vision logic only.
+ 
+ 
+Q3. What happens when `analyze_pp1` runs?
+ 
+ 
+It validates that exactly one file was uploaded, saves it temporarily, converts HEIC if needed, calls the shared PP1 
+pipeline, stores valid results, returns the analysis, and removes the temp file.
+ 
+ 
+Q4. Why use YOLO before Florence?
+ 
+ 
+Because detection should happen first. A good crop makes Florence more reliable and reduces scene noise.
+ 
+ 
+Q5. Why use Florence after detection?
+ 
+ 
+Because Florence can extract richer evidence such as OCR, descriptions, and grounded details from the object 
+crop.
+ 
+ 
+Q6. What does the PP1 service orchestrator do?
+ 
+ 
+It coordinates the full single
+-
+image flow from detection to evidence extraction, reasoning, embedding 
+generation, and fallback handling.
+ 
+ 
+Q7. Why not fail completely if Gemini is unavailable?
+ 
+ 
+Because reasoning is optional support logic. The pipeline should still return a usable degraded result when 
+possible.
+ 
+ 
+Q8. What makes PP2 different from PP1?
+ 
+ 
+PP2 does cross
+-
+view verification and fusion. It does not just repeat PP1.
+ 
+ 
+Q9. Why do you need category
+-
+specific thresholds in PP2?
+ 
+ 
+Because different item categories behave differently across views, so a single threshold would be too crude.
+ 
+ 
+
+
+--- PAGE 23 ---
+Q10. What does `get_thresholds` really control?
+ 
+ 
+It selects the similarity thresholds used to decide whether the uploaded views are likely from the same physical 
+item.
+ 
+ 
+Q11. Why does the search route rerank after FAISS?
+ 
+ 
+Because nearest
+-
+neighbor similarity alone is not enough. The system also checks category, OCR, brand, and 
+color consistency.
+ 
+ 
+Q12. Why validate `top_k` and `min_score`?
+ 
+ 
+Because they affect both safety and usefulness. Extreme values can make search noisy or wasteful.
+ 
+ 
+Q13. Why is vector indexing in Node treated as non
+-
+fatal?
+ 
+ 
+Because searchability is valuable, but it should not block the founder’s main reporting flow.
+ 
+ 
+Q14. Why does Node return `manual_fallback` instead of failing the whole request?
+ 
+ 
+Because product continuity matters. If AI is uncertain, the user should still be able to continue manually.
+ 
+ 
+Q15. How did you validate the system?
+ 
+ 
+Through targeted unit and integration tests plus a small offline search
+-
+evaluation script.
+ 
+ 
+Q16. What metrics can you safely claim?
+ 
+ 
+I can safely claim the current local fixture metrics, but only as limited internal validation, not benchmark
+-
+level 
+proof.
+ 
+ 
+Q17. Did you train these models yourself?
+ 
+ 
+I can confirm local model assets exist, but I will only claim exact training details that I can personally verify.
+ 
+ 
+Q18. What are the main limitations of your component?
+ 
+ 
+
+ 
+detection can fail
+ 
+
+ 
+OCR can be noisy
+ 
+
+ 
+retrieval can return false positives
+ 
+
+ 
+thresholds need tuning
+ 
+
+ 
+pretrained models can carry bias
+ 
+ 
+Q19. If I ask you to change the logic now, can you do it?
+ 
+ 
+Yes. I would first identify whether the change belongs to Node orchestration, Python route validation, or core 
+service logic, then update all aligned layers.
+ 
+ 
+Q20. How do you know this is your engineering work and not just AI output?
+ 
+ 
+Because I can explain the architecture, the code segments, the data flow, the failure paths, and the exact files I 
+would modify for behavior changes.
+ 
+ 
+ 
+ 
+12. Personal Verification Checklist Before Viva
+ 
+ 
+Verify these before saying them publicly:
+ 
+ 
+
+ 
+exact dataset used for 
+final_master_model.pt
+ 
+
+ 
+exact Florence tuning history
+ 
+
+ 
+whether Gemini is enabled in the final demo setup
+ 
+
+ 
+any latency numbers you plan to mention
+ 
+
+ 
+any accuracy percentages beyond the small local fixture metrics
+ 
+ 
+If you are unsure, say:
+ 
+
+
+--- PAGE 24 ---
+ 
+The repo confirms local assets and integration logic, but I do not want to overclaim undocumented training details 
+without verifying them first.
+ 
+ 
+ 
+ 
+ 
+13. Presentation Support Table
+ 
+ 
+Slide topic
+ 
+30
+-
+second answer
+ 
+deeper follow
+-
+up answer
+ 
+ 
+Architecture
+ 
+ 
+The app talks to Node, and Node 
+orchestrates the Python vision 
+service.
+ 
+ 
+This keeps the app simple and lets 
+Node manage workflow, fallback, 
+and normalization.
+ 
+ 
+PP1
+ 
+ 
+PP1 handles one image from 
+upload to structured analysis.
+ 
+ 
+It validates input, detects the 
+object, analyzes the crop, 
+optionally reasons over evidence, 
+generates embeddings, and 
+returns a result.
+ 
+ 
+PP2
+ 
+ 
+PP2 verifies and fuses 2 or 3 views 
+of the same item.
+ 
+ 
+It compares views using similarity 
+and geometry before producing 
+one fused profile.
+ 
+ 
+Search
+ 
+ 
+Search uses embeddings, FAISS, 
+and reranking.
+ 
+ 
+It does not trust one vector score 
+only; it combines multiple 
+evidence signals.
+ 
+ 
+Reliability
+ 
+ 
+The system prefers safe fallback 
+over brittle failure.
+ 
+ 
+That is why degraded output and 
+manual fallback exist.
+ 
+ 
+ 
+ 
+ 
+14. Final Defense Position
+ 
+ 
+The best final position in the viva is:
+ 
+ 
+
+ 
+I understand the architecture.
+ 
+
+ 
+I understand the code hotspots.
+ 
+
+ 
+I can explain why each model exists.
+ 
+
+ 
+I know which file to edit for behavior changes.
+ 
+
+ 
+I know the current limitations.
+ 
+
+ 
+I will not overclaim undocumented training details.
+ 
+ 
+That is the strongest and safest way to defend this component.
+ 

@@ -1,3 +1,11 @@
+"""FAISS-backed semantic engine for found-item indexing and search.
+
+Module overview:
+- Loads a sentence-transformer model with high-accuracy and lightweight fallbacks.
+- Stores normalized vectors in FAISS and keeps item metadata aligned by index position.
+- Syncs MongoDB items into local vector state and persists cache files for fast startup.
+"""
+
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
@@ -12,6 +20,8 @@ import threading
 from sklearn.metrics.pairwise import cosine_similarity
 
 class SemanticEngine:
+    """Singleton wrapper around the embedding model, FAISS index, and metadata cache."""
+
     _instance = None
 
     def __new__(cls):
@@ -42,8 +52,8 @@ class SemanticEngine:
         self.dimension = self.model.get_sentence_embedding_dimension()
         print(f"Model dimension: {self.dimension}")
 
-        # Use Inner Product (IP) index for cosine similarity
-        # Vectors will be normalized, so IP = cosine similarity
+        # Use Inner Product (IP) index for cosine similarity.
+        # Vectors are normalized before insertion, so IP equals cosine similarity.
         if os.path.exists(settings.INDEX_PATH):
             try:
                 print("Loading FAISS index from disk...")
@@ -185,7 +195,8 @@ class SemanticEngine:
         except Exception as e:
             print(f"MongoDB save failed: {e}")
         
-        # 5. Persist to disk every 10 items
+        # 5. Persist to disk every 10 items to avoid rewriting large cache files
+        # on every single insert.
         if len(self.items_metadata) % 10 == 0:
             self._save_to_disk()
         

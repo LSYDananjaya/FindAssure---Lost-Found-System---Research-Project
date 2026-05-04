@@ -1,9 +1,18 @@
+"""Environment-backed settings for the semantic engine.
+
+Module overview:
+- Loads service names, MongoDB connection values, model paths, and feature flags from .env.
+- Centralizes filesystem paths so routes, training, and indexing use the same artifacts.
+"""
+
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class Settings:
+    """Typed settings container built from environment variables."""
+
     PROJECT_NAME: str = os.getenv("APP_NAME", "Semantic Engine")
 
     # MongoDB Configuration (loaded from .env — no hardcoded credentials)

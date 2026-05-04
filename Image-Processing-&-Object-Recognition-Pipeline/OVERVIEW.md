@@ -1,6 +1,6 @@
 # Vision Core Backend Overview (Phase 1)
 
-FastAPI service that wraps a multi-model computer-vision pipeline for object analysis and re-identification. This system employs a **hybrid architecture** using **YOLOv8m** for detection and **Florence-2** for detailed visual analysis, captioning, and grounding. It leverages **Gemini 3 Flash** for high-level reasoning and **DINOv2** for feature extraction.
+FastAPI service that wraps a multi-model computer-vision pipeline for object analysis and re-identification. This system employs a **hybrid architecture** using **YOLOv8m** for detection and **Florence-2** for detailed visual analysis, captioning, and grounding. It uses a **Gemini-only** reasoning layer and leverages **DINOv2** for feature extraction.
 
 ## Key Components
 
@@ -8,7 +8,7 @@ FastAPI service that wraps a multi-model computer-vision pipeline for object ana
   FastAPI application entry point. Handles service initialization and dependency injection.
   **Endpoints:**
   - `GET /`: Health check.
-  - `POST /pp1/analyze`: **Primary Endpoint**. Single-image analysis pipeline (YOLO -> Florence -> Gemini -> DINOv2).
+  - `POST /pp1/analyze`: **Primary Endpoint**. Single-image analysis pipeline (YOLO -> Florence -> Reasoner -> DINOv2).
   - `POST /analyze`: **Deprecated**. Returns 400 Bad Request directing users to `/pp1/analyze`.
 
 - **`app/services/unified_pipeline.py`**  
@@ -16,7 +16,7 @@ FastAPI service that wraps a multi-model computer-vision pipeline for object ana
   1.  **Detection**: YOLOv8m (Local). Minimum area gate (0.5%) filters tiny detections.
   2.  **Analysis**: Florence-2 (Caption, OCR, VQA, Grounding). Guided VQA skipped when caption ≥ 12 words. Description enrichment VQA when < 6 words. All subtasks retry once on timeout.
   3.  **Cross-Validation**: Florence OD (confidence-gated: skipped when YOLO conf ≥ 0.92 + area ≥ 5%). Expanded label rerank keywords with brand names/aliases.
-  4.  **Reasoning**: Gemini 3 Flash (Evidence-Locked). Fatal errors → Florence-only fallback (`accepted_degraded`). Transient errors → `accepted_degraded` with `degradation_reason`.
+  4.  **Reasoning**: Gemini evidence-locked reasoner. Fatal errors → Florence-only fallback (`accepted_degraded`). Transient errors → `accepted_degraded` with `degradation_reason`.
   5.  **Embedding**: DINOv2 (768d + 128d projection). Validated for NaN/Inf/zeros.
   6.  **Storage**: Accepted/degraded items persisted to PostgreSQL + Redis.
 
@@ -30,9 +30,9 @@ FastAPI service that wraps a multi-model computer-vision pipeline for object ana
   - **Local Loading**: Strictly loads from `app/models/florence2-base-ft/`.
 
 - **`app/services/gemini_reasoner.py`**  
-  Interface for Google's Gemini 3 Flash Preview model.
-  - **Strict Extraction**: Uses a rigid prompt to extract JSON data solely from the provided evidence.
-  - **Validation**: Enforces allowed labels and category-specific defects.
+  Gemini implementation for the reasoning layer.
+  - **Strict Extraction**: Use rigid prompts to extract JSON data solely from the provided evidence.
+  - **Validation**: Enforce allowed labels and category-specific defects.
 
 - **`app/services/dino_embedder.py`**  
   Wraps the DINOv2 Vision Transformer for generating high-quality semantic embeddings (768d) and a projected 128d vector for efficient storage.

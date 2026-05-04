@@ -1,9 +1,19 @@
+"""Legacy in-package semantic engine kept for lightweight direct imports.
+
+Module overview:
+- Loads the fine-tuned sentence-transformer when available.
+- Maintains an in-memory FAISS index and metadata list.
+- Provides simple add/search methods for callers that do not use app.core.semantic.
+"""
+
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import os
 
 class SemanticEngine:
+    """Simple in-memory semantic index wrapper."""
+
     def __init__(self):
         # Path management to find the model
         base_dir = os.path.dirname(os.path.abspath(__file__))

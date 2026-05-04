@@ -1,3 +1,14 @@
+"""PP1 single-image orchestration.
+
+Module overview:
+- YOLO proposes the object crop and initial category.
+- Florence extracts grounded evidence from the crop: caption, OCR, color, and
+  category-specific details.
+- The optional reasoning provider structures that evidence, but guards prevent
+  unsupported label changes.
+- DINO creates vectors so the item remains searchable by image.
+"""
+
 from typing import Any, Dict, List, Optional
 from PIL import Image
 import numpy as np
@@ -10,15 +21,17 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.services.yolo_service import YoloService
 from app.services.florence_service import FlorenceService
-from app.services.gemini_reasoner import (
-    GeminiReasoner,
-    GeminiFatalError,
-    GeminiTransientError,
-    REASONING_FAILED_MESSAGE,
-    RETRYABLE_UNAVAILABLE_MESSAGE,
-)
 from app.services.dino_embedder import DINOEmbedder
 from app.services.detection_arbiter import should_run_florence_od, arbitrate
+from app.services.pp2_fusion_service import MultiViewFusionService
+from app.services.reasoner_factory import create_reasoner_from_settings
+from app.services.reasoner_types import (
+    REASONING_FAILED_MESSAGE,
+    RETRYABLE_UNAVAILABLE_MESSAGE,
+    ReasonerFatalError,
+    ReasonerProtocol,
+    ReasonerTransientError,
+)
 from app.domain.color_utils import normalize_color
 from app.domain.label_keywords import (
     CATEGORY_KEYWORDS,
@@ -33,6 +46,8 @@ from app.domain.category_specs import canonicalize_label
 logger = logging.getLogger(__name__)
 
 class UnifiedPipeline:
+    """Coordinates all models used by the PP1 single-photo path."""
+
     LABEL_RERANK_TOPK = 5
     LABEL_RERANK_KEYWORDS: Dict[str, List[str]] = CATEGORY_KEYWORDS
     LABEL_RERANK_SOURCE_WEIGHTS: Dict[str, int] = KEYWORD_SOURCE_WEIGHTS
@@ -43,20 +58,21 @@ class UnifiedPipeline:
         self,
         yolo: Optional[YoloService] = None,
         florence: Optional[FlorenceService] = None,
-        gemini: Optional[GeminiReasoner] = None,
+        gemini: Optional[ReasonerProtocol] = None,
         dino: Optional[DINOEmbedder] = None,
     ):
-        # Initialize services
-        # Note: Models are loaded lazily or on first use in their respective services
+        # Initialize services. The service objects hide model-loading details
+        # so this orchestrator can focus on the PP1 decision flow.
+        # Models are loaded lazily or on first use in their respective services.
         self.yolo = yolo or YoloService()
         self.florence = florence or FlorenceService()
-        self.gemini = gemini or GeminiReasoner()
+        self.gemini = gemini or create_reasoner_from_settings()
         self.dino = dino or DINOEmbedder()
         self.perf_profile = str(settings.PERF_PROFILE).lower()
         self.max_detections = max(1, int(settings.PP1_MAX_DETECTIONS))
         self.include_gemini_image = bool(settings.PP1_GEMINI_INCLUDE_IMAGE)
 
-        # Gemini circuit breaker state
+        # Reasoner circuit breaker state
         self._gemini_fail_count: int = 0
         self._gemini_open_until: float = 0.0
         self._pp1_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pp1_dino")
@@ -111,6 +127,172 @@ class UnifiedPipeline:
         }
 
     @staticmethod
+    def _as_float(value: Any) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _resolve_reasoner_label(self, reasoning_meta: Optional[Dict[str, Any]] = None) -> str:
+        meta = reasoning_meta if isinstance(reasoning_meta, dict) else {}
+        selected_model = str(meta.get("selected_model") or "").strip()
+        if selected_model:
+            return selected_model
+
+        provider = str(meta.get("provider") or "").strip().lower()
+        if provider:
+            return provider
+
+        configured_model = str(getattr(settings, "PP1_GEMINI_MODEL", "") or "").strip()
+        fallback_model = str(getattr(settings, "PP1_GEMINI_FALLBACK_MODEL", "") or "").strip()
+        return configured_model or fallback_model or "gemini"
+
+    def _log_pp1_timing_summary(
+        self,
+        *,
+        primary_result: Dict[str, Any],
+        request_total_ms: float,
+        detect_ms: float,
+        detections: int,
+        profile: str,
+    ) -> None:
+        raw_payload = primary_result.get("raw", {}) if isinstance(primary_result, dict) else {}
+        raw_payload = raw_payload if isinstance(raw_payload, dict) else {}
+        timings = raw_payload.get("timings", {}) if isinstance(raw_payload.get("timings", {}), dict) else {}
+        reasoning_meta = raw_payload.get("gemini", {}) if isinstance(raw_payload.get("gemini", {}), dict) else {}
+
+        logger.info(
+            "PP1_TIMING total_ms=%.2f detect_ms=%.2f florence_ms=%.2f florence_od_ms=%.2f "
+            "label_rerank_ms=%.2f reasoner_label=%s reasoner_ms=%.2f embeddings_ms=%.2f "
+            "detections=%d profile=%s",
+            request_total_ms,
+            self._as_float(timings.get("detect_ms", detect_ms)),
+            self._as_float(timings.get("florence_ms")),
+            self._as_float(timings.get("florence_od_ms")),
+            self._as_float(timings.get("label_rerank_ms")),
+            self._resolve_reasoner_label(
+                reasoning_meta.get("reasoning_meta")
+                if isinstance(reasoning_meta.get("reasoning_meta"), dict)
+                else reasoning_meta
+            ),
+            self._as_float(timings.get("gemini_ms")),
+            self._as_float(timings.get("embeddings_ms")),
+            detections,
+            profile,
+        )
+
+    @staticmethod
+    def _clean_ocr_snippet(ocr_text: Any) -> str:
+        return " ".join(str(ocr_text or "").split()[:10]).strip()
+
+    @classmethod
+    def _supported_description_phrases(
+        cls,
+        *,
+        label: Optional[str],
+        color: Optional[str],
+        category_details: Optional[Dict[str, Any]],
+        key_count: Optional[int],
+        ocr_text: Any,
+    ) -> List[str]:
+        phrases: List[str] = []
+        canonical = canonicalize_label(label or "") if label else None
+        if canonical:
+            phrases.append(canonical.lower())
+            if canonical == "Key" and isinstance(key_count, int):
+                phrases.append(f"{key_count} key" if key_count == 1 else f"{key_count} keys")
+        normalized_color = normalize_color(color) if color else None
+        if normalized_color:
+            phrases.append(str(normalized_color).lower())
+
+        source = category_details if isinstance(category_details, dict) else {}
+        for key in ("features", "defects", "attachments"):
+            for value in source.get(key, []) if isinstance(source.get(key), list) else []:
+                text = str(value or "").strip().lower()
+                if text:
+                    phrases.append(text)
+
+        ocr_snippet = cls._clean_ocr_snippet(ocr_text)
+        if ocr_snippet:
+            phrases.append(ocr_snippet.lower())
+            for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", ocr_snippet.lower()):
+                if len(token) >= 3:
+                    phrases.append(token)
+
+        return list(dict.fromkeys(phrases))
+
+    @classmethod
+    def _validate_description_with_evidence(
+        cls,
+        *,
+        candidate: Any,
+        label: Optional[str],
+        color: Optional[str],
+        category_details: Optional[Dict[str, Any]],
+        key_count: Optional[int],
+        ocr_text: Any,
+    ) -> Dict[str, Any]:
+        raw = str(candidate or "").strip()
+        if not raw:
+            return {"description": "", "quality": {"status": "empty", "kept_sentences": 0, "rejected_sentences": 0}}
+
+        finalized = MultiViewFusionService._finalize_composed_description(raw)
+        supported_phrases = cls._supported_description_phrases(
+            label=label,
+            color=color,
+            category_details=category_details,
+            key_count=key_count,
+            ocr_text=ocr_text,
+        )
+        supported_lower = [phrase.lower() for phrase in supported_phrases if phrase]
+        canonical = canonicalize_label(label or "") if label else None
+        clean_sentences: List[str] = []
+        rejected = 0
+
+        for sentence in re.split(r"(?<=[.!?])\s+", finalized):
+            cleaned = str(sentence or "").strip()
+            if not cleaned:
+                continue
+            lowered = cleaned.lower()
+            is_supported_ocr_sentence = bool(
+                re.match(r'(?i)^the text "[^"]+" is visible on the surface\.?$', cleaned)
+            )
+            if (not is_supported_ocr_sentence) and MultiViewFusionService._contains_scene_or_meta_contamination(cleaned):
+                rejected += 1
+                continue
+
+            quoted_values = re.findall(r'"([^"]+)"', cleaned)
+            if quoted_values:
+                ocr_lower = cls._clean_ocr_snippet(ocr_text).lower()
+                if not ocr_lower or any(value.lower() not in ocr_lower for value in quoted_values):
+                    rejected += 1
+                    continue
+
+            mentions_supported_phrase = any(phrase in lowered for phrase in supported_lower)
+            identity_sentence = bool(canonical and canonical.lower() in lowered)
+            if color and str(color).strip().lower() in lowered:
+                identity_sentence = True
+
+            if not mentions_supported_phrase and not identity_sentence:
+                rejected += 1
+                continue
+
+            clean_sentences.append(cleaned.rstrip(". ") + ".")
+
+        filtered = " ".join(dict.fromkeys(clean_sentences)).strip()
+        if filtered and MultiViewFusionService._is_generic_description(filtered, label or ""):
+            filtered = ""
+        return {
+            "description": filtered,
+            "quality": {
+                "status": "accepted" if filtered else "rejected",
+                "kept_sentences": len(clean_sentences) if filtered else 0,
+                "rejected_sentences": rejected,
+                "supported_phrases": supported_phrases,
+            },
+        }
+
+    @staticmethod
     def _compose_pp1_description_bundle(
         *,
         label: Optional[str],
@@ -156,13 +338,15 @@ class UnifiedPipeline:
             or ""
         ).strip()
         description_text = _clean_description_text(description_text)
+        if description_text and len(description_text.split()) < 3:
+            description_text = f"This is {description_text}".strip()
         description_lower = description_text.lower()
 
         features = _clean_list((category_details or {}).get("features") if isinstance(category_details, dict) else [])
         defects = _clean_list((category_details or {}).get("defects") if isinstance(category_details, dict) else [])
         attachments = _clean_list((category_details or {}).get("attachments") if isinstance(category_details, dict) else [])
         ocr_text = str(analysis.get("ocr_text", "") or "").strip()
-        ocr_snippet = " ".join(ocr_text.split()[:10]).strip()
+        ocr_snippet = UnifiedPipeline._clean_ocr_snippet(ocr_text)
 
         prefix_parts: List[str] = []
         canonical = canonicalize_label(label or "") if label else None
@@ -199,6 +383,15 @@ class UnifiedPipeline:
             sentences.append("Item visible in the image.")
 
         composed_description = " ".join(sentence.strip() for sentence in sentences if sentence.strip())
+        validated = UnifiedPipeline._validate_description_with_evidence(
+            candidate=composed_description,
+            label=label,
+            color=color,
+            category_details={"features": features, "defects": defects, "attachments": attachments},
+            key_count=key_count,
+            ocr_text=ocr_text,
+        )
+        final_description = validated.get("description") or MultiViewFusionService._finalize_composed_description(composed_description)
         evidence: List[str] = []
         if preferred_description:
             evidence.append("gemini_description")
@@ -214,16 +407,17 @@ class UnifiedPipeline:
             evidence.append("ocr_text")
 
         source = preferred_description_source or "evidence_composer"
-        word_count = len(composed_description.split())
+        word_count = len(final_description.split())
         return {
-            "final_description": composed_description,
-            "detailed_description": composed_description,
+            "final_description": final_description,
+            "detailed_description": final_description,
             "description_source": source,
             "detailed_description_source": source,
             "description_evidence_used": {"summary": evidence, "detailed": evidence},
             "description_filters_applied": [source],
             "description_word_count": {"final_description": word_count, "detailed_description": word_count},
             "description_timings_ms": analysis.get("raw", {}).get("description_timings_ms", {}),
+            "description_quality": validated.get("quality", {}),
         }
 
     @staticmethod
@@ -625,6 +819,10 @@ class UnifiedPipeline:
            - Grounding uses candidates from CATEGORY_SPECS.
         4. Reason with Gemini (Evidence-Locked) to produce final JSON.
         5. Generate Embeddings (DINOv2).
+
+        Design note: PP1 is a layered evidence pipeline, not only one model.
+        YOLO localizes, Florence explains the crop, the reasoner formats the
+        evidence, and DINO makes the accepted item retrievable later.
         """
         request_start = time.perf_counter()
 
@@ -659,7 +857,8 @@ class UnifiedPipeline:
         if not hasattr(self, "_pp1_thread_pool"):
             self._pp1_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pp1_dino")
 
-        # 1. Detect
+        # 1. Detect. YOLO runs before captioning because a crop removes
+        # background noise and gives Florence/embedding models the object area.
         detect_start = time.perf_counter()
         all_detections = self.yolo.detect_objects(
             image,
@@ -668,7 +867,8 @@ class UnifiedPipeline:
         detect_ms = (time.perf_counter() - detect_start) * 1000.0
         
         if not all_detections:
-            # Florence-primary path: YOLO found nothing, let Florence try
+            # Florence-primary path: YOLO found nothing, so Florence gets a
+            # fallback chance instead of rejecting a potentially valid report.
             florence_result = self._build_florence_primary_response(
                 image, filename, profile, detect_ms, request_start,
             )
@@ -680,7 +880,9 @@ class UnifiedPipeline:
             resp["image"]["filename"] = filename
             return [resp]
 
-        # Sort by confidence (descending) and process only top-N detections
+        # Sort by confidence and process only top-N detections. The extra
+        # candidates are still kept for label reranking so a strong alternate
+        # category can correct a weak top-1 label.
         all_detections.sort(key=lambda x: x.confidence, reverse=True)
         detections = all_detections[: self.max_detections]
         rerank_candidates = all_detections[: self.LABEL_RERANK_TOPK]
@@ -714,7 +916,9 @@ class UnifiedPipeline:
 
             crop = image.crop((x1, y1, x2, y2))
 
-            # 3. Analyze Crop (Caption, OCR, VQA, Grounding)
+            # 3. Analyze Crop (Caption, OCR, VQA, Grounding). This is the
+            # evidence layer that explains why a category/description was
+            # selected when explaining or debugging the pipeline.
             florence_start = time.perf_counter()
             analysis = self.florence.analyze_crop(
                 crop,
@@ -743,6 +947,8 @@ class UnifiedPipeline:
                 "reason": "not_applied_non_primary_detection",
             }
             if detection_idx == 0:
+                # Reranking is limited to the primary detection to avoid making
+                # every secondary/background object influence the public result.
                 rerank_start = time.perf_counter()
                 rerank_decision = self._rerank_label(
                     top1_label=detection.label,
@@ -935,6 +1141,9 @@ class UnifiedPipeline:
                 florence_strong_label = final_label
 
             # 4. Construct Evidence JSON for Gemini
+            # The reasoner receives evidence, not the raw application request.
+            # That keeps the generated description anchored to detector output,
+            # OCR, colors, and category details.
             evidence = {
                 "detection": {
                     "label": final_label,
@@ -954,15 +1163,17 @@ class UnifiedPipeline:
             except Exception as _exc:
                 logger.warning("PP1_DINO_SUBMIT_FAILED: %s", _exc)
 
-            # 5. Reason (Gemini)
+            # 5. Reason with the configured provider. The system can degrade to
+            # Florence-only output when the provider fails, which is why a model
+            # outage does not stop founders from reporting items.
             gemini_start = time.perf_counter()
             gemini_error_meta = None
 
-            # Circuit breaker: skip Gemini if too many consecutive failures
+            # Circuit breaker: skip reasoning if too many consecutive failures
             _cb_open = time.time() < self._gemini_open_until
             if _cb_open:
                 logger.warning(
-                    "PP1_GEMINI_CIRCUIT_BREAKER_OPEN: skipping Gemini for %d more seconds",
+                    "PP1_REASONER_CIRCUIT_BREAKER_OPEN: skipping reasoning for %d more seconds",
                     int(self._gemini_open_until - time.time()),
                 )
                 fallback_color = analysis.get("color_vqa") or None
@@ -970,7 +1181,7 @@ class UnifiedPipeline:
                     fallback_color = normalize_color(fallback_color) or fallback_color
                 gemini_result = {
                     "status": "accepted_degraded",
-                    "message": "Gemini circuit breaker open — accepted with Florence-only data.",
+                    "message": "Reasoning circuit breaker open — accepted with Florence-only data.",
                     "label": final_label,
                     "color": fallback_color,
                     "category_details": {"features": [], "defects": [], "attachments": []},
@@ -980,7 +1191,7 @@ class UnifiedPipeline:
                     "degradation_reason": "circuit_breaker_open",
                 }
                 gemini_warnings.append(
-                    "Gemini circuit breaker open — accepted with Florence-only data."
+                    "Reasoning circuit breaker open — accepted with Florence-only data."
                 )
 
             if not _cb_open:
@@ -991,9 +1202,9 @@ class UnifiedPipeline:
                 )
                 # Success — reset circuit breaker
                 self._gemini_fail_count = 0
-              except GeminiTransientError as exc:
+              except ReasonerTransientError as exc:
                 logger.warning(
-                    "PP1_GEMINI_TRANSIENT_FALLBACK status_code=%s provider_status=%s — using Florence data",
+                    "PP1_REASONER_TRANSIENT_FALLBACK status_code=%s provider_status=%s — using Florence data",
                     exc.status_code,
                     exc.provider_status,
                 )
@@ -1001,7 +1212,7 @@ class UnifiedPipeline:
                 self._gemini_fail_count += 1
                 if self._gemini_fail_count >= int(settings.GEMINI_CB_FAILURE_THRESHOLD):
                     self._gemini_open_until = time.time() + float(settings.GEMINI_CB_RECOVERY_TIMEOUT_S)
-                    logger.warning("PP1_GEMINI_CIRCUIT_BREAKER_TRIPPED after %d failures", self._gemini_fail_count)
+                    logger.warning("PP1_REASONER_CIRCUIT_BREAKER_TRIPPED after %d failures", self._gemini_fail_count)
                 # Build a usable fallback from Florence so the item stays searchable
                 fallback_color = analysis.get("color_vqa") or None
                 if fallback_color:
@@ -1018,12 +1229,12 @@ class UnifiedPipeline:
                     "degradation_reason": "gemini_transient",
                 }
                 gemini_warnings.append(
-                    "Gemini unavailable — accepted with Florence-only data. "
+                    "Reasoning provider unavailable — accepted with Florence-only data. "
                     "Description and color derived from grounded Florence evidence."
                 )
-              except GeminiFatalError as exc:
+              except ReasonerFatalError as exc:
                 logger.warning(
-                    "PP1_GEMINI_FATAL_FALLBACK status_code=%s provider_status=%s",
+                    "PP1_REASONER_FATAL_FALLBACK status_code=%s provider_status=%s",
                     exc.status_code,
                     exc.provider_status,
                 )
@@ -1031,14 +1242,14 @@ class UnifiedPipeline:
                 self._gemini_fail_count += 1
                 if self._gemini_fail_count >= int(settings.GEMINI_CB_FAILURE_THRESHOLD):
                     self._gemini_open_until = time.time() + float(settings.GEMINI_CB_RECOVERY_TIMEOUT_S)
-                    logger.warning("PP1_GEMINI_CIRCUIT_BREAKER_TRIPPED after %d failures", self._gemini_fail_count)
+                    logger.warning("PP1_REASONER_CIRCUIT_BREAKER_TRIPPED after %d failures", self._gemini_fail_count)
                 # Build Florence-only fallback so the item stays searchable
                 fallback_color = analysis.get("color_vqa") or None
                 if fallback_color:
                     fallback_color = normalize_color(fallback_color) or fallback_color
                 gemini_result = {
                     "status": "accepted_degraded",
-                    "message": "Gemini authentication/authorization failed — accepted with Florence-only data.",
+                    "message": "Reasoning provider authentication/authorization failed — accepted with Florence-only data.",
                     "label": final_label,
                     "color": fallback_color,
                     "category_details": {"features": [], "defects": [], "attachments": []},
@@ -1047,17 +1258,17 @@ class UnifiedPipeline:
                     "tags": [],
                 }
                 gemini_warnings.append(
-                    "Gemini fatal error (auth) — accepted with Florence-only data. "
+                    "Reasoning provider fatal error — accepted with Florence-only data. "
                     "Description and color derived from grounded Florence evidence."
                 )
               except Exception as exc:
-                logger.exception("PP1_GEMINI_UNKNOWN_ERROR")
+                logger.exception("PP1_REASONER_UNKNOWN_ERROR")
                 self._gemini_fail_count += 1
                 if self._gemini_fail_count >= int(settings.GEMINI_CB_FAILURE_THRESHOLD):
                     self._gemini_open_until = time.time() + float(settings.GEMINI_CB_RECOVERY_TIMEOUT_S)
-                    logger.warning("PP1_GEMINI_CIRCUIT_BREAKER_TRIPPED after %d failures", self._gemini_fail_count)
+                    logger.warning("PP1_REASONER_CIRCUIT_BREAKER_TRIPPED after %d failures", self._gemini_fail_count)
                 gemini_error_meta = {
-                    "type": "gemini_unknown_error",
+                    "type": "reasoner_unknown_error",
                     "status_code": None,
                     "retryable": False,
                     "provider_status": None,
@@ -1078,8 +1289,9 @@ class UnifiedPipeline:
             gemini_label_raw = gemini_result.get("label")
             gemini_label = str(gemini_label_raw).strip() if gemini_label_raw is not None else ""
 
-            # Gemini label guard: reject silent label changes
-            # If Gemini changed the label but gave no explanation, revert.
+            # Reject silent label changes from the reasoning provider. This is
+            # a critical guard: generative reasoning may enrich evidence,
+            # but it cannot override the category without explicit support.
             if (
                 gemini_label
                 and gemini_label != final_label
@@ -1087,12 +1299,12 @@ class UnifiedPipeline:
                 and not gemini_result.get("label_change_reason")
             ):
                 logger.info(
-                    "PP1_GEMINI_LABEL_GUARD: Gemini silently changed %s -> %s — reverting",
+                    "PP1_REASONER_LABEL_GUARD: provider silently changed %s -> %s — reverting",
                     final_label, gemini_label,
                 )
                 gemini_result["label"] = final_label
                 gemini_warnings.append(
-                    f"Gemini label change reverted ({gemini_label} -> {final_label}): "
+                    f"Reasoning label change reverted ({gemini_label} -> {final_label}): "
                     "no label_change_reason provided."
                 )
                 gemini_label = final_label
@@ -1104,7 +1316,7 @@ class UnifiedPipeline:
             ):
                 gemini_result["label"] = florence_strong_label
                 gemini_warnings.append(
-                    "Gemini label overridden from "
+                    "Reasoning label overridden from "
                     f"{gemini_label} to {florence_strong_label} due to strong Florence evidence (caption/ocr)."
                 )
                 matching = [
@@ -1118,7 +1330,9 @@ class UnifiedPipeline:
                     )
                 final_label = florence_strong_label
             
-            # 6. Embeddings (DINOv2) — collect from background thread (submitted before Gemini call)
+            # 6. Embeddings (DINOv2) - collect from the background thread
+            # submitted before the reasoning call. This overlaps slow work and
+            # stores vectors needed for later image-based search.
             embeddings_start = time.perf_counter()
             vec_768_list = []
             vec_128_list = []
@@ -1146,7 +1360,8 @@ class UnifiedPipeline:
                 "total_ms": round(total_ms, 2),
             }
 
-            # 7. Construct Final Response
+            # 7. Construct Final Response. The raw payload preserves evidence
+            # and timing metadata so each field can be traced back to its source.
             status = gemini_result.get("status", "rejected")
             
             raw_payload = {
@@ -1165,6 +1380,17 @@ class UnifiedPipeline:
             }
             if gemini_error_meta is not None:
                 raw_payload["gemini_error"] = gemini_error_meta
+            if isinstance(raw_payload.get("gemini"), dict):
+                raw_payload["gemini"]["evidence_used"] = gemini_result.get("evidence_used", {})
+                raw_payload["gemini"]["validation"] = {
+                    "unsupported_claims": gemini_result.get("unsupported_claims", []),
+                }
+                reasoning_meta = gemini_result.get("reasoning_meta", {})
+                if isinstance(reasoning_meta, dict):
+                    raw_payload["gemini"]["provider"] = reasoning_meta.get("provider")
+                    raw_payload["gemini"]["model_attempts"] = reasoning_meta.get("model_attempts", [])
+                    raw_payload["gemini"]["selected_model"] = reasoning_meta.get("selected_model")
+                    raw_payload["gemini"]["failover_reason"] = reasoning_meta.get("failover_reason")
 
             response_label = gemini_result.get("label") or final_label
             response_color = gemini_result.get("color")
@@ -1189,10 +1415,11 @@ class UnifiedPipeline:
                 )
                 raw_payload["description_debug"] = description_bundle
                 gemini_result["final_description"] = description_bundle.get("final_description")
+                raw_payload["description_quality"] = description_bundle.get("description_quality", {})
 
             response = {
                 "status": status,
-                "message": gemini_result.get("message", "Success" if status == "accepted" else "Rejected by Gemini"),
+                "message": gemini_result.get("message", "Success" if status == "accepted" else "Rejected by reasoner"),
                 "item_id": str(uuid.uuid4()),
                 "image": {
                     "image_id": str(uuid.uuid4()),
@@ -1213,6 +1440,7 @@ class UnifiedPipeline:
                 "description_evidence_used": description_bundle.get("description_evidence_used") if description_bundle else {"summary": [], "detailed": []},
                 "description_filters_applied": description_bundle.get("description_filters_applied") if description_bundle else [],
                 "description_word_count": description_bundle.get("description_word_count") if description_bundle else {"final_description": 0, "detailed_description": 0},
+                "description_quality": description_bundle.get("description_quality") if description_bundle else {},
                 "category_details": response_category_details,
                 "key_count": response_key_count,
                 "tags": gemini_result.get("tags", []),
@@ -1231,12 +1459,12 @@ class UnifiedPipeline:
              return [resp]
 
         request_total_ms = (time.perf_counter() - request_start) * 1000.0
-        logger.info(
-            "PP1_TIMING total_ms=%.2f detect_ms=%.2f detections=%d profile=%s",
-            request_total_ms,
-            detect_ms,
-            len(results),
-            profile,
+        self._log_pp1_timing_summary(
+            primary_result=results[0],
+            request_total_ms=request_total_ms,
+            detect_ms=detect_ms,
+            detections=len(results),
+            profile=profile,
         )
         if request_total_ms > 8000:
             logger.warning("PP1_SLOW_REQUEST total_ms=%.2f profile=%s", request_total_ms, profile)

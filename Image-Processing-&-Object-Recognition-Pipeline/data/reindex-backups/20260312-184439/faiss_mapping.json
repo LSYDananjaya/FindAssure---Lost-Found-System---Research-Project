@@ -1,0 +1,928 @@
+{
+  "0": {
+    "name": "vec1"
+  },
+  "1": {
+    "name": "vec2"
+  },
+  "2": {
+    "item_id": "123babe7-0782-4f56-8540-1d6743d1e7f9",
+    "report_id": "807778bc-4c15-41d0-ab61-2952ced7cb12",
+    "source": "pp1",
+    "label": "Wallet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "3": {
+    "item_id": "4d0b3218-feb2-45b2-9643-2aca719aa992",
+    "report_id": "7965e440-01e5-4321-8ca0-a398768e5676",
+    "source": "pp1",
+    "label": "Helmet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "4": {
+    "item_id": "0a2e91d3-d4d1-43c1-9867-74fe4624173b",
+    "report_id": "ea61dc54-8141-4416-b9e6-46b8fe67e2fd",
+    "source": "pp1",
+    "label": "Wallet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "5": {
+    "item_id": "db9d630c-4769-4078-9c48-276f943217d5",
+    "report_id": "282aa468-af15-46e9-b19e-bc86e4286c78",
+    "source": "pp1",
+    "label": "Smart Phone",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "6": {
+    "item_id": "acba12a7-5d9c-4bc7-9bc4-6d24cddbc725",
+    "report_id": "70294657-d73c-4cbe-80f6-20d22bd1f9b1",
+    "source": "pp1",
+    "label": "Wallet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "7": {
+    "item_id": "208b1932-d865-4598-af03-200839f34e52",
+    "report_id": "1a995cd7-0e80-46a0-9d20-d379fb3b2a09",
+    "source": "pp1",
+    "label": "Helmet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "8": {
+    "item_id": "4dd0754f-9cc8-4166-8248-c11f37c440d3",
+    "report_id": "72369930-a955-4860-aebd-16bd67f50147",
+    "source": "pp1",
+    "label": "Helmet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "9": {
+    "item_id": "9ae418b1-4c81-4512-9dc7-0eb2a01eab63",
+    "report_id": "6039498b-366b-4c70-90d1-8fdeb8670c35",
+    "source": "pp1",
+    "label": "Wallet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "10": {
+    "item_id": "3d32877b-a7e3-4c67-948a-582e8a9a4dce",
+    "report_id": "8472c96a-44fc-4371-a0e8-35a5120d9cf9",
+    "source": "pp1",
+    "label": "Student ID",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "11": {
+    "item_id": "401bfd40-3282-40de-9f6d-4da36b6ea71a",
+    "report_id": "5453ee0e-8fa4-4786-b1cf-309289389775",
+    "source": "pp1",
+    "label": "Student ID",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "12": {
+    "item_id": "76d3030a-b2d2-4310-aac2-9986d1f55aa5",
+    "report_id": "3b7686fb-bc59-47de-8d3e-7dbec02c060f",
+    "source": "pp1",
+    "label": "Helmet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "13": {
+    "item_id": "b4230af3-4aa3-4bbf-bfa8-4bed6f4b267a",
+    "report_id": "2b43a7e5-edc9-435c-b304-eb7a206568c0",
+    "source": "pp1",
+    "label": "Helmet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "14": {
+    "item_id": "dc4522c2-ddd4-415c-8983-15abf47dbe3c",
+    "report_id": "683dd621-8d93-4669-9a95-5d7d67e94c90",
+    "source": "pp1",
+    "label": "Earbuds - Earbuds case",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "15": {
+    "item_id": "671ca2bd-5776-4ca2-9007-7a9d28b62be6",
+    "fused_embedding_id": "671ca2bd-5776-4ca2-9007-7a9d28b62be6_fused",
+    "embedding_id": "671ca2bd-5776-4ca2-9007-7a9d28b62be6_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "16": {
+    "item_id": "709ff74f-1978-48f3-a50d-40b74fd4778d",
+    "fused_embedding_id": "709ff74f-1978-48f3-a50d-40b74fd4778d_fused",
+    "embedding_id": "709ff74f-1978-48f3-a50d-40b74fd4778d_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "17": {
+    "item_id": "c5f001bd-1011-431b-9fcb-251490e7698e",
+    "report_id": "468fbb09-9626-4b5b-b9eb-41ffed1e7a7e",
+    "source": "pp1",
+    "label": "Earbuds - Earbuds case",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "18": {
+    "item_id": "b62a7976-aabb-4bc6-badc-d1444e31133c",
+    "report_id": "6ccb18c5-c5ca-4408-8dda-583f7e860740",
+    "source": "pp1",
+    "label": "Helmet",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "19": {
+    "item_id": "c2f270bb-17ba-4688-aa4a-1be710465986",
+    "fused_embedding_id": "c2f270bb-17ba-4688-aa4a-1be710465986_fused",
+    "embedding_id": "c2f270bb-17ba-4688-aa4a-1be710465986_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "20": {
+    "item_id": "ac0bc319-050f-4353-846a-e24b172b00f6",
+    "report_id": "6449b550-bf40-45b3-9e64-529fc9a165a7",
+    "source": "pp1",
+    "label": "Key",
+    "submitted_by": "69a97c520a881c6c545b4715"
+  },
+  "21": {
+    "item_id": "10a2637f-9889-45aa-88b3-a99226628cc2",
+    "source": "pp1_preanalysis",
+    "label": "Laptop",
+    "category": "Laptop"
+  },
+  "22": {
+    "item_id": "431685f8-2601-469a-9496-d58d0a77b63f",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "23": {
+    "item_id": "833da618-a2cf-4461-b942-6b914ca40d1a",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "24": {
+    "item_id": "59b8080f-4856-4a34-b2c5-80ebdbc93f92",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "25": {
+    "item_id": "93208c5f-0995-488e-89ca-48f8c3711620",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "26": {
+    "item_id": "8f48fdbd-6da0-4b06-af6c-66547a2124fb",
+    "fused_embedding_id": "8f48fdbd-6da0-4b06-af6c-66547a2124fb_fused",
+    "embedding_id": "8f48fdbd-6da0-4b06-af6c-66547a2124fb_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Key"
+  },
+  "27": {
+    "item_id": "f7179789-854b-44b9-ac27-90e0c7a8c016",
+    "fused_embedding_id": "f7179789-854b-44b9-ac27-90e0c7a8c016_fused",
+    "embedding_id": "f7179789-854b-44b9-ac27-90e0c7a8c016_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "28": {
+    "item_id": "3873e0ce-6375-4ba5-a9a7-900fd68bea91",
+    "fused_embedding_id": "3873e0ce-6375-4ba5-a9a7-900fd68bea91_fused",
+    "embedding_id": "3873e0ce-6375-4ba5-a9a7-900fd68bea91_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "29": {
+    "item_id": "1e94167c-aa01-491a-b6fc-553640139765",
+    "fused_embedding_id": "1e94167c-aa01-491a-b6fc-553640139765_fused",
+    "embedding_id": "1e94167c-aa01-491a-b6fc-553640139765_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Earbuds - Earbuds case"
+  },
+  "30": {
+    "item_id": "831ec07c-a3b6-4c5c-9217-8c78e5965eaf",
+    "source": "pp1_preanalysis",
+    "label": "Smart Phone",
+    "category": "Smart Phone"
+  },
+  "31": {
+    "item_id": "9b834b19-e572-4332-bfbc-7c6c80bc6d58",
+    "source": "pp1_preanalysis",
+    "label": "Smart Phone",
+    "category": "Smart Phone"
+  },
+  "32": {
+    "item_id": "b980af51-d3a1-4fc9-bc04-fb840ec97545",
+    "source": "pp1_preanalysis",
+    "label": "Smart Phone",
+    "category": "Smart Phone"
+  },
+  "33": {
+    "item_id": "a727f142-4483-4007-92b6-0e7479886473",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "34": {
+    "item_id": "81d465a7-e9eb-430f-9c83-661135b2499b",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "35": {
+    "item_id": "224f91e3-753f-4fba-a8cf-9f788c28dc11",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "36": {
+    "item_id": "f012f33c-f693-4ecb-abea-5bec1db6f6e7",
+    "fused_embedding_id": "f012f33c-f693-4ecb-abea-5bec1db6f6e7_fused",
+    "embedding_id": "f012f33c-f693-4ecb-abea-5bec1db6f6e7_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "37": {
+    "item_id": "67bd9fb6-f4fe-4a63-8065-863a8a8c1017",
+    "source": "pp1_preanalysis",
+    "label": "Smart Phone",
+    "category": "Smart Phone"
+  },
+  "38": {
+    "item_id": "c9a962bb-ff30-44b8-a0c3-c950b6e30e57",
+    "source": "pp1_preanalysis",
+    "label": "Smart Phone",
+    "category": "Smart Phone"
+  },
+  "39": {
+    "item_id": "cbb0deb7-fdcd-482e-8f7e-64083bd49a0c",
+    "source": "pp1_preanalysis",
+    "label": "Smart Phone",
+    "category": "Smart Phone"
+  },
+  "40": {
+    "item_id": "26ac4c71-811c-47d1-ba68-04f53b7d3794",
+    "fused_embedding_id": "26ac4c71-811c-47d1-ba68-04f53b7d3794_fused",
+    "embedding_id": "26ac4c71-811c-47d1-ba68-04f53b7d3794_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Smart Phone"
+  },
+  "41": {
+    "item_id": "5b4cd2c9-078e-4334-b4fa-749abb2e1541",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "42": {
+    "item_id": "12048b00-3df2-4b56-88ca-436438a2abef",
+    "fused_embedding_id": "12048b00-3df2-4b56-88ca-436438a2abef_fused",
+    "embedding_id": "12048b00-3df2-4b56-88ca-436438a2abef_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Smart Phone"
+  },
+  "43": {
+    "item_id": "c9c53009-1009-42f4-a7df-ba08ff0c142d",
+    "fused_embedding_id": "c9c53009-1009-42f4-a7df-ba08ff0c142d_fused",
+    "embedding_id": "c9c53009-1009-42f4-a7df-ba08ff0c142d_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Helmet"
+  },
+  "44": {
+    "item_id": "5a71ab10-e793-4c37-92d4-44c5622a5a8f",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "45": {
+    "item_id": "901e41e6-0921-4d69-9ebc-205c9a57d809",
+    "fused_embedding_id": "901e41e6-0921-4d69-9ebc-205c9a57d809_fused",
+    "embedding_id": "901e41e6-0921-4d69-9ebc-205c9a57d809_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "46": {
+    "item_id": "b11bf9a7-a1b0-4a45-a46c-48a2d99f2d1e",
+    "fused_embedding_id": "b11bf9a7-a1b0-4a45-a46c-48a2d99f2d1e_fused",
+    "embedding_id": "b11bf9a7-a1b0-4a45-a46c-48a2d99f2d1e_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "47": {
+    "item_id": "a9b8dba0-11de-4ee3-aac0-b985122c6287",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "48": {
+    "item_id": "b2d4adb4-2b97-4f78-8cfa-1ad5e9db6adc",
+    "fused_embedding_id": "b2d4adb4-2b97-4f78-8cfa-1ad5e9db6adc_fused",
+    "embedding_id": "b2d4adb4-2b97-4f78-8cfa-1ad5e9db6adc_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "49": {
+    "item_id": "f3e506d0-4c7d-482d-95ff-3e09d89e532d",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "50": {
+    "item_id": "3f7da787-58f3-4a4e-9caa-13060c470114",
+    "fused_embedding_id": "3f7da787-58f3-4a4e-9caa-13060c470114_fused",
+    "embedding_id": "3f7da787-58f3-4a4e-9caa-13060c470114_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "51": {
+    "item_id": "8b750a24-f2c5-4ab6-8765-68d7112820a8",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "52": {
+    "item_id": "2c0c46df-1ae8-41e2-b64b-545fc4ce6f32",
+    "fused_embedding_id": "2c0c46df-1ae8-41e2-b64b-545fc4ce6f32_fused",
+    "embedding_id": "2c0c46df-1ae8-41e2-b64b-545fc4ce6f32_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "53": {
+    "item_id": "650feb9d-6e82-4885-9ac7-2ede948d970a",
+    "fused_embedding_id": "650feb9d-6e82-4885-9ac7-2ede948d970a_fused",
+    "embedding_id": "650feb9d-6e82-4885-9ac7-2ede948d970a_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "54": {
+    "item_id": "71c9e342-2982-4757-ad49-28fe08bdef62",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "55": {
+    "item_id": "c6e5bf08-7263-4591-b28b-6feaf70fd988",
+    "fused_embedding_id": "c6e5bf08-7263-4591-b28b-6feaf70fd988_fused",
+    "embedding_id": "c6e5bf08-7263-4591-b28b-6feaf70fd988_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Helmet"
+  },
+  "56": {
+    "item_id": "40f5c9b1-b495-4102-b46a-05becd57548b",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "57": {
+    "item_id": "823afe7a-5632-4afd-9238-82e20dd2d246",
+    "fused_embedding_id": "823afe7a-5632-4afd-9238-82e20dd2d246_fused",
+    "embedding_id": "823afe7a-5632-4afd-9238-82e20dd2d246_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "58": {
+    "item_id": "8588adbc-204c-48c2-a549-d518e59e994b",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "59": {
+    "item_id": "628bb9fd-9746-44e8-893b-47a59bacb801",
+    "fused_embedding_id": "628bb9fd-9746-44e8-893b-47a59bacb801_fused",
+    "embedding_id": "628bb9fd-9746-44e8-893b-47a59bacb801_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "60": {
+    "item_id": "43c80c49-7340-4ce9-9605-d5fd39e76b53",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "61": {
+    "item_id": "b04303ce-2834-4a7e-94b5-884c036a9ab3",
+    "fused_embedding_id": "b04303ce-2834-4a7e-94b5-884c036a9ab3_fused",
+    "embedding_id": "b04303ce-2834-4a7e-94b5-884c036a9ab3_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "62": {
+    "item_id": "aa003cd9-28a5-4afe-b35d-66ed46c79953",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "63": {
+    "item_id": "c168664f-7ffc-44bf-90f4-49b27db57fd8",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "64": {
+    "item_id": "31638844-12bc-46b2-bfed-bd2165921afe",
+    "fused_embedding_id": "31638844-12bc-46b2-bfed-bd2165921afe_fused",
+    "embedding_id": "31638844-12bc-46b2-bfed-bd2165921afe_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "65": {
+    "item_id": "b21fdbb8-ea58-4b91-83e9-4b0748f739b0",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "66": {
+    "item_id": "3cb05f86-b16d-4db4-931a-2956218e202f",
+    "fused_embedding_id": "3cb05f86-b16d-4db4-931a-2956218e202f_fused",
+    "embedding_id": "3cb05f86-b16d-4db4-931a-2956218e202f_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "67": {
+    "item_id": "7e0ef581-448b-46a7-bba2-49f08caa7102",
+    "fused_embedding_id": "7e0ef581-448b-46a7-bba2-49f08caa7102_fused",
+    "embedding_id": "7e0ef581-448b-46a7-bba2-49f08caa7102_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "68": {
+    "item_id": "277d5498-fc78-4710-a131-ec275715b1e2",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "69": {
+    "item_id": "9c1568ee-0195-4453-a4aa-67d04e92f11b",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "70": {
+    "item_id": "dd4eec41-144e-4c2d-b9ea-6936d218d96a",
+    "fused_embedding_id": "dd4eec41-144e-4c2d-b9ea-6936d218d96a_fused",
+    "embedding_id": "dd4eec41-144e-4c2d-b9ea-6936d218d96a_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "71": {
+    "item_id": "4b08dc8b-0cec-4e8a-9e33-df698a39ec6f",
+    "source": "pp1_preanalysis",
+    "label": "Key",
+    "category": "Key"
+  },
+  "72": {
+    "item_id": "d53c6ec8-3299-40cc-8c56-170312e67683",
+    "fused_embedding_id": "d53c6ec8-3299-40cc-8c56-170312e67683_fused",
+    "embedding_id": "d53c6ec8-3299-40cc-8c56-170312e67683_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "73": {
+    "item_id": "de31799f-8c48-4257-a394-4c557ef89e10",
+    "fused_embedding_id": "de31799f-8c48-4257-a394-4c557ef89e10_fused",
+    "embedding_id": "de31799f-8c48-4257-a394-4c557ef89e10_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "74": {
+    "item_id": "a5212d5a-a36f-4366-896e-e85e57793acd",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "75": {
+    "item_id": "1cfb3211-1b65-40d9-bf76-3bf65f9f3fc6",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "76": {
+    "item_id": "c4f1ec9e-bd2c-4484-8134-1498961ca6a2",
+    "fused_embedding_id": "c4f1ec9e-bd2c-4484-8134-1498961ca6a2_fused",
+    "embedding_id": "c4f1ec9e-bd2c-4484-8134-1498961ca6a2_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "77": {
+    "item_id": "c88b2487-6c93-49e2-9c4a-6900518a852c",
+    "fused_embedding_id": "c88b2487-6c93-49e2-9c4a-6900518a852c_fused",
+    "embedding_id": "c88b2487-6c93-49e2-9c4a-6900518a852c_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "78": {
+    "item_id": "6585742c-f717-4e4e-81d2-e3be5ab23233",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "79": {
+    "item_id": "af13061e-3528-4e87-8b3f-998068aba099",
+    "fused_embedding_id": "af13061e-3528-4e87-8b3f-998068aba099_fused",
+    "embedding_id": "af13061e-3528-4e87-8b3f-998068aba099_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "80": {
+    "item_id": "04a57095-e4e3-4298-a8e2-c6eb2fac0620",
+    "fused_embedding_id": "04a57095-e4e3-4298-a8e2-c6eb2fac0620_fused",
+    "embedding_id": "04a57095-e4e3-4298-a8e2-c6eb2fac0620_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Helmet"
+  },
+  "81": {
+    "item_id": "c180422b-f712-461d-8ddc-cd1668fea208",
+    "fused_embedding_id": "c180422b-f712-461d-8ddc-cd1668fea208_fused",
+    "embedding_id": "c180422b-f712-461d-8ddc-cd1668fea208_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "82": {
+    "item_id": "500fe83f-e4a9-47ad-b67b-50eb6ee268d3",
+    "fused_embedding_id": "500fe83f-e4a9-47ad-b67b-50eb6ee268d3_fused",
+    "embedding_id": "500fe83f-e4a9-47ad-b67b-50eb6ee268d3_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "83": {
+    "item_id": "dd329a83-042c-4832-a91d-3a763d0a074f",
+    "fused_embedding_id": "dd329a83-042c-4832-a91d-3a763d0a074f_fused",
+    "embedding_id": "dd329a83-042c-4832-a91d-3a763d0a074f_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "84": {
+    "item_id": "0c2aa167-d9dc-478f-a8ef-bf81bb378a02",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "85": {
+    "item_id": "1436224c-6b20-48f3-ade8-ced4c4d57bdf",
+    "fused_embedding_id": "1436224c-6b20-48f3-ade8-ced4c4d57bdf_fused",
+    "embedding_id": "1436224c-6b20-48f3-ade8-ced4c4d57bdf_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "86": {
+    "item_id": "f7f8a275-3abb-4b51-9700-2e5a61dbc7ed",
+    "fused_embedding_id": "f7f8a275-3abb-4b51-9700-2e5a61dbc7ed_fused",
+    "embedding_id": "f7f8a275-3abb-4b51-9700-2e5a61dbc7ed_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Key"
+  },
+  "87": {
+    "item_id": "0bf8bbe5-0824-4318-97c0-e78b0bfffbba",
+    "fused_embedding_id": "0bf8bbe5-0824-4318-97c0-e78b0bfffbba_fused",
+    "embedding_id": "0bf8bbe5-0824-4318-97c0-e78b0bfffbba_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Helmet"
+  },
+  "88": {
+    "item_id": "f73a601d-8639-490a-98b8-faa35885a0ce",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "89": {
+    "item_id": "7d10c44c-19fa-4d96-8514-636a9b9ccd5a",
+    "source": "pp1_preanalysis",
+    "label": "Laptop/Mobile chargers & cables",
+    "category": "Laptop/Mobile chargers & cables"
+  },
+  "90": {
+    "item_id": "46d20e45-62eb-447a-8cc3-1fcd05c78e30",
+    "fused_embedding_id": "46d20e45-62eb-447a-8cc3-1fcd05c78e30_fused",
+    "embedding_id": "46d20e45-62eb-447a-8cc3-1fcd05c78e30_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Backpack"
+  },
+  "91": {
+    "item_id": "b6368ec0-4781-404b-9fe0-44e9a631bf12",
+    "source": "pp1_preanalysis",
+    "label": "Backpack",
+    "category": "Backpack"
+  },
+  "92": {
+    "item_id": "afd75a80-da97-453c-9c65-b465a63471e5",
+    "fused_embedding_id": "afd75a80-da97-453c-9c65-b465a63471e5_fused",
+    "embedding_id": "afd75a80-da97-453c-9c65-b465a63471e5_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Backpack"
+  },
+  "93": {
+    "item_id": "3e9508cd-aa6e-4925-bc60-6eb31c685d4a",
+    "source": "pp1_preanalysis",
+    "label": "Key",
+    "category": "Key"
+  },
+  "94": {
+    "item_id": "b9a23447-d3aa-4d25-ad71-77108542a2ae",
+    "source": "pp1_preanalysis",
+    "label": "Laptop",
+    "category": "Laptop"
+  },
+  "95": {
+    "item_id": "2365dc35-df3a-40f9-859a-50a3784c4164",
+    "source": "pp1_preanalysis",
+    "label": "Handbag",
+    "category": "Handbag"
+  },
+  "96": {
+    "item_id": "1e15e388-9cf9-403d-8c8e-d3398313b6c8",
+    "fused_embedding_id": "1e15e388-9cf9-403d-8c8e-d3398313b6c8_fused",
+    "embedding_id": "1e15e388-9cf9-403d-8c8e-d3398313b6c8_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "97": {
+    "item_id": "c9dea02c-116c-4e02-920a-648c18d9b79a",
+    "fused_embedding_id": "c9dea02c-116c-4e02-920a-648c18d9b79a_fused",
+    "embedding_id": "c9dea02c-116c-4e02-920a-648c18d9b79a_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "98": {
+    "item_id": "bab20834-7bb8-4a3b-937f-252e7d1ba62a",
+    "fused_embedding_id": "bab20834-7bb8-4a3b-937f-252e7d1ba62a_fused",
+    "embedding_id": "bab20834-7bb8-4a3b-937f-252e7d1ba62a_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Wallet"
+  },
+  "99": {
+    "item_id": "90775620-1756-4d97-b744-41b88b3c698a",
+    "source": "pp1_preanalysis",
+    "label": "Key",
+    "category": "Key"
+  },
+  "100": {
+    "item_id": "fcdc1c00-2955-4aa5-840a-cb110fe85075",
+    "source": "pp1_preanalysis",
+    "label": "Smart Phone",
+    "category": "Smart Phone"
+  },
+  "101": {
+    "item_id": "48723532-ee9f-4a8d-888e-f6874b4c2796",
+    "source": "pp1_preanalysis",
+    "label": "Smart Phone",
+    "category": "Smart Phone"
+  },
+  "102": {
+    "item_id": "a63be674-615f-44cd-8640-de107d813a0f",
+    "source": "pp1_preanalysis",
+    "label": "Smart Phone",
+    "category": "Smart Phone"
+  },
+  "103": {
+    "item_id": "59275770-61cd-4633-937e-54a2ca45537e",
+    "fused_embedding_id": "59275770-61cd-4633-937e-54a2ca45537e_fused",
+    "embedding_id": "59275770-61cd-4633-937e-54a2ca45537e_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "104": {
+    "item_id": "e56b4a6a-250a-4fc6-b766-86cccfffa121",
+    "fused_embedding_id": "e56b4a6a-250a-4fc6-b766-86cccfffa121_fused",
+    "embedding_id": "e56b4a6a-250a-4fc6-b766-86cccfffa121_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "105": {
+    "item_id": "af583000-b3b0-4872-9525-d11c1c36d99b",
+    "fused_embedding_id": "af583000-b3b0-4872-9525-d11c1c36d99b_fused",
+    "embedding_id": "af583000-b3b0-4872-9525-d11c1c36d99b_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "106": {
+    "item_id": "0f02d8d6-2382-4e8a-b4ff-b6387e51ec51",
+    "source": "pp1_preanalysis",
+    "label": "Helmet",
+    "category": "Helmet"
+  },
+  "107": {
+    "item_id": "4f1cd2bf-204e-4d85-82a2-291ccb6605b1",
+    "fused_embedding_id": "4f1cd2bf-204e-4d85-82a2-291ccb6605b1_fused",
+    "embedding_id": "4f1cd2bf-204e-4d85-82a2-291ccb6605b1_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Helmet"
+  },
+  "108": {
+    "item_id": "525dc28a-875c-4ea4-81e3-d3484dd5374f",
+    "fused_embedding_id": "525dc28a-875c-4ea4-81e3-d3484dd5374f_fused",
+    "embedding_id": "525dc28a-875c-4ea4-81e3-d3484dd5374f_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "109": {
+    "item_id": "8537fb1a-1e43-49fb-99f8-174453c94b88",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "110": {
+    "item_id": "b52d05f0-5df8-48a7-8a34-7c22b27e77b8",
+    "fused_embedding_id": "b52d05f0-5df8-48a7-8a34-7c22b27e77b8_fused",
+    "embedding_id": "b52d05f0-5df8-48a7-8a34-7c22b27e77b8_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "111": {
+    "item_id": "b4ae8fe1-601b-4c28-aa3d-134ae59f1d3e",
+    "fused_embedding_id": "b4ae8fe1-601b-4c28-aa3d-134ae59f1d3e_fused",
+    "embedding_id": "b4ae8fe1-601b-4c28-aa3d-134ae59f1d3e_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "112": {
+    "item_id": "f4f803a9-6198-4bcd-b46f-be4a2f636b7b",
+    "fused_embedding_id": "f4f803a9-6198-4bcd-b46f-be4a2f636b7b_fused",
+    "embedding_id": "f4f803a9-6198-4bcd-b46f-be4a2f636b7b_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "113": {
+    "item_id": "901b9730-1f7b-4675-b048-fce444d9821a",
+    "fused_embedding_id": "901b9730-1f7b-4675-b048-fce444d9821a_fused",
+    "embedding_id": "901b9730-1f7b-4675-b048-fce444d9821a_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "114": {
+    "item_id": "c463f450-d775-4aef-aa5c-3be482b27b27",
+    "fused_embedding_id": "c463f450-d775-4aef-aa5c-3be482b27b27_fused",
+    "embedding_id": "c463f450-d775-4aef-aa5c-3be482b27b27_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Helmet"
+  },
+  "115": {
+    "item_id": "82aff435-3f08-4172-aa67-5556613df311",
+    "fused_embedding_id": "82aff435-3f08-4172-aa67-5556613df311_fused",
+    "embedding_id": "82aff435-3f08-4172-aa67-5556613df311_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "116": {
+    "item_id": "cfb09a2e-9ea9-4736-8fe9-97fb544b87d6",
+    "fused_embedding_id": "cfb09a2e-9ea9-4736-8fe9-97fb544b87d6_fused",
+    "embedding_id": "cfb09a2e-9ea9-4736-8fe9-97fb544b87d6_fused",
+    "view_index": null,
+    "best_view_index": 2,
+    "category": "Wallet"
+  },
+  "117": {
+    "item_id": "86a11537-9ef6-4bbd-8f2f-8bcadd05d24f",
+    "fused_embedding_id": "86a11537-9ef6-4bbd-8f2f-8bcadd05d24f_fused",
+    "embedding_id": "86a11537-9ef6-4bbd-8f2f-8bcadd05d24f_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "118": {
+    "item_id": "8f2141df-ef68-4c00-b6a3-e831c013cc19",
+    "fused_embedding_id": "8f2141df-ef68-4c00-b6a3-e831c013cc19_fused",
+    "embedding_id": "8f2141df-ef68-4c00-b6a3-e831c013cc19_fused",
+    "view_index": null,
+    "best_view_index": 1,
+    "category": "Laptop"
+  },
+  "119": {
+    "item_id": "dc192c4b-6711-4ac9-a3b1-4aac122f6c8e",
+    "fused_embedding_id": "dc192c4b-6711-4ac9-a3b1-4aac122f6c8e_fused",
+    "embedding_id": "dc192c4b-6711-4ac9-a3b1-4aac122f6c8e_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "120": {
+    "item_id": "0705700d-8a44-4b11-a5c8-1b5fb4845cf6",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "121": {
+    "item_id": "fc0beb9a-8edc-4204-9cd5-ae48d21f6f38",
+    "source": "pp1_preanalysis",
+    "label": "Wallet",
+    "category": "Wallet"
+  },
+  "122": {
+    "item_id": "c82509f0-3de3-4d09-868d-ecf9e03665ad",
+    "fused_embedding_id": "c82509f0-3de3-4d09-868d-ecf9e03665ad_fused",
+    "embedding_id": "c82509f0-3de3-4d09-868d-ecf9e03665ad_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "123": {
+    "item_id": "9758a635-8549-44e6-be4b-8165fc9eadc9",
+    "fused_embedding_id": "9758a635-8549-44e6-be4b-8165fc9eadc9_fused",
+    "embedding_id": "9758a635-8549-44e6-be4b-8165fc9eadc9_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "124": {
+    "item_id": "97e14c86-54f0-41a2-acdf-a476467bb157",
+    "fused_embedding_id": "97e14c86-54f0-41a2-acdf-a476467bb157_fused",
+    "embedding_id": "97e14c86-54f0-41a2-acdf-a476467bb157_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "125": {
+    "item_id": "0b35fcdb-f396-4e99-a662-abdfb06419a7",
+    "fused_embedding_id": "0b35fcdb-f396-4e99-a662-abdfb06419a7_fused",
+    "embedding_id": "0b35fcdb-f396-4e99-a662-abdfb06419a7_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Power Bank"
+  },
+  "126": {
+    "item_id": "a1752cb5-5abb-4594-9c26-18edc148d6a1",
+    "source": "pp1_preanalysis",
+    "label": "Laptop/Mobile chargers & cables",
+    "category": "Laptop/Mobile chargers & cables"
+  },
+  "127": {
+    "item_id": "88c4b193-0f43-40d3-bfda-f3ccad06c7b0",
+    "source": "pp1_preanalysis",
+    "label": "Laptop/Mobile chargers & cables",
+    "category": "Laptop/Mobile chargers & cables"
+  },
+  "128": {
+    "item_id": "252e1713-593a-4cf8-859d-04ef2c6298b8",
+    "source": "pp1_preanalysis",
+    "label": "Key",
+    "category": "Key"
+  },
+  "129": {
+    "item_id": "34e88a79-083a-44cd-9bfc-c3d0bd8eccb0",
+    "source": "pp1_preanalysis",
+    "label": "Key",
+    "category": "Key"
+  },
+  "130": {
+    "item_id": "5d35e591-c212-4f95-b7d2-a4ecf7adccdf",
+    "fused_embedding_id": "5d35e591-c212-4f95-b7d2-a4ecf7adccdf_fused",
+    "embedding_id": "5d35e591-c212-4f95-b7d2-a4ecf7adccdf_fused",
+    "view_index": null,
+    "best_view_index": 0,
+    "category": "Wallet"
+  },
+  "131": {
+    "item_id": "607fad81-588c-4589-8a4b-705f8926241d",
+    "source": "pp1_preanalysis",
+    "label": "Laptop/Mobile chargers & cables",
+    "category": "Laptop/Mobile chargers & cables"
+  }
+}

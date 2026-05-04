@@ -1,7 +1,7 @@
 import io
 import sys
 from contextlib import asynccontextmanager
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 
-# Patch heavy modules before importing app.main
 mock_yolo_module = MagicMock()
 mock_florence_module = MagicMock()
 mock_dino_module = MagicMock()
@@ -23,17 +22,38 @@ sys.modules["app.services.florence_service"] = mock_florence_module
 sys.modules["app.services.dino_embedder"] = mock_dino_module
 
 from app.main import app
+from app.services.image_search_reranker import build_color_histogram
+
+
+def _solid_hist(color: tuple[int, int, int]) -> list[float]:
+    image = Image.new("RGB", (32, 32), color=color)
+    hist = build_color_histogram(image)
+    assert hist is not None
+    return [float(v) for v in hist.tolist()]
 
 
 class _DummyDet:
-    def __init__(self):
-        self.confidence = 0.9
-        self.bbox = (0, 0, 10, 10)
+    def __init__(self, label="Wallet", confidence=0.9, bbox=(0, 0, 24, 24)):
+        self.label = label
+        self.cls_name = label
+        self.confidence = confidence
+        self.bbox = bbox
 
 
 class _DummyYolo:
+    def __init__(self, label="Wallet"):
+        self._label = label
+
     def detect_objects(self, _image):
-        return [_DummyDet()]
+        return [_DummyDet(label=self._label)]
+
+
+class _DummyFlorence:
+    def __init__(self, ocr_text=""):
+        self._ocr_text = ocr_text
+
+    def ocr_structured(self, _image, profile="fast"):
+        return {"ocr_text": self._ocr_text}
 
 
 class _DummyDino:
@@ -42,14 +62,10 @@ class _DummyDino:
 
 
 class _DummyFaiss:
-    def __init__(self):
+    def __init__(self, hits, vectors=None):
         self.saved = False
-        self._vectors = {
-            7: np.full(128, 0.74, dtype=np.float32),
-            8: np.full(128, 0.92, dtype=np.float32),
-            10: np.full(128, 0.88, dtype=np.float32),
-            11: np.full(128, 0.81, dtype=np.float32),
-        }
+        self._hits = list(hits)
+        self._vectors = vectors or {}
 
     def add(self, _vector, _metadata):
         return 7
@@ -58,37 +74,7 @@ class _DummyFaiss:
         self.saved = True
 
     def search(self, _vector, top_k=5):
-        hits = [
-            {
-                "score": 0.92,
-                "faiss_id": 7,
-                "item_id": "item-123",
-                "category": "Wallet",
-                "fused_embedding_id": "item-123_fused",
-            },
-            {
-                "score": 0.97,
-                "faiss_id": 8,
-                "item_id": "item-123",
-                "category": "Wallet",
-                "view_index": 1,
-            },
-            {
-                "score": 0.89,
-                "faiss_id": 10,
-                "item_id": "item-xyz",
-                "category": "Bag",
-                "view_index": 3,
-            },
-            {
-                "score": 0.86,
-                "faiss_id": 11,
-                "item_id": "item-xyz",
-                "category": "Bag",
-                "view_index": 2,
-            },
-        ]
-        return hits[:top_k]
+        return list(self._hits[:top_k])
 
     def get_vector(self, faiss_id):
         return self._vectors[faiss_id]
@@ -97,12 +83,19 @@ class _DummyFaiss:
         return float(stored_vec[0])
 
 
+_CURRENT_YOLO = _DummyYolo()
+_CURRENT_DINO = _DummyDino()
+_CURRENT_FLORANCE = _DummyFlorence()
+_CURRENT_FAISS = _DummyFaiss([])
+
+
 @asynccontextmanager
 async def mock_lifespan(app_obj):
     pipeline_mock = MagicMock()
-    pipeline_mock.yolo = _DummyYolo()
-    pipeline_mock.dino = _DummyDino()
-    pipeline_mock.faiss = _DummyFaiss()
+    pipeline_mock.yolo = _CURRENT_YOLO
+    pipeline_mock.dino = _CURRENT_DINO
+    pipeline_mock.florence = _CURRENT_FLORANCE
+    pipeline_mock.faiss = _CURRENT_FAISS
 
     app_obj.state.multiview_pipeline = pipeline_mock
     yield
@@ -112,14 +105,54 @@ async def mock_lifespan(app_obj):
 app.router.lifespan_context = mock_lifespan
 
 
-def _image_bytes() -> bytes:
-    image = Image.new("RGB", (32, 32), color=(255, 0, 0))
+def _image_bytes(color=(255, 0, 0)) -> bytes:
+    image = Image.new("RGB", (32, 32), color=color)
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()
 
 
+def _make_hit(
+    *,
+    faiss_id,
+    item_id,
+    score,
+    category,
+    color=None,
+    color_histogram=None,
+    brand=None,
+    brand_tokens=None,
+    ocr_tokens=None,
+):
+    payload = {
+        "score": score,
+        "faiss_id": faiss_id,
+        "item_id": item_id,
+        "category": category,
+    }
+    if color is not None:
+        payload["normalized_color"] = color
+    if color_histogram is not None:
+        payload["color_histogram"] = color_histogram
+    if brand is not None:
+        payload["brand"] = brand
+    if brand_tokens is not None:
+        payload["brand_tokens"] = brand_tokens
+    if ocr_tokens is not None:
+        payload["ocr_tokens"] = ocr_tokens
+    return payload
+
+
+def _set_pipeline(*, hits, vectors, yolo_label="Wallet", ocr_text=""):
+    global _CURRENT_YOLO, _CURRENT_DINO, _CURRENT_FLORANCE, _CURRENT_FAISS
+    _CURRENT_YOLO = _DummyYolo(label=yolo_label)
+    _CURRENT_DINO = _DummyDino()
+    _CURRENT_FLORANCE = _DummyFlorence(ocr_text=ocr_text)
+    _CURRENT_FAISS = _DummyFaiss(hits=hits, vectors=vectors)
+
+
 def test_index_vector_returns_faiss_id():
+    _set_pipeline(hits=[], vectors={})
     with TestClient(app) as client:
         payload = {
             "vector_128d": [0.1] * 128,
@@ -130,96 +163,115 @@ def test_index_vector_returns_faiss_id():
         assert response.json()["faiss_id"] == 7
 
 
-def test_search_by_image_returns_matches():
-    with TestClient(app) as client:
-        files = {"file": ("query.png", _image_bytes(), "image/png")}
-        data = {"top_k": "2", "min_score": "0.7"}
+def test_search_by_image_rejects_category_mismatch():
+    red_hist = _solid_hist((255, 0, 0))
+    hits = [
+        _make_hit(faiss_id=7, item_id="item-wallet", score=0.82, category="Wallet", color="red", color_histogram=red_hist),
+        _make_hit(faiss_id=8, item_id="item-bag", score=0.96, category="Bag", color="red", color_histogram=red_hist),
+    ]
+    vectors = {
+        7: np.full(128, 0.82, dtype=np.float32),
+        8: np.full(128, 0.96, dtype=np.float32),
+    }
+    _set_pipeline(hits=hits, vectors=vectors, yolo_label="Wallet")
 
-        response = client.post("/search/by-image", files=files, data=data)
+    with TestClient(app) as client:
+        response = client.post("/search/by-image", files={"file": ("query.png", _image_bytes(), "image/png")}, data={"top_k": "2"})
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["top_k"] == 2
-        assert payload["min_score"] == 0.7
-        assert len(payload["matches"]) == 2
-        assert [match["item_id"] for match in payload["matches"]] == ["item-xyz", "item-123"]
-        top_match = payload["matches"][0]
-        fused_match = payload["matches"][1]
-        assert top_match["score"] == pytest.approx(0.88)
-        assert top_match["canonical_score"] == pytest.approx(0.88)
-        assert top_match["best_hit_score"] == pytest.approx(0.89)
-        assert top_match["score_source"] == "canonical_full_vs_fallback"
-        assert fused_match["faiss_id"] == 7
-        assert fused_match["score"] == pytest.approx(0.74)
-        assert fused_match["canonical_score"] == pytest.approx(0.74)
-        assert fused_match["best_hit_score"] == pytest.approx(0.97)
-        assert fused_match["score_source"] == "canonical_full_vs_fused"
-        assert fused_match["vector_hits_count"] == 2
+        assert payload["category_filter"] == "Wallet"
+        assert [match["item_id"] for match in payload["matches"]] == ["item-wallet"]
 
 
-def test_search_by_image_prefers_fused_vector_for_canonical_score():
+def test_search_by_image_penalizes_color_conflicts():
+    red_hist = _solid_hist((255, 0, 0))
+    blue_hist = _solid_hist((0, 0, 255))
+    hits = [
+        _make_hit(faiss_id=7, item_id="item-red", score=0.82, category="Wallet", color="red", color_histogram=red_hist),
+        _make_hit(faiss_id=8, item_id="item-blue", score=0.93, category="Wallet", color="blue", color_histogram=blue_hist),
+    ]
+    vectors = {
+        7: np.full(128, 0.82, dtype=np.float32),
+        8: np.full(128, 0.93, dtype=np.float32),
+    }
+    _set_pipeline(hits=hits, vectors=vectors, yolo_label="Wallet")
+
     with TestClient(app) as client:
-        files = {"file": ("query.png", _image_bytes(), "image/png")}
-
-        response = client.post("/search/by-image", files=files, data={"top_k": "2", "min_score": "0.7"})
+        response = client.post("/search/by-image", files={"file": ("query.png", _image_bytes(), "image/png")}, data={"top_k": "2"})
 
         assert response.status_code == 200
         payload = response.json()
-        item = next(match for match in payload["matches"] if match["item_id"] == "item-123")
-        assert item["item_id"] == "item-123"
-        assert item["faiss_id"] == 7
-        assert item["score"] < item["best_hit_score"]
-        assert item["metadata"]["canonical_from_faiss_id"] == 7
-        assert item["metadata"]["canonical_query_view"] == "full"
+        assert [match["item_id"] for match in payload["matches"]] == ["item-red"]
 
 
-def test_search_by_image_uses_lowest_faiss_id_for_fallback_canonical_score():
+def test_search_by_image_prefers_brand_and_ocr_overlap():
+    red_hist = _solid_hist((255, 0, 0))
+    hits = [
+        _make_hit(
+            faiss_id=7,
+            item_id="item-generic",
+            score=0.89,
+            category="Wallet",
+            color="red",
+            color_histogram=red_hist,
+        ),
+        _make_hit(
+            faiss_id=8,
+            item_id="item-jbl",
+            score=0.86,
+            category="Wallet",
+            color="red",
+            color_histogram=red_hist,
+            brand="JBL",
+            brand_tokens=["JBL"],
+            ocr_tokens=["JBL"],
+        ),
+    ]
+    vectors = {
+        7: np.full(128, 0.89, dtype=np.float32),
+        8: np.full(128, 0.86, dtype=np.float32),
+    }
+    _set_pipeline(hits=hits, vectors=vectors, yolo_label="Wallet", ocr_text="JBL")
+
     with TestClient(app) as client:
-        files = {"file": ("query.png", _image_bytes(), "image/png")}
-
-        response = client.post("/search/by-image", files=files, data={"top_k": "2", "min_score": "0.7"})
+        response = client.post(
+            "/search/by-image",
+            files={"file": ("query.png", _image_bytes(), "image/png")},
+            data={"top_k": "2", "return_debug_scores": "true"},
+        )
 
         assert response.status_code == 200
         payload = response.json()
-        fallback_item = next(match for match in payload["matches"] if match["item_id"] == "item-xyz")
-        assert fallback_item["faiss_id"] == 10
-        assert fallback_item["score"] == pytest.approx(0.88)
+        assert [match["item_id"] for match in payload["matches"]] == ["item-jbl", "item-generic"]
+        assert payload["matches"][0]["metadata"]["rerank_debug"]["brand_overlap"] == pytest.approx(1.0)
 
 
-def test_search_by_image_repeated_calls_return_same_canonical_score():
-    with TestClient(app) as client:
-        files = {"file": ("query.png", _image_bytes(), "image/png")}
-        data = {"top_k": "2", "min_score": "0.7"}
+def test_search_by_image_keeps_match_when_color_unknown():
+    red_hist = _solid_hist((255, 0, 0))
+    hits = [
+        _make_hit(
+            faiss_id=7,
+            item_id="item-strong",
+            score=0.96,
+            category="Wallet",
+            color="blue",
+            color_histogram=red_hist,
+        ),
+    ]
+    vectors = {
+        7: np.full(128, 0.96, dtype=np.float32),
+    }
+    _set_pipeline(hits=hits, vectors=vectors, yolo_label="Wallet")
 
-        response_a = client.post("/search/by-image", files=files, data=data)
-        response_b = client.post("/search/by-image", files={"file": ("query.png", _image_bytes(), "image/png")}, data=data)
+    with patch("app.routers.search_router.extract_pixel_dominant_color", return_value=None):
+        with TestClient(app) as client:
+            response = client.post(
+                "/search/by-image",
+                files={"file": ("query.png", _image_bytes(), "image/png")},
+                data={"top_k": "1", "min_score": "0.55"},
+            )
 
-        assert response_a.status_code == 200
-        assert response_b.status_code == 200
-        first_a = response_a.json()["matches"][0]
-        first_b = response_b.json()["matches"][0]
-        assert first_a["item_id"] == first_b["item_id"] == "item-xyz"
-        assert first_a["score"] == pytest.approx(first_b["score"])
-
-
-def test_search_by_image_defaults_to_top1_item():
-    with TestClient(app) as client:
-        files = {"file": ("query.png", _image_bytes(), "image/png")}
-        response = client.post("/search/by-image", files=files)
-
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["top_k"] == 1
-        assert len(payload["matches"]) == 1
-        assert payload["matches"][0]["item_id"] == "item-xyz"
-
-
-def test_search_by_image_filters_on_canonical_score():
-    with TestClient(app) as client:
-        files = {"file": ("query.png", _image_bytes(), "image/png")}
-
-        response = client.post("/search/by-image", files=files, data={"top_k": "2", "min_score": "0.8"})
-
-        assert response.status_code == 200
-        payload = response.json()
-        assert [match["item_id"] for match in payload["matches"]] == ["item-xyz"]
+            assert response.status_code == 200
+            payload = response.json()
+            assert [match["item_id"] for match in payload["matches"]] == ["item-strong"]

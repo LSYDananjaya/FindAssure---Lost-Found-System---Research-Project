@@ -1,6 +1,8 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="forbid")
+
     REDIS_URL: str = "redis://localhost:6379/0"
     PRE_ANALYSIS_JOB_TTL_S: int = 900
     PRE_ANALYSIS_RETRY_AFTER_MS: int = 1000
@@ -17,6 +19,12 @@ class Settings(BaseSettings):
     PERF_PROFILE: str = "balanced"
     PP1_MAX_DETECTIONS: int = 1
     PP1_GEMINI_INCLUDE_IMAGE: bool = False
+    PP1_GEMINI_MODEL: str = "models/gemini-3.1-flash-lite-preview"
+    PP1_GEMINI_FALLBACK_MODEL: str = "gemini-2.5-flash"
+    PP1_GEMINI_TEMPERATURE: float = 0.1
+    PP1_GEMINI_MAX_OUTPUT_TOKENS: int = 320
+    PP1_GEMINI_THINKING_LEVEL: str = "low"
+    PP1_DINO_TIMEOUT_S: int = 10
     FLORENCE_FAST_MAX_NEW_TOKENS: int = 96
     FLORENCE_FAST_NUM_BEAMS: int = 1
     FLORENCE_TIMEOUT_MS: int = 120000
@@ -31,9 +39,19 @@ class Settings(BaseSettings):
     PP2_FORCE_GROUNDING: bool = False
     PP2_DISABLE_MULTIVIEW_VERIFICATION: bool = False
     PP2_OCR_FIRST_TINY_BBOX_AREA_RATIO: float = 0.05
-    PP2_ENABLE_GEMINI: bool = False
-    PP2_GEMINI_ON_NEAR_MISS: bool = True
-    PP2_GEMINI_TIMEOUT_S: int = 4
+    PP2_ENABLE_REASONER: bool = False
+    PP2_REASONER_MODE: str = "per_view_and_phase2"
+    PP2_REASONER_MODEL: str = "models/gemini-3.1-flash-lite-preview"
+    PP2_REASONER_FALLBACK_MODEL: str = "gemini-2.5-flash"
+    PP2_REASONER_THINKING_BUDGET: int = 256
+    PP2_REASONER_THINKING_LEVEL: str = "medium"
+    PP2_REASONER_MAX_OUTPUT_TOKENS: int = 320
+    PP2_REASONER_TEMPERATURE: float = 0.2
+    PP2_REASONER_ALWAYS_ENRICH: bool = True
+    PP2_REASONER_INCLUDE_IMAGES: bool = True
+    PP2_REASONER_MIN_WORDS: int = 24
+    PP2_REASONER_ON_NEAR_MISS: bool = True
+    PP2_REASONER_TIMEOUT_S: int = 4
     PP2_PHASE2_TIMEOUT_S: int = 4
     DINO_MODEL_PATH: str | None = None
     DINO_INPUT_SIZE: int = 224
@@ -70,8 +88,5 @@ class Settings(BaseSettings):
     PP2_VERIFIER_THREE_VIEW_SMALL_AMBIGUOUS: float | None = None
     PP2_VERIFIER_ANGLE_HARD_BRAND_RESCUE_FLOOR: float | None = None  # override MultiViewVerifier.ANGLE_HARD_BRAND_RESCUE_FLOOR (default 0.38)
     PP2_VERIFIER_SMART_PHONE_FRONT_BACK_RESCUE_FLOOR: float = 0.18
-
-    class Config:
-        env_file = ".env"
 
 settings = Settings()

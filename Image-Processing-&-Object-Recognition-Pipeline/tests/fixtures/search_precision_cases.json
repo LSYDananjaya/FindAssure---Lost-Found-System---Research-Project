@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "name": "same-category-different-color",
+      "relevant_ids": ["wallet-red-01"],
+      "predicted_ids": ["wallet-red-01", "wallet-blue-09", "wallet-black-03"]
+    },
+    {
+      "name": "same-category-and-color-different-brand",
+      "relevant_ids": ["speaker-jbl-01"],
+      "predicted_ids": ["speaker-jbl-01", "speaker-generic-04", "speaker-sony-08"]
+    },
+    {
+      "name": "same-object-angle-change",
+      "relevant_ids": ["helmet-black-02"],
+      "predicted_ids": ["helmet-black-02", "helmet-black-05", "helmet-red-07"]
+    },
+    {
+      "name": "partial-crop-vs-full-image",
+      "relevant_ids": ["student-id-11"],
+      "predicted_ids": ["student-id-11", "wallet-brown-02", "student-id-13"]
+    }
+  ]
+}

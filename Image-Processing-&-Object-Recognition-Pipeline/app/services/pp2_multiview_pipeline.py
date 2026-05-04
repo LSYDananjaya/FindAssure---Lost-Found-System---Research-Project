@@ -1,3 +1,15 @@
+"""PP2 multi-view orchestration.
+
+Module overview:
+- Stage 1 processes each uploaded view independently: detect, crop, extract
+  light evidence, and create an embedding.
+- Consensus selection aligns views to one likely category before verification.
+- Verification chooses the best pair and checks whether the views likely show
+  the same physical item.
+- Fusion runs only after verification passes, then stores a fused profile and
+  searchable vector.
+"""
+
 import uuid
 import cv2
 import numpy as np
@@ -31,16 +43,21 @@ from app.services.pp2_fusion_service import MultiViewFusionService
 from app.services.pp2_multiview_verifier import MultiViewVerifier
 from app.services.storage_service import StorageService
 from app.services.faiss_service import FaissService
-from app.services.gemini_reasoner import GeminiReasoner
+from app.services.image_search_reranker import build_color_histogram, collect_search_tokens, extract_brand_tokens
 from app.services.detection_arbiter import should_run_florence_od, arbitrate
+from app.services.reasoner_factory import create_reasoner_from_settings
+from app.services.reasoner_types import ReasonerFatalError, ReasonerProtocol
 from app.config.settings import settings
 from app.domain.category_specs import canonicalize_label
+from app.domain.color_utils import normalize_color
 from app.domain.label_keywords import CATEGORY_KEYWORDS, NEGATIVE_KEYWORDS, NEGATIVE_KEYWORD_WEIGHT
 
 logger = logging.getLogger(__name__)
 
 
 class MultiViewPipeline:
+    """Coordinates PP2 detection, verification, enrichment, fusion, and storage."""
+
     MIN_VIEWS = 2
     MAX_VIEWS = 3
     PP2_TOP_K_DETECTIONS = 5
@@ -54,6 +71,7 @@ class MultiViewPipeline:
     MIN_SELECTION_CONFIDENCE = 0.10
     HINT_KEYWORDS: Dict[str, List[str]] = CATEGORY_KEYWORDS
     UMBRELLA_KEYWORDS: List[str] = ["umbrella", "parasol"]
+    PP2_REASONER_MODES = {"disabled", "phase2_only", "per_view_and_phase2"}
     HINT_PRIORITY: List[str] = [
         "Helmet",
         "Smart Phone",
@@ -78,7 +96,7 @@ class MultiViewPipeline:
         verifier: MultiViewVerifier, 
         fusion: MultiViewFusionService, 
         faiss: FaissService,
-        gemini: Optional[GeminiReasoner] = None,
+        gemini: Optional[ReasonerProtocol] = None,
     ):
         self.yolo = yolo
         self.florence = florence
@@ -93,15 +111,124 @@ class MultiViewPipeline:
         self.lite_success_confidence = max(self.LITE_EXTRACTION_CONFIDENCE, configured)
         self._pp2_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pp2_phase2")
 
-    def _get_gemini(self) -> Optional[GeminiReasoner]:
-        if not bool(getattr(settings, "PP2_ENABLE_GEMINI", False)):
+    def _get_gemini(self) -> Optional[ReasonerProtocol]:
+        if not bool(getattr(settings, "PP2_ENABLE_REASONER", False)):
             return None
         if self._gemini is not None:
             return self._gemini
         with self._gemini_lock:
             if self._gemini is None:
-                self._gemini = GeminiReasoner()
+                self._gemini = create_reasoner_from_settings()
         return self._gemini
+
+    def _get_pp2_reasoner_mode(self) -> str:
+        raw_mode = str(getattr(settings, "PP2_REASONER_MODE", "per_view_and_phase2") or "per_view_and_phase2").strip().lower()
+        if raw_mode not in self.PP2_REASONER_MODES:
+            return "per_view_and_phase2"
+        return raw_mode
+
+    def _pp2_reasoner_enabled(self) -> bool:
+        if not bool(getattr(settings, "PP2_ENABLE_REASONER", False)):
+            return False
+        return self._get_pp2_reasoner_mode() != "disabled"
+
+    def _should_run_pp2_per_view_reasoner(self) -> bool:
+        return self._pp2_reasoner_enabled() and self._get_pp2_reasoner_mode() == "per_view_and_phase2"
+
+    def _should_run_pp2_phase2_reasoner(self, *, verification_passed: bool) -> bool:
+        if not self._pp2_reasoner_enabled() or not verification_passed:
+            return False
+        reasoner_mode = self._get_pp2_reasoner_mode()
+        if reasoner_mode == "phase2_only":
+            return True
+        if reasoner_mode == "per_view_and_phase2":
+            return bool(getattr(settings, "PP2_REASONER_ALWAYS_ENRICH", True))
+        return False
+
+    @staticmethod
+    def _as_float(value: Any) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _resolve_reasoner_label(self, *payloads: Any, enabled: bool = True) -> str:
+        if not enabled:
+            return "disabled"
+
+        for payload in payloads:
+            if not isinstance(payload, dict):
+                continue
+
+            reasoning_meta = payload.get("reasoning_meta", {}) if isinstance(payload.get("reasoning_meta", {}), dict) else {}
+            selected_model = str(reasoning_meta.get("selected_model") or "").strip()
+            if selected_model:
+                return selected_model
+
+            provider = str(reasoning_meta.get("provider") or "").strip().lower()
+            if provider:
+                return provider
+
+        configured_model = str(getattr(settings, "PP2_REASONER_MODEL", "") or "").strip()
+        fallback_model = str(getattr(settings, "PP2_REASONER_FALLBACK_MODEL", "") or "").strip()
+        return configured_model or fallback_model or "gemini"
+
+    def _log_pp2_timing_summary(
+        self,
+        *,
+        request_id: str,
+        item_id: str,
+        total_ms: float,
+        per_view_ms: List[float],
+        verify_ms: float,
+        florence_stage1_total_ms: float,
+        florence_detail_ms: float,
+        storage_ms: float,
+        early_exit_pair: Optional[Tuple[int, int]],
+        profile: str,
+        gemini_enabled: bool,
+        reasoner_view_outputs: Optional[Dict[int, Dict[str, Any]]] = None,
+        phase2_result: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        reasoner_view_outputs = reasoner_view_outputs if isinstance(reasoner_view_outputs, dict) else {}
+        phase2_result = phase2_result if isinstance(phase2_result, dict) else {}
+        view_elapsed = [
+            self._as_float(meta.get("elapsed_ms"))
+            for meta in reasoner_view_outputs.values()
+            if isinstance(meta, dict)
+        ]
+        reasoner_view_total_ms = sum(view_elapsed)
+        reasoner_view_avg_ms = (reasoner_view_total_ms / len(view_elapsed)) if view_elapsed else 0.0
+        reasoner_phase2_ms = self._as_float(phase2_result.get("elapsed_ms"))
+        reasoner_total_ms = reasoner_view_total_ms + reasoner_phase2_ms
+        reasoner_label = self._resolve_reasoner_label(
+            *(meta for meta in reasoner_view_outputs.values() if isinstance(meta, dict)),
+            phase2_result,
+            enabled=gemini_enabled,
+        )
+
+        logger.info(
+            "PP2_TIMING request_id=%s item_id=%s total_ms=%.2f per_view_avg_ms=%.2f verify_ms=%.2f "
+            "florence_stage1_total_ms=%.2f florence_stage1_avg_ms=%.2f florence_detail_ms=%.2f "
+            "reasoner_label=%s reasoner_view_total_ms=%.2f reasoner_view_avg_ms=%.2f "
+            "reasoner_phase2_ms=%.2f reasoner_total_ms=%.2f storage_ms=%.2f early_exit=%s profile=%s",
+            request_id,
+            item_id,
+            total_ms,
+            (sum(per_view_ms) / len(per_view_ms)) if per_view_ms else 0.0,
+            verify_ms,
+            florence_stage1_total_ms,
+            (florence_stage1_total_ms / len(per_view_ms)) if per_view_ms else 0.0,
+            florence_detail_ms,
+            reasoner_label,
+            reasoner_view_total_ms,
+            reasoner_view_avg_ms,
+            reasoner_phase2_ms,
+            reasoner_total_ms,
+            storage_ms,
+            bool(early_exit_pair),
+            profile,
+        )
 
     @staticmethod
     def _verification_has_near_miss(verification: PP2VerificationResult) -> bool:
@@ -500,19 +627,16 @@ class MultiViewPipeline:
                 item_id,
                 view_idx,
             )
-            response = gemini.confirm_pp2_view(
+            response = gemini.analyze_pp2_view(
                 evidence_json=evidence,
                 crop_image=crop_by_index.get(view_idx),
             )
             elapsed_ms = (time.perf_counter() - start) * 1000.0
-            payload = {
-                "status": str(response.get("status", "error") or "error"),
-                "label": response.get("label"),
-                "description": response.get("description"),
-                "message": str(response.get("message", "") or ""),
-                "elapsed_ms": round(elapsed_ms, 2),
-                "timeout_s": int(timeout_s),
-            }
+            payload = dict(response) if isinstance(response, dict) else {}
+            payload["status"] = str(payload.get("pp2_view_status", payload.get("status", "error")) or "error")
+            payload["description"] = payload.get("description") or payload.get("detailed_description") or payload.get("final_description")
+            payload["elapsed_ms"] = round(elapsed_ms, 2)
+            payload["timeout_s"] = int(timeout_s)
             if "error" in response:
                 payload["error"] = response.get("error")
             logger.debug(
@@ -553,6 +677,7 @@ class MultiViewPipeline:
                         "status": "error",
                         "reason": "exception",
                         "message": str(exc),
+                        "elapsed_ms": 0.0,
                         "timeout_s": int(timeout_s),
                     }
                     logger.exception(
@@ -565,52 +690,177 @@ class MultiViewPipeline:
             executor.shutdown(wait=False, cancel_futures=True)
         return outputs
 
+    def _apply_gemini_view_enrichment(
+        self,
+        *,
+        per_view_results: List[PP2PerViewResult],
+        gemini_evidence_by_index: Dict[int, Dict[str, Any]],
+    ) -> None:
+        for idx, gemini_meta in gemini_evidence_by_index.items():
+            if idx < 0 or idx >= len(per_view_results):
+                continue
+
+            view = per_view_results[idx]
+            existing_raw = view.extraction.raw if isinstance(view.extraction.raw, dict) else {}
+            raw = dict(existing_raw)
+            raw["gemini"] = gemini_meta
+            raw["smart_description"] = gemini_meta
+
+            status = str(gemini_meta.get("status", "") or "").strip().lower()
+            if status != "success":
+                view.extraction.raw = raw
+                continue
+
+            grounded = view.extraction.grounded_features if isinstance(view.extraction.grounded_features, dict) else {}
+            grounded = dict(grounded)
+            category_details = gemini_meta.get("category_details", {}) if isinstance(gemini_meta.get("category_details"), dict) else {}
+
+            for field_name in ("features", "defects", "attachments"):
+                merged_values = self._normalize_string_list(grounded.get(field_name))
+                merged_values.extend(self._normalize_string_list(category_details.get(field_name)))
+                deduped: List[str] = []
+                seen: set[str] = set()
+                for value in merged_values:
+                    key = value.lower()
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    deduped.append(value)
+                if deduped:
+                    grounded[field_name] = deduped
+
+            gemini_color = str(gemini_meta.get("color", "") or "").strip()
+            if gemini_color and not str(grounded.get("color", "") or "").strip():
+                grounded["color"] = gemini_color
+
+            key_count = gemini_meta.get("key_count")
+            if isinstance(key_count, int) and not isinstance(key_count, bool) and grounded.get("key_count") is None:
+                grounded["key_count"] = key_count
+
+            view.extraction.grounded_features = grounded
+
+            detailed_description = str(
+                gemini_meta.get("detailed_description")
+                or gemini_meta.get("final_description")
+                or ""
+            ).strip()
+            if detailed_description:
+                view.extraction.detailed_description = detailed_description
+
+            view.extraction.raw = raw
+
+    def _build_phase2_bundle_view_payload(
+        self,
+        *,
+        view: PP2PerViewResult,
+        canonical_label_by_index: Dict[int, str],
+        selected_index_set: set[int],
+    ) -> Dict[str, Any]:
+        canonical = canonical_label_by_index.get(view.view_index, str(view.detection.cls_name))
+        raw = view.extraction.raw if isinstance(view.extraction.raw, dict) else {}
+        grounded = view.extraction.grounded_features if isinstance(view.extraction.grounded_features, dict) else {}
+        category_details = self._build_phase2_category_details(grounded)
+        gemini_meta = raw.get("gemini", {}) if isinstance(raw.get("gemini", {}), dict) else {}
+
+        detailed_description = str(
+            gemini_meta.get("detailed_description")
+            or gemini_meta.get("final_description")
+            or getattr(view.extraction, "detailed_description", "")
+            or getattr(view.extraction, "caption", "")
+            or ""
+        )
+        source_tags = {
+            "caption": self._normalize_string_list(gemini_meta.get("evidence_used", {}).get("caption") if isinstance(gemini_meta.get("evidence_used", {}), dict) else []),
+            "ocr": self._normalize_string_list(gemini_meta.get("evidence_used", {}).get("ocr") if isinstance(gemini_meta.get("evidence_used", {}), dict) else []),
+            "grounding": self._normalize_string_list(gemini_meta.get("evidence_used", {}).get("grounding") if isinstance(gemini_meta.get("evidence_used", {}), dict) else []),
+            "color": self._normalize_string_list(gemini_meta.get("evidence_used", {}).get("color") if isinstance(gemini_meta.get("evidence_used", {}), dict) else []),
+        }
+        if not source_tags["caption"] and str(view.extraction.caption or "").strip():
+            source_tags["caption"] = ["florence_caption"]
+        if not source_tags["ocr"] and str(view.extraction.ocr_text or "").strip():
+            source_tags["ocr"] = ["ocr_text"]
+        if not source_tags["grounding"]:
+            source_tags["grounding"] = [name for name in ("features", "defects", "attachments") if category_details.get(name)]
+        if not source_tags["color"] and str(raw.get("color_vqa") or "").strip():
+            source_tags["color"] = ["florence_vqa_color"]
+
+        return {
+            "view_index": int(view.view_index),
+            "selected_for_verification": int(view.view_index) in selected_index_set,
+            "phase1_output": {
+                "label": canonical,
+                "description": detailed_description,
+                "detailed_description": detailed_description,
+                "color_vqa": str(gemini_meta.get("color") or raw.get("color_vqa") or ""),
+                "ocr_text": str(view.extraction.ocr_text or ""),
+                "category_details": category_details,
+                "brand": str(grounded.get("brand") or ""),
+                "key_count": grounded.get("key_count"),
+                "unsupported_claims": self._normalize_string_list(gemini_meta.get("unsupported_claims")),
+            },
+            "source_tags": source_tags,
+            "ocr_snippets": re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", str(view.extraction.ocr_text or ""))[:4],
+            "conflict_flags": {
+                "sparse_text": self._view_has_sparse_florence_text(view),
+                "missing_color": not bool(str(raw.get("color_vqa") or gemini_meta.get("color") or "").strip()),
+                "gemini_status": str(gemini_meta.get("status", "") or "").strip().lower() if gemini_meta else None,
+            },
+        }
+
     def _run_pp2_phase2_gemini_sync(
         self,
         *,
         per_view_results: List[PP2PerViewResult],
         canonical_label_by_index: Dict[int, str],
+        crop_by_index: Dict[int, Image.Image],
+        selected_indices: List[int],
         item_id: str,
         request_id: str,
     ) -> Dict[str, Any]:
         """Run Gemini Phase2 multi-view fusion synchronously (intended for thread pool execution)."""
         gemini = self._get_gemini()
         if gemini is None:
-            return {"status": "skipped", "reason": "disabled"}
+            return {"status": "skipped", "reason": "disabled", "elapsed_ms": 0.0}
+        start = time.perf_counter()
         try:
+            selected_view_indices = [
+                int(idx)
+                for idx in selected_indices
+                if isinstance(idx, int) and 0 <= int(idx) < len(per_view_results)
+            ]
+            if not selected_view_indices:
+                selected_view_indices = list(range(len(per_view_results)))
+            selected_index_set = set(selected_view_indices)
             per_image = []
-            for view in per_view_results:
-                canonical = canonical_label_by_index.get(view.view_index, str(view.detection.cls_name))
-                raw = view.extraction.raw if isinstance(view.extraction.raw, dict) else {}
-                grounded = view.extraction.grounded_features if isinstance(view.extraction.grounded_features, dict) else {}
-                category_details = self._build_phase2_category_details(grounded)
-                detailed_description = str(
-                    getattr(view.extraction, "detailed_description", "")
-                    or getattr(view.extraction, "caption", "")
-                    or ""
+            image_inputs: List[Image.Image] = []
+            include_images = bool(getattr(settings, "PP2_REASONER_INCLUDE_IMAGES", True))
+            for idx, view in enumerate(per_view_results):
+                per_image.append(
+                    self._build_phase2_bundle_view_payload(
+                        view=view,
+                        canonical_label_by_index=canonical_label_by_index,
+                        selected_index_set=selected_index_set,
+                    )
                 )
-                per_image.append({
-                    "view_index": int(view.view_index),
-                    "phase1_output": {
-                        "label": canonical,
-                        "description": detailed_description,
-                        "detailed_description": detailed_description,
-                        "color_vqa": str(raw.get("color_vqa") or ""),
-                        "ocr_text": str(view.extraction.ocr_text or ""),
-                        "category_details": category_details,
-                        "brand": str(grounded.get("brand") or ""),
-                        "key_count": grounded.get("key_count"),
-                    },
-                })
-            bundle = {"item_id": item_id, "per_image": per_image}
+                if include_images:
+                    crop = crop_by_index.get(idx)
+                    if crop is not None:
+                        image_inputs.append(crop)
+            bundle = {
+                "item_id": item_id,
+                "selected_view_indices": selected_view_indices,
+                "per_image": per_image,
+            }
             logger.debug(
                 "PP2_PHASE2_GEMINI_START request_id=%s item_id=%s n_views=%d",
                 request_id,
                 item_id,
                 len(per_image),
             )
-            start = time.perf_counter()
-            result = gemini.run_phase2(evidence_bundle_json=bundle)
+            result = gemini.run_phase2(
+                evidence_bundle_json=bundle,
+                images=image_inputs or None,
+            )
             elapsed_ms = (time.perf_counter() - start) * 1000.0
             logger.debug(
                 "PP2_PHASE2_GEMINI_DONE request_id=%s item_id=%s status=%s elapsed_ms=%.2f",
@@ -619,14 +869,42 @@ class MultiViewPipeline:
                 str(result.get("status", "unknown")),
                 elapsed_ms,
             )
+            result["elapsed_ms"] = round(elapsed_ms, 2)
             return result
-        except Exception:
+        except ReasonerFatalError as exc:
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            provider_status = str(getattr(exc, "provider_status", "") or "").strip() or None
+            payload = {
+                "status": "error",
+                "elapsed_ms": round(elapsed_ms, 2),
+                "message": str(exc),
+            }
+            if provider_status:
+                payload["provider_status"] = provider_status
+            if provider_status == "INSUFFICIENT_SYSTEM_MEMORY":
+                payload["expected_capacity_failure"] = True
+                logger.warning(
+                    "PP2_PHASE2_GEMINI_CAPACITY request_id=%s item_id=%s provider_status=%s message=%s",
+                    request_id,
+                    item_id,
+                    provider_status,
+                    str(exc),
+                )
+                return payload
             logger.exception(
                 "PP2_PHASE2_GEMINI_ERROR request_id=%s item_id=%s",
                 request_id,
                 item_id,
             )
-            return {"status": "error"}
+            return payload
+        except Exception:
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            logger.exception(
+                "PP2_PHASE2_GEMINI_ERROR request_id=%s item_id=%s",
+                request_id,
+                item_id,
+            )
+            return {"status": "error", "elapsed_ms": round(elapsed_ms, 2)}
 
     @staticmethod
     def _set_phase2_gemini_meta(
@@ -669,6 +947,7 @@ class MultiViewPipeline:
             return False
 
         status = str(phase2_result.get("status", "unknown") or "unknown").strip().lower()
+        reasoning_meta = phase2_result.get("reasoning_meta", {}) if isinstance(phase2_result, dict) else {}
         if status != "accepted":
             self._set_phase2_gemini_meta(
                 fused,
@@ -677,13 +956,32 @@ class MultiViewPipeline:
                 timeout_s=timeout_s,
                 message=str(phase2_result.get("message", "") or "").strip() or None,
             )
+            if isinstance(reasoning_meta, dict) and reasoning_meta:
+                attributes = getattr(fused, "attributes", {}) if isinstance(getattr(fused, "attributes", {}), dict) else {}
+                attributes = dict(attributes)
+                attributes["phase2_gemini_reasoning"] = reasoning_meta
+                fused.attributes = attributes
             return False
 
         phase2_description = str(phase2_result.get("final_description") or "").strip()
+        finalizer = getattr(self.fusion, "_finalize_composed_description", None)
+        if callable(finalizer):
+            finalized = finalizer(phase2_description)
+            if isinstance(finalized, str) and finalized.strip():
+                phase2_description = finalized.strip()
         if not phase2_description:
             self._set_phase2_gemini_meta(
                 fused,
                 status="empty_description",
+                applied=False,
+                timeout_s=timeout_s,
+            )
+            return False
+        min_words = max(1, int(getattr(settings, "PP2_REASONER_MIN_WORDS", 24)))
+        if len(phase2_description.split()) < min_words:
+            self._set_phase2_gemini_meta(
+                fused,
+                status="below_min_words",
                 applied=False,
                 timeout_s=timeout_s,
             )
@@ -694,6 +992,26 @@ class MultiViewPipeline:
         fused_defects = self._normalize_string_list(getattr(fused, "defects", []))
         fused_attachments = self._normalize_string_list(fused_attributes.get("attachments"))
         fused_ocr_text = " ".join(getattr(fused, "merged_ocr_tokens", [])[:2])
+        sanitized = self._sanitize_phase2_description_against_evidence(
+            phase2_description,
+            category=str(getattr(fused, "category", "") or ""),
+            color=str(getattr(fused, "color", "") or "") or None,
+            features=fused_features,
+            defects=fused_defects,
+            attachments=fused_attachments,
+            ocr_text=fused_ocr_text,
+            fusion=self.fusion,
+        )
+        phase2_description = str(sanitized.get("description") or "").strip()
+        if not phase2_description:
+            self._set_phase2_gemini_meta(
+                fused,
+                status="unsupported_claims",
+                applied=False,
+                timeout_s=timeout_s,
+                message=f"Rejected {int(sanitized.get('rejected_sentences', 0))} unsupported sentences" if sanitized.get("rejected_sentences") else None,
+            )
+            return False
 
         if not self._should_prefer_phase2_description(
             getattr(fused, "detailed_description", None),
@@ -716,8 +1034,9 @@ class MultiViewPipeline:
         fused.detailed_description = phase2_description
         fused.detailed_description_source = "phase2_gemini_enriched"
         word_count = len(phase2_description.split())
+        caption_word_count = len(str(getattr(fused, "caption", "") or "").split())
         fused.description_word_count = {
-            "final_description": word_count,
+            "final_description": caption_word_count,
             "detailed_description": word_count,
         }
         evidence = fused.description_evidence_used if isinstance(getattr(fused, "description_evidence_used", None), dict) else {"summary": [], "detailed": []}
@@ -741,6 +1060,11 @@ class MultiViewPipeline:
             applied=True,
             timeout_s=timeout_s,
         )
+        if isinstance(reasoning_meta, dict) and reasoning_meta:
+            attributes = getattr(fused, "attributes", {}) if isinstance(getattr(fused, "attributes", {}), dict) else {}
+            attributes = dict(attributes)
+            attributes["phase2_gemini_reasoning"] = reasoning_meta
+            fused.attributes = attributes
         return True
 
     @staticmethod
@@ -802,6 +1126,75 @@ class MultiViewPipeline:
         if not text:
             return 0
         return len([part for part in re.split(r"(?<=[.!?])\s+", text) if part.strip()])
+
+    @classmethod
+    def _sanitize_phase2_description_against_evidence(
+        cls,
+        description: Any,
+        *,
+        category: str,
+        color: Optional[str],
+        features: List[str],
+        defects: List[str],
+        attachments: List[str],
+        ocr_text: str,
+        fusion: Any,
+    ) -> Dict[str, Any]:
+        raw = str(description or "").strip()
+        if not raw:
+            return {"description": "", "rejected_sentences": 0}
+
+        finalizer = getattr(fusion, "_finalize_composed_description", None)
+        finalized = raw
+        if callable(finalizer):
+            candidate = finalizer(raw)
+            if isinstance(candidate, str) and candidate.strip():
+                finalized = candidate.strip()
+        contains_scene = getattr(fusion, "_contains_scene_or_meta_contamination", None)
+        is_generic = getattr(fusion, "_is_generic_description", None)
+
+        allowed_phrases = cls._normalize_string_list(features) + cls._normalize_string_list(defects) + cls._normalize_string_list(attachments)
+        if color:
+            allowed_phrases.append(str(color).lower())
+        if category:
+            allowed_phrases.append(str(category).lower())
+        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", str(ocr_text or "").lower()):
+            if len(token) >= 3:
+                allowed_phrases.append(token)
+        allowed_phrases = [phrase.lower() for phrase in allowed_phrases if phrase]
+
+        kept: List[str] = []
+        rejected = 0
+        for sentence in re.split(r"(?<=[.!?])\s+", str(finalized or "").strip()):
+            cleaned = str(sentence or "").strip()
+            if not cleaned:
+                continue
+            lowered = cleaned.lower()
+            identity_sentence = bool(category and str(category).lower() in lowered)
+            if color and str(color).lower() in lowered:
+                identity_sentence = True
+            if callable(contains_scene):
+                contamination = contains_scene(cleaned)
+                if isinstance(contamination, bool) and contamination:
+                    rejected += 1
+                    continue
+            quoted_values = re.findall(r'"([^"]+)"', cleaned)
+            if quoted_values:
+                ocr_lower = str(ocr_text or "").lower()
+                if not ocr_lower or any(value.lower() not in ocr_lower for value in quoted_values):
+                    rejected += 1
+                    continue
+            if not any(phrase in lowered for phrase in allowed_phrases) and not identity_sentence:
+                rejected += 1
+                continue
+            kept.append(cleaned.rstrip(". ") + ".")
+
+        filtered = " ".join(dict.fromkeys(kept)).strip()
+        if callable(is_generic) and filtered:
+            generic = is_generic(filtered, category)
+            if isinstance(generic, bool) and generic:
+                filtered = ""
+        return {"description": filtered, "rejected_sentences": rejected}
 
     @classmethod
     def _should_prefer_phase2_description(
@@ -1863,6 +2256,7 @@ class MultiViewPipeline:
                     break
 
         stage1_vector: Optional[List[float]] = None
+        stage1_vector_768: Optional[List[float]] = None
         stage1_vector_dim: Optional[int] = None
         stage1_skipped = False
         if early_exit_event.is_set():
@@ -1871,16 +2265,28 @@ class MultiViewPipeline:
             stage1_extraction["raw"] = self._mark_extraction_skipped(raw, ["embedding"])
         else:
             try:
-                vec = self.dino.embed_128(stage1_crop)
-                arr = np.asarray(vec, dtype=np.float32)
+                vec_128 = None
+                vec_768 = None
+                if hasattr(self.dino, "embed_both"):
+                    vec_768, vec_128 = self.dino.embed_both(stage1_crop)
+                else:
+                    vec_128 = self.dino.embed_128(stage1_crop)
+                    if hasattr(self.dino, "embed_768"):
+                        vec_768 = self.dino.embed_768(stage1_crop)
+
+                arr = np.asarray(vec_128, dtype=np.float32) if vec_128 is not None else np.asarray([], dtype=np.float32)
                 if np.isnan(arr).any() or np.isinf(arr).any() or np.allclose(arr, 0):
                     logger.warning(
                         "PP2_STAGE1_EMBEDDING_INVALID request_id=%s item_id=%s view=%d — NaN/Inf/zeros",
                         request_id, item_id, view_index,
                     )
                 else:
-                    stage1_vector = [float(v) for v in list(vec)]
+                    stage1_vector = [float(v) for v in list(vec_128)]
                     stage1_vector_dim = len(stage1_vector)
+                    if vec_768 is not None:
+                        arr_768 = np.asarray(vec_768, dtype=np.float32)
+                        if not np.isnan(arr_768).any() and not np.isinf(arr_768).any() and not np.allclose(arr_768, 0):
+                            stage1_vector_768 = [float(v) for v in list(vec_768)]
             except Exception:
                 logger.exception(
                     "PP2_STAGE1_EMBEDDING_FAILED request_id=%s item_id=%s view=%d",
@@ -1905,6 +2311,7 @@ class MultiViewPipeline:
             "hint_signals": hint_signals,
             "florence_stage1_ms": stage1_ms_float,
             "stage1_vector": stage1_vector,
+            "stage1_vector_768": stage1_vector_768,
             "stage1_vector_dim": stage1_vector_dim,
             "stage1_crop": stage1_crop,
             "pair_label": pair_label,
@@ -2007,6 +2414,13 @@ class MultiViewPipeline:
         storage: StorageService,
         request_id: Optional[str] = None,
     ) -> PP2Response:
+        """Run end-to-end PP2 analysis for 2 or 3 uploaded views.
+
+        Design note: PP2 does not simply average multiple images. It first
+        verifies that at least a reliable pair belongs to the same item, then
+        fuses only trusted evidence into the public found-item profile.
+        """
+
         request_start = time.perf_counter()
         profile = self.perf_profile
         item_id = str(uuid.uuid4())
@@ -2015,6 +2429,8 @@ class MultiViewPipeline:
             trace_request_id = str(uuid.uuid4())
         n_views = len(files)
         if n_views < self.MIN_VIEWS or n_views > self.MAX_VIEWS:
+            # The route also validates this, but the service repeats the guard
+            # so direct tests or future callers cannot bypass the PP2 contract.
             raise ValueError(
                 f"Multi-view analysis requires {self.MIN_VIEWS} to {self.MAX_VIEWS} views, got {n_views}."
             )
@@ -2028,6 +2444,7 @@ class MultiViewPipeline:
 
         per_view_results: List[PP2PerViewResult] = []
         vectors: List[List[float]] = []
+        vectors_768_by_index: Dict[int, np.ndarray] = {}
         crops: List[Image.Image] = []
         per_view_ms: List[float] = []
         label_outliers: Dict[int, bool] = {}
@@ -2061,6 +2478,8 @@ class MultiViewPipeline:
         eligible_indices_by_label: Dict[str, List[int]] = {}
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Stage 1 is parallel because each view can be detected, cropped,
+            # lightly described, and embedded independently.
             for i, file in enumerate(files):
                 fut = executor.submit(
                     self._run_view_stage1_task,
@@ -2162,6 +2581,9 @@ class MultiViewPipeline:
 
                 remaining_pending = [idx for idx in pending_indices if not futures_by_index[idx].done()]
                 if provisional_passed and remaining_pending:
+                    # Early exit is an optimization: once a reliable pair is
+                    # found, slow unfinished views can be skipped without losing
+                    # the minimum evidence required for PP2.
                     early_exit_pair = pair
                     early_exit_event.set()
                     cancel_attempts = 0
@@ -2201,7 +2623,9 @@ class MultiViewPipeline:
             sum(1 for entry in view_inputs if bool(entry.get('stage1_skipped', False))),
         )
 
-        # 2. Cross-view consensus (hint-first, then YOLO fallback)
+        # 2. Cross-view consensus (hint-first, then YOLO fallback). This aligns
+        # per-view detections before verification so a single weak YOLO label
+        # does not automatically drop a useful angle.
         per_view_detections = [entry["detections"] for entry in view_inputs]
         hint_list = [entry.get("canonical_hint") for entry in view_inputs]
         hint_signals_list = [entry.get("hint_signals") or {} for entry in view_inputs]
@@ -2233,7 +2657,9 @@ class MultiViewPipeline:
             hint_votes,
         )
 
-        # 3. Process each view using consensus-aligned selection
+        # 3. Process each view using consensus-aligned selection. Views that do
+        # not match the consensus are marked as outliers rather than silently
+        # fused into the final profile.
         for entry in view_inputs:
             i = int(entry["view_index"])
             filename = str(entry["filename"])
@@ -2334,6 +2760,18 @@ class MultiViewPipeline:
                 vector = [0.0] * max(1, int(resolved_embedding_dim))
 
             vectors.append([float(v) for v in vector])
+            vector_768 = entry.get("stage1_vector_768")
+            if isinstance(vector_768, list) and vector_768:
+                try:
+                    vectors_768_by_index[i] = np.asarray(vector_768, dtype=np.float32)
+                except Exception:
+                    logger.debug(
+                        "PP2_STAGE1_RERANK_VECTOR_PARSE_FAILED request_id=%s item_id=%s view=%d",
+                        trace_request_id,
+                        item_id,
+                        i,
+                        exc_info=True,
+                    )
             crops.append(crop)
 
             # E. Quality
@@ -2492,7 +2930,8 @@ class MultiViewPipeline:
         )
 
         # 4. Verification
-        # Convert vectors to numpy for verifier
+        # Convert vectors to numpy for verifier. The verifier expects numerical
+        # arrays so it can compare embeddings and optional center-crop variants.
         florence_detail_ms = 0.0
         verify_start = time.perf_counter()
         vectors_np = [np.array(v, dtype=np.float32) for v in vectors]
@@ -2529,6 +2968,9 @@ class MultiViewPipeline:
         if len(eligible_indices) >= 2:
             best_pair: Optional[Tuple[int, int]] = None
             try:
+                # PP2 uses the best pair as the decision core. Extra views can
+                # enrich the result, but weak/outlier views should not force a
+                # bad verification decision.
                 best_pair, pair_scores = self.verifier.select_best_pair(
                     vectors_np,
                     self.faiss,
@@ -2581,6 +3023,8 @@ class MultiViewPipeline:
             item_id=item_id,
             canonical_hints=canonical_hint_by_index,
         )
+        # Verification output is normalized before downstream enrichment/fusion
+        # so all later stages can rely on used_views and dropped_views metadata.
         verification = self._normalize_verification_result(
             verification,
             used_views=used_views,
@@ -2626,39 +3070,30 @@ class MultiViewPipeline:
                 detail_already_applied = True
 
         gemini_evidence_by_index: Dict[int, Dict[str, Any]] = {}
-        gemini_enabled = bool(getattr(settings, "PP2_ENABLE_GEMINI", False))
-        gemini_on_near_miss = bool(getattr(settings, "PP2_GEMINI_ON_NEAR_MISS", True))
-        near_miss = self._verification_has_near_miss(verification)
-        selected_gemini_idx = self._select_best_gemini_view(per_view_results, verification)
-        selected_sparse = (
-            selected_gemini_idx is not None
-            and 0 <= int(selected_gemini_idx) < len(per_view_results)
-            and self._view_has_sparse_florence_text(per_view_results[int(selected_gemini_idx)])
+        gemini_enabled = self._pp2_reasoner_enabled()
+        reasoner_mode = self._get_pp2_reasoner_mode()
+        phase2_result: Dict[str, Any] = {}
+        selected_indices = (
+            list(verification.used_views)
+            if len(getattr(verification, "used_views", [])) == 2
+            else (decision_indices if len(decision_indices) == 2 else list(range(len(per_view_results))))
         )
-        should_run_gemini = (
-            (not verification.passed)
-            and gemini_enabled
-            and ((not gemini_on_near_miss) or near_miss)
-            and (selected_gemini_idx is not None)
-            and selected_sparse
-        )
+        gemini_view_indices = list(range(len(per_view_results))) if self._should_run_pp2_per_view_reasoner() else []
         logger.debug(
-            "PP2_GEMINI_POLICY request_id=%s item_id=%s enabled=%s verify_passed=%s near_miss=%s near_miss_required=%s selected_view=%s selected_sparse=%s should_run=%s",
+            "PP2_GEMINI_POLICY request_id=%s item_id=%s enabled=%s mode=%s verify_passed=%s view_indices=%s should_run=%s",
             trace_request_id,
             item_id,
             gemini_enabled,
+            reasoner_mode,
             bool(verification.passed),
-            near_miss,
-            gemini_on_near_miss,
-            selected_gemini_idx,
-            selected_sparse,
-            should_run_gemini,
+            gemini_view_indices,
+            bool(gemini_view_indices),
         )
-        if should_run_gemini and selected_gemini_idx is not None:
-            timeout_s = int(getattr(settings, "PP2_GEMINI_TIMEOUT_S", 12))
+        if gemini_view_indices:
+            timeout_s = int(getattr(settings, "PP2_REASONER_TIMEOUT_S", 12))
             timeout_s = max(1, timeout_s)
             gemini_evidence_by_index = self._run_gemini_for_views_parallel(
-                indices=[int(selected_gemini_idx)],
+                indices=gemini_view_indices,
                 per_view_results=per_view_results,
                 crop_by_index=crop_by_index,
                 canonical_label_by_index=canonical_label_by_index,
@@ -2666,24 +3101,32 @@ class MultiViewPipeline:
                 request_id=trace_request_id,
                 item_id=item_id,
             )
-            gemini_meta = gemini_evidence_by_index.get(int(selected_gemini_idx), {})
-            gemini_status = str(gemini_meta.get("status", "")).strip().lower()
-            if gemini_status in {"timeout", "error"}:
+            self._apply_gemini_view_enrichment(
+                per_view_results=per_view_results,
+                gemini_evidence_by_index=gemini_evidence_by_index,
+            )
+            for idx, gemini_meta in gemini_evidence_by_index.items():
+                gemini_status = str(gemini_meta.get("status", "")).strip().lower()
+                if gemini_status not in {"timeout", "error"}:
+                    continue
                 warning = (
-                    f"Gemini fallback {gemini_status} for view {int(selected_gemini_idx)}; "
+                    f"Gemini fallback {gemini_status} for view {int(idx)}; "
                     "continuing with partial evidence."
                 )
                 if warning not in verification.failure_reasons:
                     verification.failure_reasons.append(warning)
 
-        # Submit Phase2 Gemini fusion concurrently with Florence enrichment
+        # Submit Phase2 Gemini fusion concurrently with Florence enrichment.
+        # The reasoner is optional enrichment; verification remains the gate.
         _pp2_phase2_future = None
-        if gemini_enabled and verification.passed:
+        if self._should_run_pp2_phase2_reasoner(verification_passed=bool(verification.passed)):
             try:
                 _pp2_phase2_future = self._pp2_thread_pool.submit(
                     self._run_pp2_phase2_gemini_sync,
                     per_view_results=per_view_results,
                     canonical_label_by_index=canonical_label_by_index,
+                    crop_by_index=crop_by_index,
+                    selected_indices=selected_indices,
                     item_id=item_id,
                     request_id=trace_request_id,
                 )
@@ -2752,17 +3195,9 @@ class MultiViewPipeline:
                 pass_caption_refinement,
             )
 
-        if gemini_evidence_by_index:
-            for idx, gemini_meta in gemini_evidence_by_index.items():
-                if idx < 0 or idx >= len(per_view_results):
-                    continue
-                existing_raw = per_view_results[idx].extraction.raw or {}
-                if not isinstance(existing_raw, dict):
-                    existing_raw = {}
-                existing_raw["gemini"] = gemini_meta
-                per_view_results[idx].extraction.raw = existing_raw
-
-        # 6. Fusion & Storage
+        # 6. Fusion & Storage. The final fused profile is only created for
+        # verified views, which prevents unrelated photos from becoming one
+        # searchable found item.
         fused = None
         stored = False
         cache_key = None
@@ -2770,11 +3205,6 @@ class MultiViewPipeline:
         
         if verification.passed:
             storage_start = time.perf_counter()
-            selected_indices = (
-                list(verification.used_views)
-                if len(getattr(verification, "used_views", [])) == 2
-                else (decision_indices if len(decision_indices) == 2 else list(range(len(per_view_results))))
-            )
             fused = self.fusion.fuse(
                 per_view_results,
                 vectors_np,
@@ -2783,11 +3213,13 @@ class MultiViewPipeline:
                 used_view_indices=selected_indices,
             )
 
-            # Apply Phase2 Gemini fusion result (overlapped with Florence enrichment)
+            # Apply Phase2 Gemini fusion result (overlapped with Florence
+            # enrichment). If it times out, the deterministic fusion result is
+            # still usable.
             if _pp2_phase2_future is not None:
                 phase2_timeout = max(
                     1.0,
-                    float(getattr(settings, "PP2_PHASE2_TIMEOUT_S", getattr(settings, "PP2_GEMINI_TIMEOUT_S", 4))),
+                    float(getattr(settings, "PP2_PHASE2_TIMEOUT_S", getattr(settings, "PP2_REASONER_TIMEOUT_S", 4))),
                 )
                 try:
                     phase2_result = _pp2_phase2_future.result(timeout=phase2_timeout)
@@ -2805,6 +3237,7 @@ class MultiViewPipeline:
                     _pp2_phase2_future = None
                 except FutureTimeoutError:
                     _pp2_phase2_future.cancel()
+                    phase2_result = {"status": "timeout", "elapsed_ms": 0.0}
                     self._set_phase2_gemini_meta(
                         fused,
                         status="timeout",
@@ -2818,6 +3251,7 @@ class MultiViewPipeline:
                         phase2_timeout,
                     )
                 except Exception as _exc:
+                    phase2_result = {"status": "error", "elapsed_ms": 0.0, "message": str(_exc)}
                     self._set_phase2_gemini_meta(
                         fused,
                         status="error",
@@ -2835,16 +3269,44 @@ class MultiViewPipeline:
             try:
                 selected_vectors = [vectors_np[i] for i in selected_indices]
                 fused_vector_np = self.fusion.compute_fused_vector(selected_vectors)
+                selected_vectors_768 = [
+                    vectors_768_by_index[i]
+                    for i in selected_indices
+                    if i in vectors_768_by_index
+                ]
+                fused_vector_768_np = None
+                if selected_vectors_768 and len(selected_vectors_768) == len(selected_indices):
+                    fused_vector_768_np = self.fusion.compute_fused_vector(selected_vectors_768)
+
+                normalized_color = normalize_color(str(getattr(fused, "color", "") or "").strip()) or None
+                ocr_tokens = collect_search_tokens(getattr(fused, "merged_ocr_tokens", []) or [])
+                brand_tokens = extract_brand_tokens(
+                    [getattr(fused, "brand", "")] + list(getattr(fused, "merged_ocr_tokens", []) or [])
+                )
+                best_crop = crop_by_index.get(int(getattr(fused, "best_view_index", 0)))
+                color_histogram = build_color_histogram(best_crop)
+
+                metadata = {
+                    "item_id": item_id,
+                    "fused_embedding_id": fused.fused_embedding_id,
+                    "embedding_id": fused.fused_embedding_id,
+                    "view_index": None,
+                    "best_view_index": fused.best_view_index,
+                    "category": fused.category,
+                    "color": getattr(fused, "color", None),
+                    "normalized_color": normalized_color,
+                    "ocr_tokens": ocr_tokens,
+                    "brand": getattr(fused, "brand", None),
+                    "brand_tokens": brand_tokens,
+                }
+                if color_histogram is not None:
+                    metadata["color_histogram"] = [float(v) for v in color_histogram.tolist()]
+                if fused_vector_768_np is not None:
+                    metadata["rerank_vector_768"] = [float(v) for v in fused_vector_768_np.tolist()]
+
                 faiss_id = self.faiss.add(
                     fused_vector_np,
-                    metadata={
-                        "item_id": item_id,
-                        "fused_embedding_id": fused.fused_embedding_id,
-                        "embedding_id": fused.fused_embedding_id,
-                        "view_index": None,
-                        "best_view_index": fused.best_view_index,
-                        "category": fused.category,
-                    },
+                    metadata=metadata,
                 )
             except Exception:
                 logger.exception(
@@ -2877,19 +3339,20 @@ class MultiViewPipeline:
             )
 
         total_ms = (time.perf_counter() - request_start) * 1000.0
-        logger.info(
-            "PP2_TIMING request_id=%s item_id=%s total_ms=%.2f per_view_avg_ms=%.2f verify_ms=%.2f florence_stage1_total_ms=%.2f florence_stage1_avg_ms=%.2f florence_detail_ms=%.2f storage_ms=%.2f early_exit=%s profile=%s",
-            trace_request_id,
-            item_id,
-            total_ms,
-            (sum(per_view_ms) / len(per_view_ms)) if per_view_ms else 0.0,
-            verify_ms,
-            florence_stage1_total_ms,
-            (florence_stage1_total_ms / len(view_inputs)) if view_inputs else 0.0,
-            florence_detail_ms,
-            storage_ms,
-            bool(early_exit_pair),
-            profile,
+        self._log_pp2_timing_summary(
+            request_id=trace_request_id,
+            item_id=item_id,
+            total_ms=total_ms,
+            per_view_ms=per_view_ms,
+            verify_ms=verify_ms,
+            florence_stage1_total_ms=florence_stage1_total_ms,
+            florence_detail_ms=florence_detail_ms,
+            storage_ms=storage_ms,
+            early_exit_pair=early_exit_pair,
+            profile=profile,
+            gemini_enabled=gemini_enabled,
+            reasoner_view_outputs=gemini_evidence_by_index,
+            phase2_result=phase2_result,
         )
         if total_ms > 18000:
             logger.warning(

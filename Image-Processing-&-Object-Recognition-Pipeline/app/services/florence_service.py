@@ -21,6 +21,12 @@ Notes:
 - Uses CATEGORY_SPECS for grounding candidates.
 - For PP2, list-style grounded fields are normalized in the pipeline into
   a strict dict-based `grounded_features` contract.
+
+Module overview:
+- Florence is the evidence extractor: captions, OCR, colors, object details,
+  and fallback object detection.
+- PP1 and PP2 use its output as grounded support before generating public
+  descriptions or accepting label corrections.
 """
 
 from __future__ import annotations
@@ -668,6 +674,8 @@ def _build_florence_description(
 
 
 class FlorenceService:
+    """Wrapper around Florence-2 tasks used by PP1, PP2, and search."""
+
     _shared_model = None
     _shared_processor = None
     _shared_model_key = None
@@ -800,6 +808,8 @@ class FlorenceService:
         )
 
     def load_model(self) -> None:
+        """Load the local Florence model once and reuse it across calls."""
+
         if self._model is not None and self._processor is not None:
             logger.debug("FLORENCE_MODEL_LOAD_SKIP_ALREADY_LOADED")
             return

@@ -22,7 +22,17 @@ import logging
 import re
 import time
 
+from app.config.settings import settings
 from app.domain.category_specs import ALLOWED_LABELS, CATEGORY_SPECS, canonicalize_label
+from app.services.reasoner_types import (
+    REASONING_FAILED_MESSAGE,
+    RETRYABLE_UNAVAILABLE_MESSAGE,
+    ReasonerFatalError,
+    ReasonerProtocol,
+    ReasonerQuotaError,
+    ReasonerServiceError,
+    ReasonerTransientError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,56 +47,10 @@ TRANSIENT_PROVIDER_STATUSES = {
 }
 FATAL_PROVIDER_STATUSES = {"UNAUTHENTICATED", "PERMISSION_DENIED", "INVALID_ARGUMENT"}
 
-RETRYABLE_UNAVAILABLE_MESSAGE = "Reasoning service temporarily unavailable. Please retry."
-REASONING_FAILED_MESSAGE = "Reasoning failed."
-
-
-class GeminiServiceError(RuntimeError):
-    def __init__(
-        self,
-        message: str,
-        *,
-        status_code: Optional[int] = None,
-        provider_status: Optional[str] = None,
-        retryable: bool = False,
-        error_type: str = "gemini_error",
-    ) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-        self.provider_status = provider_status
-        self.retryable = retryable
-        self.error_type = error_type
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "type": self.error_type,
-            "status_code": self.status_code,
-            "retryable": self.retryable,
-            "provider_status": self.provider_status,
-            "message": str(self),
-        }
-
-
-class GeminiTransientError(GeminiServiceError):
-    def __init__(self, message: str, *, status_code: Optional[int] = None, provider_status: Optional[str] = None) -> None:
-        super().__init__(
-            message,
-            status_code=status_code,
-            provider_status=provider_status,
-            retryable=True,
-            error_type="gemini_transient_error",
-        )
-
-
-class GeminiFatalError(GeminiServiceError):
-    def __init__(self, message: str, *, status_code: Optional[int] = None, provider_status: Optional[str] = None) -> None:
-        super().__init__(
-            message,
-            status_code=status_code,
-            provider_status=provider_status,
-            retryable=False,
-            error_type="gemini_fatal_error",
-        )
+GeminiServiceError = ReasonerServiceError
+GeminiTransientError = ReasonerTransientError
+GeminiQuotaError = ReasonerQuotaError
+GeminiFatalError = ReasonerFatalError
 
 
 # ----------------------------
@@ -124,13 +88,23 @@ HOW TO DECIDE (STRICT)
 STRICT OUTPUT FORMAT (JSON ONLY)
 Return exactly one JSON object with these keys:
 {{
-  "description": string,
+  "status": string,
+  "final_description": string,
+  "detailed_description": string,
   "color": string | null,
   "features": [string],
   "defects": [string],
   "attachments": [string],
   "key_count": integer | null,
-  "label_change_reason": string | null
+  "label_change_reason": string | null,
+  "evidence_used": {{
+    "caption": [string],
+    "ocr": [string],
+    "grounding": [string],
+    "color": [string],
+    "key_count": [string]
+  }},
+  "unsupported_claims": [string]
 }}
 
 RULES
@@ -143,6 +117,9 @@ RULES
 - If you believe the provided LABEL is INCORRECT based on the image and evidence, you may change it.
   In that case, set label_change_reason to a short explanation (e.g. "Image shows earbuds not a wallet").
   If the label is correct, set label_change_reason to null.
+- status must be "accepted" when the output stays evidence-locked, otherwise "rejected".
+- final_description and detailed_description must be object-only. Do not mention background, hands, people, desks, tables, floors, or ownership/use assumptions.
+- unsupported_claims must list any tempting but unsupported facts you intentionally left out. Use [] when none.
 
 CATEGORY-SPECIFIC RULES:
 - SMART PHONE: Identify the BACK COVER color ONLY. The screen/display shows wallpaper/content — do NOT use screen color. Look at the physical back panel, glass, or casing.
@@ -179,79 +156,144 @@ Count how many separate keys are visible. Return a single integer. If only one k
 Else set key_count to null.
 """
 
-PHASE2_PP2_PROMPT = r"""
-SYSTEM:
+PHASE2_PP2_SYSTEM_INSTRUCTION = r"""
 You are an evidence-locked information extractor for a lost-and-found system.
 
 STRICT RULES:
-1) Use ONLY the EVIDENCE BUNDLE JSON provided below. Do NOT invent, assume, or hallucinate.
-2) Every feature/defect/attachment MUST be explicitly supported by at least one image’s evidence.
-3) You must reject if images do not represent the SAME category (different labels).
-4) You must reject if the bundle strongly suggests different physical objects (different brand OCR, very different colors, totally different form factor).
-5) Color must be PRECISE. Prefer per-image evidence.color_vqa.
-6) Key rule: key_count may be output only if at least one image evidence includes key_count.
+1) Use ONLY the provided selected-view images and EVIDENCE_BUNDLE JSON. Do NOT invent, assume, or hallucinate.
+2) Every feature, defect, and attachment must be explicitly supported by the evidence bundle or be clearly visible in the supplied images.
+3) Reject the item if the selected views do not show the same category or strongly suggest different physical objects.
+4) Color must be precise and refer to the physical item only. Reject screen glow, reflections, glare, and background colors.
+5) If status is accepted, final_description must be 4 to 6 sentences, object-only, and must not mention the background, table, desk, floor, hands, or people.
+6) Sentence 1 must open with the item color and label when known.
+7) If status is accepted, include all confirmed features, attachments, and defects at least once. Include the most relevant exact OCR text only when supported.
+8) If key_count is not supported by evidence, return null.
+9) Output JSON only and follow the response schema exactly.
 
-ALLOWED LABELS (Preferred):
+CATEGORY-SPECIFIC RULES:
+- SMART PHONE: Use the BACK COVER color only. Never use wallpaper or screen color.
+- NIC / NATIONAL ID CARD: Extract NIC number, full name, and date of birth only from OCR-backed evidence.
+- STUDENT ID: Extract institution name, student name, and student number only from OCR-backed evidence.
+"""
+
+PHASE2_PP2_PROMPT = r"""
+Analyze the selected views for one lost-and-found item.
+
+Preferred labels:
 {{ALLOWED_LABELS_LIST}}
 
-STEP-BY-STEP:
-0) CATEGORY-SPECIFIC RULES (apply throughout):
-   - SMART PHONE: Use the BACK COVER color ONLY. Do NOT use screen color or wallpaper color.
-   - NIC / NATIONAL ID CARD: Extract NIC number (9 digits + V or X), full name, date of birth from OCR evidence.
-   - STUDENT ID: Extract institution name, student name, student ID number from OCR evidence.
-   - ALL ITEMS: combined_color must be the dominant PHYSICAL surface color. Reject screen glow, glare, and reflections.
-1) Inspect EVIDENCE_BUNDLE.per_image[].phase1_output.label and ensure all labels match.
-   - If any mismatch -> status="rejected" with message and stop.
-2) Decide if images show the same physical object:
-   - Compare OCR (brand text), distinctive marks, color phrases, and described features.
-   - If evidence indicates different objects -> rejected.
-3) Merge details:
-   - combined_color: choose the most specific non-conflicting color phrase from evidence.color_vqa.
-     If conflicts (e.g., "black" vs "white") -> rejected.
-    - combined_features/defects/attachments: union of evidence-backed items from per_image[].phase1_output.category_details (de-dup).
-    - Use per_image[].phase1_output.detailed_description as the preferred prose evidence for each view.
-4) Write final_description: 3–5 sentences.
-    - Sentence 1 must open with the item color and label if known.
-    - Include every confirmed feature, attachment, and defect at least once.
-    - If OCR text is confirmed on the item, include the most relevant exact text verbatim.
-    - Keep the wording object-only and do not mention the background.
-5) Produce final JSON in the exact schema below.
+Return:
+- status="accepted" when the selected views support one coherent item.
+- status="rejected" with a short message when the evidence conflicts.
 
-OUTPUT FORMAT:
-Return VALID JSON ONLY. No markdown.
-
-OUTPUT JSON SCHEMA:
-{
-  "status": "accepted" | "rejected",
-  "message": string,
-
-  "label": string | null,
-  "color": string | null,
-
-  "final_description": string | null,
-
-  "category_details": {
-    "features": [string],
-    "defects": [string],
-    "attachments": [string]
-  },
-
-  "key_count": integer | null,
-
-  "tags": [string],
-
-  "evidence_used": {
-    "color_source": "florence_vqa_color" | "caption" | "unknown",
-    "feature_sources": [string],
-    "defect_sources": [string],
-    "attachment_sources": [string],
-    "ocr_source": "ocr_text" | "none"
-  }
-}
-
-EVIDENCE BUNDLE (authoritative):
+EVIDENCE_BUNDLE_JSON:
 {{EVIDENCE_BUNDLE_JSON}}
 """
+
+PHASE2_PP2_RESPONSE_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "status",
+        "message",
+        "label",
+        "color",
+        "final_description",
+        "category_details",
+        "key_count",
+        "tags",
+        "evidence_used",
+    ],
+    "properties": {
+        "status": {"type": "string", "enum": ["accepted", "rejected"]},
+        "message": {"type": "string"},
+        "label": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "color": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "final_description": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "category_details": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["features", "defects", "attachments"],
+            "properties": {
+                "features": {"type": "array", "items": {"type": "string"}},
+                "defects": {"type": "array", "items": {"type": "string"}},
+                "attachments": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        "key_count": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "evidence_used": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "color_source",
+                "feature_sources",
+                "defect_sources",
+                "attachment_sources",
+                "ocr_source",
+            ],
+            "properties": {
+                "color_source": {
+                    "type": "string",
+                    "enum": ["florence_vqa_color", "caption", "unknown"],
+                },
+                "feature_sources": {"type": "array", "items": {"type": "string"}},
+                "defect_sources": {"type": "array", "items": {"type": "string"}},
+                "attachment_sources": {"type": "array", "items": {"type": "string"}},
+                "ocr_source": {"type": "string", "enum": ["ocr_text", "none"]},
+            },
+        },
+    },
+}
+
+PHASE1_PP1_RESPONSE_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": [
+        "status",
+        "label",
+        "color",
+        "final_description",
+        "detailed_description",
+        "category_details",
+        "key_count",
+        "evidence_used",
+        "unsupported_claims",
+        "label_change_reason",
+    ],
+    "properties": {
+        "status": {"type": "string", "enum": ["accepted", "rejected"]},
+        "label": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "color": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "final_description": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "detailed_description": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "category_details": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["features", "defects", "attachments"],
+            "properties": {
+                "features": {"type": "array", "items": {"type": "string"}},
+                "defects": {"type": "array", "items": {"type": "string"}},
+                "attachments": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        "key_count": {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+        "evidence_used": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["caption", "ocr", "grounding", "color", "key_count"],
+            "properties": {
+                "caption": {"type": "array", "items": {"type": "string"}},
+                "ocr": {"type": "array", "items": {"type": "string"}},
+                "grounding": {"type": "array", "items": {"type": "string"}},
+                "color": {"type": "array", "items": {"type": "string"}},
+                "key_count": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        "unsupported_claims": {"type": "array", "items": {"type": "string"}},
+        "label_change_reason": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    },
+}
 
 
 # ----------------------------
@@ -278,7 +320,7 @@ def _extract_json_content(text: str) -> str:
     return text.strip()
 
 
-class GeminiReasoner:
+class GeminiReasoner(ReasonerProtocol):
     """
     Thin wrapper around Gemini.
 
@@ -289,10 +331,29 @@ class GeminiReasoner:
       export GOOGLE_API_KEY=...
     """
 
-    def __init__(self, model_name: str = "gemini-3-flash-preview") -> None:
-        self.model_name = model_name
+    def __init__(
+        self,
+        model_name: Optional[str] = None,
+        *,
+        pp2_model_name: Optional[str] = None,
+    ) -> None:
+        configured_pp1_model = str(
+            model_name or getattr(settings, "PP1_GEMINI_MODEL", "models/gemini-3.1-flash-lite-preview")
+        ).strip()
+        self.model_name = configured_pp1_model or "models/gemini-3.1-flash-lite-preview"
+        self.pp1_fallback_model = str(
+            getattr(settings, "PP1_GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")
+        ).strip() or "gemini-2.5-flash"
+        self.pp2_model_name = str(
+            pp2_model_name or getattr(settings, "PP2_REASONER_MODEL", "models/gemini-3.1-flash-lite-preview")
+        ).strip() or "models/gemini-3.1-flash-lite-preview"
+        self.pp2_fallback_model = str(
+            getattr(settings, "PP2_REASONER_FALLBACK_MODEL", "gemini-2.5-flash")
+        ).strip() or "gemini-2.5-flash"
         self._client = None
         self._retry_delay_seconds = 0.5
+        self._validated_models: Dict[str, bool] = {}
+        self._last_request_meta: Dict[str, Any] = {}
 
     def _load_client(self) -> None:
         if self._client is not None:
@@ -354,6 +415,9 @@ class GeminiReasoner:
             if provider_status is None:
                 provider_status = parsed_status
 
+        if status_code == 429 or provider_status == "RESOURCE_EXHAUSTED":
+            return GeminiQuotaError(message, status_code=status_code, provider_status=provider_status)
+
         if status_code in TRANSIENT_STATUS_CODES:
             return GeminiTransientError(message, status_code=status_code, provider_status=provider_status)
 
@@ -365,19 +429,106 @@ class GeminiReasoner:
 
         return GeminiFatalError(message, status_code=status_code, provider_status=provider_status)
 
-    def _generate_text_once(self, prompt: str, images: Optional[List[Any]] = None) -> str:
+    @staticmethod
+    def _indefinite_article(label: str) -> str:
+        cleaned = re.sub(r"^[^A-Za-z0-9]+", "", str(label or "").strip())
+        if not cleaned:
+            return "a"
+        return "an" if cleaned[0].lower() in {"a", "e", "i", "o", "u"} else "a"
+
+    @classmethod
+    def _build_pp1_visual_context(cls, label: Optional[str], image_count: int) -> str:
+        resolved_label = str(label or "").strip()
+        if not resolved_label:
+            return "This image includes one detected item. Describe only this item using the visible evidence."
+        article = cls._indefinite_article(resolved_label)
+        return (
+            f"This image includes {article} {resolved_label}. "
+            f"Describe only this {resolved_label} using the visible evidence."
+        )
+
+    @staticmethod
+    def _extract_phase2_prompt_label(evidence_bundle_json: Dict[str, Any]) -> Optional[str]:
+        per_image = evidence_bundle_json.get("per_image", [])
+        if not isinstance(per_image, list):
+            return None
+
+        labels_by_canonical: Dict[str, Dict[str, Any]] = {}
+        for entry in per_image:
+            if not isinstance(entry, dict) or not entry.get("selected_for_verification"):
+                continue
+            phase1_output = entry.get("phase1_output", {})
+            if not isinstance(phase1_output, dict):
+                continue
+            raw_label = str(phase1_output.get("label") or "").strip()
+            if not raw_label:
+                continue
+            canonical_label = canonicalize_label(raw_label) or raw_label
+            bucket = labels_by_canonical.setdefault(
+                canonical_label,
+                {"count": 0, "label": raw_label},
+            )
+            bucket["count"] += 1
+
+        if not labels_by_canonical:
+            return None
+
+        ranked = sorted(
+            labels_by_canonical.values(),
+            key=lambda item: int(item["count"]),
+            reverse=True,
+        )
+        if len(ranked) > 1 and int(ranked[0]["count"]) == int(ranked[1]["count"]):
+            return None
+        return str(ranked[0]["label"]).strip() or None
+
+    @classmethod
+    def _build_pp2_visual_context(cls, evidence_bundle_json: Dict[str, Any], image_count: int) -> str:
+        label = cls._extract_phase2_prompt_label(evidence_bundle_json)
+        if image_count <= 1:
+            if label:
+                article = cls._indefinite_article(label)
+                return (
+                    f"This image includes {article} {label}. "
+                    f"Describe the same {label} using only supported evidence."
+                )
+            return "This image includes one item. Describe the item using only supported evidence."
+
+        if label:
+            return (
+                f"These images include different angles of {label}. "
+                f"Describe the same {label} consistently across the selected views using only supported evidence."
+            )
+        return (
+            "These images include different angles of the same item. "
+            "Describe the item consistently across the selected views using only supported evidence."
+        )
+
+    def _generate_text_once(
+        self,
+        prompt: str,
+        images: Optional[List[Any]] = None,
+        *,
+        config: Any = None,
+        model_name: Optional[str] = None,
+        image_first: bool = False,
+    ) -> str:
         self._load_client()
         assert self._client is not None
-        
-        contents = [prompt]
-        if images:
+        self._ensure_model_available(model_name or self.model_name)
+
+        contents: List[Any] = []
+        if image_first and images:
+            contents.extend(images)
+        contents.append(prompt)
+        if (not image_first) and images:
             contents.extend(images)
 
         try:
-            # google-genai API shape can differ by version; adapt if needed.
             resp = self._client.models.generate_content(
-                model=self.model_name,
+                model=model_name or self.model_name,
                 contents=contents,
+                config=config,
             )
         except GeminiServiceError:
             raise
@@ -394,28 +545,355 @@ class GeminiReasoner:
         except Exception:
             return str(resp)
 
-    def _generate_text(self, prompt: str, images: Optional[List[Any]] = None) -> str:
+    def _generate_text(
+        self,
+        prompt: str,
+        images: Optional[List[Any]] = None,
+        *,
+        config: Any = None,
+        model_name: Optional[str] = None,
+        fallback_model_name: Optional[str] = None,
+        fallback_config: Any = None,
+        image_first: bool = False,
+    ) -> str:
         attempts = 2
-        for attempt in range(1, attempts + 1):
-            try:
-                output = self._generate_text_once(prompt, images=images)
-                if attempt > 1:
-                    logger.info("Gemini request succeeded after retry.")
-                return output
-            except GeminiTransientError as exc:
-                if attempt < attempts:
-                    logger.warning(
-                        "Gemini transient failure (attempt %s/%s): status_code=%s provider_status=%s",
-                        attempt,
-                        attempts,
-                        exc.status_code,
-                        exc.provider_status,
-                    )
-                    time.sleep(self._retry_delay_seconds)
-                    continue
-                raise
+        primary_model = str(model_name or self.model_name).strip()
+        fallback_model = str(fallback_model_name or "").strip()
+        primary_config = config
+        secondary_config = fallback_config if fallback_config is not None else config
+        model_attempts: List[Dict[str, Any]] = []
+        failover_reason: Optional[str] = None
+        model_sequence: List[tuple[str, Any]] = [(primary_model, primary_config)]
+        if fallback_model and fallback_model != primary_model:
+            model_sequence.append((fallback_model, secondary_config))
 
+        last_exc: Optional[Exception] = None
+        for model_index, (current_model, current_config) in enumerate(model_sequence):
+            attempted_fallback = model_index > 0
+            for attempt in range(1, attempts + 1):
+                attempt_meta: Dict[str, Any] = {
+                    "model": current_model,
+                    "attempt": attempt,
+                    "fallback": attempted_fallback,
+                }
+                model_attempts.append(attempt_meta)
+                try:
+                    output = self._generate_text_once(
+                        prompt,
+                        images=images,
+                        config=current_config,
+                        model_name=current_model,
+                        image_first=image_first,
+                    )
+                    attempt_meta["status"] = "success"
+                    self._last_request_meta = {
+                        "model_attempts": model_attempts,
+                        "selected_model": current_model,
+                        "failover_reason": failover_reason,
+                    }
+                    if attempt > 1:
+                        logger.info("Gemini request succeeded after retry.")
+                    return output
+                except GeminiQuotaError as exc:
+                    last_exc = exc
+                    attempt_meta["status"] = "quota_error"
+                    attempt_meta["status_code"] = exc.status_code
+                    attempt_meta["provider_status"] = exc.provider_status
+                    if not attempted_fallback and fallback_model and fallback_model != current_model:
+                        failover_reason = "quota_limit"
+                        logger.warning(
+                            "Gemini quota failure on %s; failing over to %s",
+                            current_model,
+                            fallback_model,
+                        )
+                        break
+                    if attempt < attempts:
+                        time.sleep(self._retry_delay_seconds)
+                        continue
+                    self._last_request_meta = {
+                        "model_attempts": model_attempts,
+                        "selected_model": None,
+                        "failover_reason": failover_reason or "quota_limit",
+                    }
+                    raise
+                except GeminiTransientError as exc:
+                    last_exc = exc
+                    attempt_meta["status"] = "transient_error"
+                    attempt_meta["status_code"] = exc.status_code
+                    attempt_meta["provider_status"] = exc.provider_status
+                    if attempt < attempts:
+                        logger.warning(
+                            "Gemini transient failure (attempt %s/%s): status_code=%s provider_status=%s",
+                            attempt,
+                            attempts,
+                            exc.status_code,
+                            exc.provider_status,
+                        )
+                        time.sleep(self._retry_delay_seconds)
+                        continue
+                    self._last_request_meta = {
+                        "model_attempts": model_attempts,
+                        "selected_model": None,
+                        "failover_reason": failover_reason,
+                    }
+                    raise
+                except GeminiFatalError as exc:
+                    last_exc = exc
+                    attempt_meta["status"] = "fatal_error"
+                    attempt_meta["status_code"] = exc.status_code
+                    attempt_meta["provider_status"] = exc.provider_status
+                    self._last_request_meta = {
+                        "model_attempts": model_attempts,
+                        "selected_model": None,
+                        "failover_reason": failover_reason,
+                    }
+                    raise
+
+        self._last_request_meta = {
+            "model_attempts": model_attempts,
+            "selected_model": None,
+            "failover_reason": failover_reason,
+        }
+        if isinstance(last_exc, GeminiServiceError):
+            raise last_exc
         raise GeminiFatalError("Gemini generation failed unexpectedly.")
+
+    def consume_last_request_meta(self) -> Dict[str, Any]:
+        meta = dict(self._last_request_meta)
+        self._last_request_meta = {}
+        return meta
+
+    @staticmethod
+    def _normalize_string_list(value: Any) -> List[str]:
+        if not isinstance(value, list):
+            return []
+        out: List[str] = []
+        for item in value:
+            text = str(item or "").strip()
+            if text:
+                out.append(text)
+        return out
+
+    @staticmethod
+    def _is_gemini3_model(model_name: str) -> bool:
+        normalized = str(model_name or "").strip().lower()
+        return "gemini-3" in normalized or "gemini 3" in normalized
+
+    def _ensure_model_available(self, model_name: str) -> None:
+        normalized = str(model_name or "").strip()
+        if not normalized:
+            raise GeminiFatalError("Gemini model name is empty.", provider_status="MODEL_NOT_CONFIGURED")
+        if self._validated_models.get(normalized):
+            return
+
+        assert self._client is not None
+        models_api = getattr(self._client, "models", None)
+        if models_api is None:
+            self._validated_models[normalized] = True
+            return
+
+        getter = getattr(models_api, "get", None)
+        if callable(getter):
+            try:
+                try:
+                    getter(model=normalized)
+                except TypeError:
+                    getter(normalized)
+                self._validated_models[normalized] = True
+                return
+            except Exception as exc:
+                classified = self._classify_gemini_exception(exc)
+                raise GeminiFatalError(
+                    f"Configured Gemini model unavailable: {normalized}",
+                    status_code=classified.status_code,
+                    provider_status=classified.provider_status or "MODEL_UNAVAILABLE",
+                ) from exc
+
+        self._validated_models[normalized] = True
+
+    @classmethod
+    def normalize_phase1_response(cls, payload: Any, *, fallback_label: Optional[str], fallback_color: Optional[str]) -> Dict[str, Any]:
+        if not isinstance(payload, dict):
+            return {
+                "status": "rejected",
+                "message": "Gemini returned a non-object Phase 1 payload",
+                "label": fallback_label,
+                "color": fallback_color,
+                "category_details": {"features": [], "defects": [], "attachments": []},
+                "key_count": None,
+                "final_description": None,
+                "detailed_description": None,
+                "label_change_reason": None,
+                "evidence_used": {"caption": [], "ocr": [], "grounding": [], "color": [], "key_count": []},
+                "unsupported_claims": [],
+            }
+
+        category_details = payload.get("category_details")
+        category_details = category_details if isinstance(category_details, dict) else {}
+        evidence_used = payload.get("evidence_used")
+        evidence_used = evidence_used if isinstance(evidence_used, dict) else {}
+        key_count = payload.get("key_count")
+        if not isinstance(key_count, int) or isinstance(key_count, bool):
+            key_count = None
+
+        status = str(payload.get("status", "rejected") or "rejected").strip().lower()
+        if status not in {"accepted", "rejected"}:
+            status = "rejected"
+
+        return {
+            "status": status,
+            "message": str(payload.get("message", "") or "").strip(),
+            "label": str(payload.get("label", "") or "").strip() or fallback_label,
+            "color": str(payload.get("color", "") or "").strip() or fallback_color,
+            "category_details": {
+                "features": cls._normalize_string_list(category_details.get("features")),
+                "defects": cls._normalize_string_list(category_details.get("defects")),
+                "attachments": cls._normalize_string_list(category_details.get("attachments")),
+            },
+            "key_count": key_count,
+            "final_description": str(payload.get("final_description", "") or "").strip() or None,
+            "detailed_description": str(payload.get("detailed_description", "") or "").strip() or None,
+            "label_change_reason": str(payload.get("label_change_reason", "") or "").strip() or None,
+            "evidence_used": {
+                "caption": cls._normalize_string_list(evidence_used.get("caption")),
+                "ocr": cls._normalize_string_list(evidence_used.get("ocr")),
+                "grounding": cls._normalize_string_list(evidence_used.get("grounding")),
+                "color": cls._normalize_string_list(evidence_used.get("color")),
+                "key_count": cls._normalize_string_list(evidence_used.get("key_count")),
+            },
+            "unsupported_claims": cls._normalize_string_list(payload.get("unsupported_claims")),
+        }
+
+    @classmethod
+    def normalize_phase2_response(cls, payload: Any) -> Dict[str, Any]:
+        if not isinstance(payload, dict):
+            return {
+                "status": "rejected",
+                "message": "Gemini returned a non-object Phase 2 payload",
+                "label": None,
+                "color": None,
+                "final_description": None,
+                "category_details": {"features": [], "defects": [], "attachments": []},
+                "key_count": None,
+                "tags": [],
+                "evidence_used": {
+                    "color_source": "unknown",
+                    "feature_sources": [],
+                    "defect_sources": [],
+                    "attachment_sources": [],
+                    "ocr_source": "none",
+                },
+            }
+
+        status = str(payload.get("status", "") or "").strip().lower()
+        if status not in {"accepted", "rejected"}:
+            status = "rejected"
+
+        category_details = payload.get("category_details")
+        category_details = category_details if isinstance(category_details, dict) else {}
+        evidence_used = payload.get("evidence_used")
+        evidence_used = evidence_used if isinstance(evidence_used, dict) else {}
+        key_count = payload.get("key_count")
+        if not isinstance(key_count, int) or isinstance(key_count, bool):
+            key_count = None
+
+        color_source = str(evidence_used.get("color_source", "unknown") or "unknown").strip()
+        if color_source not in {"florence_vqa_color", "caption", "unknown"}:
+            color_source = "unknown"
+        ocr_source = str(evidence_used.get("ocr_source", "none") or "none").strip()
+        if ocr_source not in {"ocr_text", "none"}:
+            ocr_source = "none"
+
+        result = {
+            "status": status,
+            "message": str(payload.get("message", "") or "").strip(),
+            "label": str(payload.get("label", "") or "").strip() or None,
+            "color": str(payload.get("color", "") or "").strip() or None,
+            "final_description": str(payload.get("final_description", "") or "").strip() or None,
+            "category_details": {
+                "features": cls._normalize_string_list(category_details.get("features")),
+                "defects": cls._normalize_string_list(category_details.get("defects")),
+                "attachments": cls._normalize_string_list(category_details.get("attachments")),
+            },
+            "key_count": key_count,
+            "tags": cls._normalize_string_list(payload.get("tags")),
+            "evidence_used": {
+                "color_source": color_source,
+                "feature_sources": cls._normalize_string_list(evidence_used.get("feature_sources")),
+                "defect_sources": cls._normalize_string_list(evidence_used.get("defect_sources")),
+                "attachment_sources": cls._normalize_string_list(evidence_used.get("attachment_sources")),
+                "ocr_source": ocr_source,
+            },
+        }
+
+        if result["status"] == "accepted" and not result["final_description"]:
+            result["status"] = "rejected"
+            result["message"] = result["message"] or "Gemini returned an empty accepted Phase 2 description"
+
+        return result
+
+    def _build_pp2_generate_config(self) -> Any:
+        from google.genai import types  # type: ignore
+
+        thinking_budget = max(0, int(getattr(settings, "PP2_REASONER_THINKING_BUDGET", 256)))
+        thinking_level = str(getattr(settings, "PP2_REASONER_THINKING_LEVEL", "medium") or "medium").strip().lower()
+        thinking_config = (
+            types.ThinkingConfig(thinkingLevel=thinking_level)
+            if self._is_gemini3_model(self.pp2_model_name)
+            else types.ThinkingConfig(thinkingBudget=thinking_budget)
+        )
+        return types.GenerateContentConfig(
+            systemInstruction=PHASE2_PP2_SYSTEM_INSTRUCTION.strip(),
+            temperature=float(getattr(settings, "PP2_REASONER_TEMPERATURE", 0.2)),
+            maxOutputTokens=int(getattr(settings, "PP2_REASONER_MAX_OUTPUT_TOKENS", 320)),
+            response_mime_type="application/json",
+            response_json_schema=PHASE2_PP2_RESPONSE_SCHEMA,
+            thinkingConfig=thinking_config,
+        )
+
+    def _build_pp1_generate_config(self) -> Any:
+        from google.genai import types  # type: ignore
+
+        thinking_level = str(getattr(settings, "PP1_GEMINI_THINKING_LEVEL", "low") or "low").strip().lower()
+        thinking_config = (
+            types.ThinkingConfig(thinkingLevel=thinking_level)
+            if self._is_gemini3_model(self.model_name)
+            else types.ThinkingConfig(thinkingBudget=max(0, int(getattr(settings, "PP2_REASONER_THINKING_BUDGET", 256))))
+        )
+        return types.GenerateContentConfig(
+            temperature=float(getattr(settings, "PP1_GEMINI_TEMPERATURE", 0.1)),
+            maxOutputTokens=int(getattr(settings, "PP1_GEMINI_MAX_OUTPUT_TOKENS", 320)),
+            response_mime_type="application/json",
+            response_json_schema=PHASE1_PP1_RESPONSE_SCHEMA,
+            thinkingConfig=thinking_config,
+        )
+
+    def _build_pp1_fallback_generate_config(self) -> Any:
+        from google.genai import types  # type: ignore
+
+        return types.GenerateContentConfig(
+            temperature=float(getattr(settings, "PP1_GEMINI_TEMPERATURE", 0.1)),
+            maxOutputTokens=int(getattr(settings, "PP1_GEMINI_MAX_OUTPUT_TOKENS", 320)),
+            response_mime_type="application/json",
+            response_json_schema=PHASE1_PP1_RESPONSE_SCHEMA,
+            thinkingConfig=types.ThinkingConfig(
+                thinkingBudget=max(0, int(getattr(settings, "PP2_REASONER_THINKING_BUDGET", 256)))
+            ),
+        )
+
+    def _build_pp2_fallback_generate_config(self) -> Any:
+        from google.genai import types  # type: ignore
+
+        return types.GenerateContentConfig(
+            systemInstruction=PHASE2_PP2_SYSTEM_INSTRUCTION.strip(),
+            temperature=float(getattr(settings, "PP2_REASONER_TEMPERATURE", 0.2)),
+            maxOutputTokens=int(getattr(settings, "PP2_REASONER_MAX_OUTPUT_TOKENS", 320)),
+            response_mime_type="application/json",
+            response_json_schema=PHASE2_PP2_RESPONSE_SCHEMA,
+            thinkingConfig=types.ThinkingConfig(
+                thinkingBudget=max(0, int(getattr(settings, "PP2_REASONER_THINKING_BUDGET", 256)))
+            ),
+        )
 
     def extract_category_details(self, evidence_json: Dict[str, Any], crop_image: Optional[Any] = None) -> Dict[str, Any]:
         """
@@ -461,7 +939,7 @@ class GeminiReasoner:
         grounding_raw = crop_analysis.get("raw", {}).get("grounding_raw", {})
         grounding_labels_raw = grounding_raw.get("labels", []) if isinstance(grounding_raw, dict) else []
 
-        prompt = STRICT_EXTRACTOR_PROMPT.format(
+        prompt_body = STRICT_EXTRACTOR_PROMPT.format(
             LABEL=label,
             COLOR_OR_UNKNOWN=color,
             OCR_TEXT_OR_NONE=ocr,
@@ -475,6 +953,7 @@ class GeminiReasoner:
             DEFECT_LIST=json.dumps(defect_list, indent=2),
             ATTACHMENT_LIST=json.dumps(attachment_list, indent=2)
         )
+        prompt = f"{self._build_pp1_visual_context(label, 1)}\n\n{prompt_body}"
         if label_lock:
             prompt += (
                 "\n\nCATEGORY LOCK (MANDATORY):\n"
@@ -485,32 +964,41 @@ class GeminiReasoner:
             )
 
         images = [crop_image] if crop_image else None
-        text = self._generate_text(prompt, images=images)
+        text = self._generate_text(
+            prompt,
+            images=images,
+            config=self._build_pp1_generate_config(),
+            model_name=self.model_name,
+            fallback_model_name=self.pp1_fallback_model,
+            fallback_config=self._build_pp1_fallback_generate_config(),
+        )
         cleaned_json_str = _extract_json_content(text)
-        
+
         try:
-            data = json.loads(cleaned_json_str)
-            
-            # Adapt to UnifiedPipeline expected schema
+            data = self.normalize_phase1_response(
+                json.loads(cleaned_json_str),
+                fallback_label=label,
+                fallback_color=(color if color != "Unknown" else None),
+            )
+
             gemini_color = data.get("color")
             if gemini_color and str(gemini_color).strip().lower() not in ("", "unknown", "null", "none"):
                 resolved_color = str(gemini_color).strip()
             else:
                 resolved_color = color if color != "Unknown" else None
             return {
-                "status": "accepted",
-                "message": "Extracted successfully",
-                "label": label,
+                "status": data.get("status", "accepted"),
+                "message": data.get("message") or "Extracted successfully",
+                "label": data.get("label") or label,
                 "color": resolved_color,
-                "category_details": {
-                    "features": data.get("features", []),
-                    "defects": data.get("defects", []),
-                    "attachments": data.get("attachments", [])
-                },
+                "category_details": data.get("category_details", {"features": [], "defects": [], "attachments": []}),
                 "key_count": data.get("key_count"),
-                "final_description": data.get("description"),
-                "detailed_description": data.get("description"),
+                "final_description": data.get("final_description"),
+                "detailed_description": data.get("detailed_description") or data.get("final_description"),
                 "label_change_reason": data.get("label_change_reason"),
+                "evidence_used": data.get("evidence_used", {"caption": [], "ocr": [], "grounding": [], "color": [], "key_count": []}),
+                "unsupported_claims": data.get("unsupported_claims", []),
+                "reasoning_meta": self.consume_last_request_meta(),
             }
             
         except json.JSONDecodeError:
@@ -518,7 +1006,10 @@ class GeminiReasoner:
             return {
                 "status": "rejected",
                 "message": "Gemini returned invalid JSON",
-                "label": label
+                "label": label,
+                "evidence_used": {"caption": [], "ocr": [], "grounding": [], "color": [], "key_count": []},
+                "unsupported_claims": [],
+                "reasoning_meta": self.consume_last_request_meta(),
             }
 
     def run_phase1(self, florence_evidence_json: Dict[str, Any], crop_image: Optional[Any] = None) -> Dict[str, Any]:
@@ -528,48 +1019,91 @@ class GeminiReasoner:
         """
         return self.extract_category_details(florence_evidence_json, crop_image=crop_image)
 
-    def confirm_pp2_view(self, evidence_json: Dict[str, Any], crop_image: Optional[Any] = None) -> Dict[str, Any]:
+    def analyze_pp2_view(self, evidence_json: Dict[str, Any], crop_image: Optional[Any] = None) -> Dict[str, Any]:
         """
-        PP2 helper that returns a compact, normalized payload for single-view advisory evidence.
-        Timeout behavior is intentionally owned by the PP2 caller.
+        Reuse the Phase 1 schema-backed extractor for a single PP2 view and return
+        the full normalized payload so PP2 can persist richer per-view evidence.
         """
         phase1 = self.run_phase1(evidence_json, crop_image=crop_image)
         status_in = str(phase1.get("status", "")).strip().lower()
 
         if status_in == "accepted":
-            status = "success"
+            pp2_status = "success"
         elif status_in == "rejected":
-            status = "rejected"
+            pp2_status = "rejected"
         else:
-            status = "error"
+            pp2_status = "error"
+
+        payload: Dict[str, Any] = dict(phase1)
+        payload["pp2_view_status"] = pp2_status
+        payload["description"] = phase1.get("detailed_description") or phase1.get("final_description")
+        return payload
+
+    def confirm_pp2_view(self, evidence_json: Dict[str, Any], crop_image: Optional[Any] = None) -> Dict[str, Any]:
+        """
+        PP2 helper that returns a compact, normalized payload for single-view advisory evidence.
+        Timeout behavior is intentionally owned by the PP2 caller.
+        """
+        phase1 = self.analyze_pp2_view(evidence_json, crop_image=crop_image)
+        status = str(phase1.get("pp2_view_status", "")).strip().lower() or "error"
 
         payload: Dict[str, Any] = {
             "status": status,
             "label": phase1.get("label"),
-            "description": phase1.get("final_description"),
+            "description": phase1.get("description"),
             "message": str(phase1.get("message", "") or ""),
         }
         if "error" in phase1:
             payload["error"] = phase1.get("error")
         return payload
 
-    def run_phase2(self, evidence_bundle_json: Dict[str, Any]) -> Dict[str, Any]:
-        prompt = PHASE2_PP2_PROMPT.replace(
+    def run_phase2(
+        self,
+        evidence_bundle_json: Dict[str, Any],
+        images: Optional[List[Any]] = None,
+    ) -> Dict[str, Any]:
+        image_count = len(images) if images else len(evidence_bundle_json.get("selected_view_indices", []) or [])
+        prompt_body = PHASE2_PP2_PROMPT.replace(
             "{{EVIDENCE_BUNDLE_JSON}}",
             json.dumps(evidence_bundle_json, ensure_ascii=False),
         ).replace(
             "{{ALLOWED_LABELS_LIST}}",
             "\n".join(f"- {label}" for label in ALLOWED_LABELS)
         )
-        text = self._generate_text(prompt)
+        prompt = f"{self._build_pp2_visual_context(evidence_bundle_json, image_count)}\n\n{prompt_body}"
+        text = self._generate_text(
+            prompt,
+            images=images,
+            config=self._build_pp2_generate_config(),
+            model_name=self.pp2_model_name,
+            fallback_model_name=self.pp2_fallback_model,
+            fallback_config=self._build_pp2_fallback_generate_config(),
+            image_first=True,
+        )
         cleaned = _extract_json_content(text)
         try:
             data = json.loads(cleaned)
         except json.JSONDecodeError:
-            return {
+            result = {
                 "status": "rejected",
                 "message": "Gemini returned invalid JSON in Phase 2",
-                "label": None
+                "label": None,
+                "color": None,
+                "final_description": None,
+                "category_details": {"features": [], "defects": [], "attachments": []},
+                "key_count": None,
+                "tags": [],
+                "evidence_used": {
+                    "color_source": "unknown",
+                    "feature_sources": [],
+                    "defect_sources": [],
+                    "attachment_sources": [],
+                    "ocr_source": "none",
+                },
             }
+            result["reasoning_meta"] = self.consume_last_request_meta()
+            return result
 
-        return data
+        result = self.normalize_phase2_response(data)
+        result["reasoning_meta"] = self.consume_last_request_meta()
+        return result

@@ -1,12 +1,23 @@
+"""Fusion logic for verified PP2 views.
+
+Module overview: this service runs after verification passes. It merges trusted
+per-view evidence into one public profile, choosing the best view, supported
+OCR/brand tokens, color, category-specific attributes, description, and fused
+embedding metadata.
+"""
+
 import numpy as np
 import re
 import string
 from collections import Counter, defaultdict
 from typing import List, Dict, Any, Optional, Set
+from app.config.settings import settings
 from app.schemas.pp2_schemas import PP2PerViewResult, PP2FusedProfile
 from app.domain.color_utils import normalize_color, extract_color_from_text
 
 class MultiViewFusionService:
+    """Builds the final fused item profile from verified PP2 evidence."""
+
     _CARD_LABELS = {"Student ID", "NIC / National ID Card"}
     _URL_OR_DOMAIN_RE = re.compile(r"(?:\bHTTP\b|\bHTTPS\b|\bWWW\b|(?:^|[^\s])\.(?:COM|NET|LK|ORG|CO)\b)")
     _SPLIT_RE = re.compile(r"[\/\._-]+")
@@ -26,6 +37,7 @@ class MultiViewFusionService:
         re.compile(r"(?i)\bcoin\s+pouch\b"),
         re.compile(r"(?i)\b(?:inner|inside|interior)\s+(?:pocket|compartment|slot)\b"),
     ]
+    _MIN_DETAIL_WORDS = 18
 
     @classmethod
     def _looks_like_url_or_domain(cls, raw_token: str) -> bool:
@@ -240,6 +252,9 @@ class MultiViewFusionService:
         2) Average normalized vectors
         3) L2-normalize the average
         Returns float32 vector.
+
+        Design note: normalizing before and after averaging keeps one high-magnitude
+        view vector from dominating the final searchable item vector.
         """
         if not vectors:
             raise ValueError("Cannot fuse empty vector list")
@@ -493,6 +508,15 @@ class MultiViewFusionService:
         deduped = cls._dedupe_keep_order(sentences)
         return " ".join(f"{part}." for part in deduped).strip()
 
+    @classmethod
+    def _needs_detail_richness_boost(cls, text: str) -> bool:
+        cleaned = str(text or "").strip()
+        if not cleaned:
+            return True
+        sentence_count = len([part for part in re.split(r"(?<=[.!?])\s+", cleaned) if part.strip()])
+        target_words = max(cls._MIN_DETAIL_WORDS, int(getattr(settings, "PP2_REASONER_MIN_WORDS", 24) * 0.75))
+        return len(cleaned.split()) < target_words or sentence_count < 3
+
     def _build_structured_detail_description(
         self,
         *,
@@ -554,6 +578,8 @@ class MultiViewFusionService:
         raw = str(text or "").strip()
         if not raw:
             return ""
+        if re.match(r'(?i)^the text "[^"]+" is visible on the surface\.?$', raw):
+            return raw.rstrip(". ")
 
         prefix_patterns = [
             r"(?i)^a\s+person\s+is\s+holding\s+",
@@ -633,6 +659,82 @@ class MultiViewFusionService:
             for value in cls._dedupe_keep_order(values)
             if not cls._is_hidden_wallet_detail(value, category)
         ]
+
+    @classmethod
+    def _sanitize_public_view_description(cls, text: str, category: str) -> str:
+        cleaned = cls._sanitize_object_text(text)
+        if not cleaned:
+            return ""
+
+        sensitive_text_categories = {"wallet", "student id", "nic / national id card"}
+        category_key = str(category or "").strip().lower()
+        keep: List[str] = []
+        for sentence in re.split(r"(?<=[.!?])\s+", cleaned):
+            candidate = str(sentence or "").strip().rstrip(". ")
+            if not candidate:
+                continue
+            if cls._contains_scene_or_meta_contamination(candidate):
+                continue
+            if cls._is_hidden_wallet_detail(candidate, category):
+                continue
+            if category_key in sensitive_text_categories:
+                if re.search(r"(?i)\bvisible\s+text\s+includes\b", candidate):
+                    continue
+                if re.search(r'"[^"]+"', candidate):
+                    continue
+            keep.append(candidate)
+        return cls._finalize_composed_description(" ".join(keep))
+
+    def _collect_public_view_descriptions(
+        self,
+        scope_views: List[PP2PerViewResult],
+        *,
+        category: str,
+    ) -> List[Dict[str, Any]]:
+        ranked_views = sorted(
+            scope_views,
+            key=lambda view: (float(view.quality_score), float(view.detection.confidence)),
+            reverse=True,
+        )
+
+        entries: List[Dict[str, Any]] = []
+        seen_texts: Set[str] = set()
+        for view in ranked_views:
+            raw = view.extraction.raw if isinstance(view.extraction.raw, dict) else {}
+            smart = raw.get("smart_description", {}) if isinstance(raw.get("smart_description", {}), dict) else {}
+            description_candidates = [
+                ("gemini_detailed", str(smart.get("detailed_description", "") or "").strip()),
+                ("gemini_final", str(smart.get("final_description", "") or "").strip()),
+                ("native_detailed", str(getattr(view.extraction, "detailed_description", "") or "").strip()),
+                ("caption", str(getattr(view.extraction, "caption", "") or "").strip()),
+            ]
+
+            selected_text = ""
+            selected_source = ""
+            for source, candidate in description_candidates:
+                sanitized = self._sanitize_public_view_description(candidate, category)
+                if not sanitized or self._is_generic_description(sanitized, category):
+                    continue
+                normalized = sanitized.lower()
+                if normalized in seen_texts:
+                    continue
+                seen_texts.add(normalized)
+                selected_text = sanitized
+                selected_source = source
+                break
+
+            if not selected_text:
+                continue
+
+            entries.append(
+                {
+                    "view_index": int(view.view_index),
+                    "description": selected_text,
+                    "source": selected_source,
+                }
+            )
+
+        return entries
 
     @staticmethod
     def _pick_majority_value(values: List[str]) -> Optional[str]:
@@ -811,13 +913,17 @@ class MultiViewFusionService:
             
         Returns:
             PP2FusedProfile: The consolidated item profile.
+
+        Design note: fusion is deliberately after verification. The system should
+        only merge evidence from views that passed the same-item checks.
         """
         if not per_view:
             raise ValueError("Cannot fuse empty view list")
 
         _ = vectors
 
-        # 1. Determine Best View
+        # 1. Determine Best View. The best view anchors public details when
+        # other views conflict or have weaker extraction quality.
         # Rule: Highest quality_score; tie-breaker = highest detection confidence
         # We sort descending, so first element is best.
         sorted_views = sorted(
@@ -827,7 +933,8 @@ class MultiViewFusionService:
         )
         best_view = sorted_views[0]
 
-        # 2. Merge OCR Tokens
+        # 2. Merge OCR Tokens. Tokens are kept when supported across views or
+        # when the best view contains a brand-like token, reducing OCR noise.
         per_view_kept_tokens: Dict[int, Set[str]] = {}
         rejected_tokens: Set[str] = set()
         token_to_views: Dict[str, Set[int]] = defaultdict(set)
@@ -1205,39 +1312,35 @@ class MultiViewFusionService:
             defects=public_defects_for_description,
             ocr_tokens=detailed_ocr_tokens,
         )
-        detailed_caption = ""
-        if detail_best_view is not None:
-            detailed_caption = self._sanitize_object_text(
-                str(getattr(detail_best_view.extraction, "caption", "") or "")
-            )
+        view_description_entries = self._collect_public_view_descriptions(
+            detailed_scope_views,
+            category=final_category,
+        )
+        contributor_view_indices = [int(entry["view_index"]) for entry in view_description_entries]
+        merged_attributes["description_contributor_view_indices"] = contributor_view_indices
+        merged_attributes["description_view_sources"] = {
+            str(entry["view_index"]): str(entry["source"])
+            for entry in view_description_entries
+        }
 
-        # Use the best view's Florence description directly if available,
-        # otherwise fall back to the caption
-        best_view_description = ""
-        if detail_best_view is not None:
-            best_view_description = self._sanitize_object_text(str(
-                getattr(detail_best_view.extraction, "detailed_description", "")
-                or getattr(detail_best_view.extraction, "final_description", "")
-                or ""
-            ).strip())
-        if not best_view_description:
-            best_view_description = detailed_caption
-
-        best_view_was_rebuilt = False
+        combined_view_description = self._finalize_composed_description(
+            " ".join(entry["description"] for entry in view_description_entries)
+        )
+        detailed_seed_description = combined_view_description
+        seed_was_rebuilt = False
         if (
-            not best_view_description
-            or self._contains_scene_or_meta_contamination(best_view_description)
-            or self._is_generic_description(best_view_description, final_category)
+            not detailed_seed_description
+            or self._contains_scene_or_meta_contamination(detailed_seed_description)
+            or self._is_generic_description(detailed_seed_description, final_category)
         ):
-            best_view_description = structured_detail_fallback
-            best_view_was_rebuilt = True
+            detailed_seed_description = structured_detail_fallback
+            seed_was_rebuilt = True
+        elif len(view_description_entries) > 1:
+            detailed_description_filters.append("all_view_description_fusion")
 
-        # ── Ensure colour + category open the description ────────────
-        # If the best-view text doesn't mention the item's colour in its
-        # opening sentence, prepend a structured "A {colour} {category}."
         _obj_color = (detailed_color or final_color or "").strip()
-        if _obj_color and best_view_description and not best_view_was_rebuilt:
-            _opening = best_view_description.split(".")[0].lower()
+        if _obj_color and detailed_seed_description and not seed_was_rebuilt:
+            _opening = detailed_seed_description.split(".")[0].lower()
             if _obj_color.lower() not in _opening:
                 _obj_brand = (detailed_brand or final_brand or "").strip()
                 _cat_text = self._humanize_category(final_category)
@@ -1245,66 +1348,14 @@ class MultiViewFusionService:
                 if _obj_brand:
                     _adj.append(_obj_brand)
                 _adj.append(_cat_text)
-                best_view_description = f"A {' '.join(_adj)}. {best_view_description}"
-
-        detail_text_lower = best_view_description.lower()
-
-        # ── Multi-angle caption merging ──────────────────────────────
-        # Collect unique descriptive facts from OTHER scope views'
-        # captions / detailed_descriptions that aren't in the best-view text.
-        other_angle_phrases: List[str] = []
-        best_view_idx = detail_best_view.view_index if detail_best_view is not None else -1
-        for res in detailed_scope_views:
-            if res.view_index == best_view_idx:
-                continue
-            # Prefer the view's detailed_description; fall back to caption
-            other_desc = self._sanitize_object_text(str(
-                getattr(res.extraction, "detailed_description", "")
-                or getattr(res.extraction, "caption", "")
-                or ""
-            ).strip())
-            if not other_desc or len(other_desc.split()) < 3:
-                continue
-            # Extract the descriptive portion after "with …" if present
-            snippet = self._extract_caption_snippet(other_desc)
-            if snippet and snippet.lower() not in detail_text_lower:
-                other_angle_phrases.append(snippet)
-                continue
-            # Fallback: use the whole description if it's substantial and
-            # contains information not already in the base text.
-            # Split into sentences and keep those with novel tokens.
-            for sentence in re.split(r'(?<=[.!?])\s+', other_desc):
-                sentence = sentence.strip().rstrip(". ")
-                if not sentence or len(sentence.split()) < 3:
-                    continue
-                sentence_lower = sentence.lower()
-                # Keep sentence if >40% of its content words are novel
-                content_words = [w for w in re.findall(r'[a-z]{3,}', sentence_lower)
-                                 if w not in {'the', 'and', 'with', 'from', 'that', 'this', 'its', 'for', 'are', 'has', 'was'}]
-                if content_words:
-                    novel_ratio = sum(1 for w in content_words if w not in detail_text_lower) / len(content_words)
-                    if novel_ratio > 0.4:
-                        other_angle_phrases.append(sentence)
-                        # Update the lower-text tracker so later views don't repeat
-                        detail_text_lower = (detail_text_lower + " " + sentence_lower)
-
-        # Deduplicate and cap at 3 angle phrases
-        other_angle_phrases = self._dedupe_keep_order(other_angle_phrases)[:3]
-        merged_attributes["multi_angle_phrases_used"] = list(other_angle_phrases)
+                detailed_seed_description = f"A {' '.join(_adj)}. {detailed_seed_description}"
 
         detail_sentences: List[str] = []
-        detail_text_lower = best_view_description.lower()
-
-        if other_angle_phrases:
-            detail_sentences.extend(
-                phrase if phrase.endswith(".") else f"{phrase}."
-                for phrase in other_angle_phrases
-            )
-            detailed_description_filters.append("multi_angle_fusion")
+        detail_text_lower = detailed_seed_description.lower()
 
         feature_novel_values = self._collect_novel_values(
             public_features_for_description,
-            " ".join([best_view_description] + other_angle_phrases),
+            detailed_seed_description,
             4,
         )
         if feature_novel_values:
@@ -1335,10 +1386,11 @@ class MultiViewFusionService:
             )
             detail_text_lower = f"{detail_text_lower} {' '.join(defect_novel_values).lower()}".strip()
 
-        if detailed_ocr_text and detailed_ocr_text.lower() not in detail_text_lower:
+        allow_public_ocr = final_category not in self._CARD_LABELS and str(final_category or "").strip().lower() != "wallet"
+        if allow_public_ocr and detailed_ocr_text and detailed_ocr_text.lower() not in detail_text_lower:
             detail_sentences.append(f'Visible text includes "{detailed_ocr_text}".')
 
-        detailed_description_text = best_view_description.rstrip(". ")
+        detailed_description_text = detailed_seed_description.rstrip(". ")
         detailed_description_parts = [part for part in [detailed_description_text] if part]
         detailed_description_parts.extend(sentence.strip() for sentence in detail_sentences if sentence.strip())
         detailed_description_text = " ".join(
@@ -1346,6 +1398,44 @@ class MultiViewFusionService:
             for part in detailed_description_parts
         ).strip()
         detailed_description_text = self._finalize_composed_description(detailed_description_text)
+        if detailed_description_text and self._needs_detail_richness_boost(detailed_description_text):
+            richness_source = detailed_description_text
+            richness_sentences: List[str] = []
+            richness_features = self._collect_novel_values(public_features_for_description, richness_source, 5)
+            if richness_features:
+                richness_sentences.append(
+                    f"Confirmed details include {self._join_natural(richness_features)}."
+                )
+                richness_source = f"{richness_source} {' '.join(richness_features)}".strip()
+            richness_attachments = self._collect_novel_values(
+                public_attachments_for_description,
+                richness_source,
+                3,
+            )
+            if richness_attachments:
+                richness_sentences.append(
+                    f"It also includes {self._join_natural(richness_attachments)}."
+                )
+                richness_source = f"{richness_source} {' '.join(richness_attachments)}".strip()
+            richness_defects = self._collect_novel_values(
+                public_defects_for_description,
+                richness_source,
+                3,
+            )
+            if richness_defects:
+                richness_sentences.append(
+                    f"Visible wear includes {self._join_natural(richness_defects)}."
+                )
+                richness_source = f"{richness_source} {' '.join(richness_defects)}".strip()
+            if allow_public_ocr and detailed_ocr_text and detailed_ocr_text.lower() not in richness_source.lower():
+                richness_sentences.append(f'Visible text includes "{detailed_ocr_text}".')
+
+            boosted_description = self._finalize_composed_description(
+                " ".join([detailed_description_text] + richness_sentences)
+            )
+            if boosted_description and len(boosted_description.split()) > len(detailed_description_text.split()):
+                detailed_description_text = boosted_description
+                detailed_description_filters.append("minimum_detail_richness")
         if (
             not detailed_description_text
             or self._is_generic_description(detailed_description_text, final_category)
@@ -1356,8 +1446,8 @@ class MultiViewFusionService:
         summary_base = main_caption.strip()
         if summary_base:
             summary_sentences.append(self._ensure_sentence(summary_base))
-        elif best_view_description:
-            first_best_sentence = re.split(r"(?<=[.!?])\s+", best_view_description.strip())[0].strip()
+        elif detailed_seed_description:
+            first_best_sentence = re.split(r"(?<=[.!?])\s+", detailed_seed_description.strip())[0].strip()
             if first_best_sentence:
                 summary_sentences.append(self._ensure_sentence(first_best_sentence))
 
@@ -1383,35 +1473,38 @@ class MultiViewFusionService:
             summary_description = self._finalize_composed_description(main_caption) or structured_detail_fallback
 
         detailed_evidence: List[str] = []
-        if best_view_description:
-            detailed_evidence.append("best_view_description")
-        elif detailed_caption:
-            detailed_evidence.append("florence_caption")
-        if best_view_was_rebuilt:
-            detailed_evidence.append("structured_regeneration")
-        if other_angle_phrases:
-            detailed_evidence.append("multi_angle_views")
+        if combined_view_description:
+            detailed_evidence.append("all_view_seed_description")
+        elif detailed_seed_description:
+            detailed_evidence.append("structured_seed_description")
         if public_features_for_description:
             detailed_evidence.append("grounded_features")
         if public_attachments_for_description:
             detailed_evidence.append("grounded_attachments")
         if public_defects_for_description:
             detailed_evidence.append("grounded_defects")
-        if detailed_ocr_text:
+        if allow_public_ocr and detailed_ocr_text:
             detailed_evidence.append("ocr_text")
 
-        desc_source = "multi_angle_evidence_composer" if other_angle_phrases else "best_view_evidence_composer"
+        if len(contributor_view_indices) > 1:
+            detailed_evidence.append("all_view_descriptions")
+        elif contributor_view_indices:
+            detailed_evidence.append("single_view_description")
+        if seed_was_rebuilt:
+            detailed_evidence.append("structured_regeneration")
+
+        desc_source = "all_view_evidence_composer" if len(contributor_view_indices) > 1 else "best_view_evidence_composer"
         detailed_description_bundle = {
             "detailed_description": detailed_description_text,
             "final_description": summary_description,
             "detailed_description_source": desc_source,
             "description_evidence_used": {
                 "summary": self._dedupe_keep_order(
-                    ["structured_summary"] + [e for e in detailed_evidence if e != "multi_angle_views"]
+                    ["structured_summary"] + detailed_evidence
                 ),
                 "detailed": detailed_evidence,
             },
-            "description_filters_applied": ["best_view_evidence_composer"],
+            "description_filters_applied": [desc_source],
             "description_word_count": {
                 "final_description": len(summary_description.split()),
                 "detailed_description": len(detailed_description_text.split()),

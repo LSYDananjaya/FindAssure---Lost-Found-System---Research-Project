@@ -1,3 +1,10 @@
+"""YOLO object-detection wrapper.
+
+Module overview: YOLO is the first visual stage. It proposes object labels and
+bounding boxes so later Florence, Gemini, and DINO steps can work on the item
+crop instead of the whole background-heavy image.
+"""
+
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -19,11 +26,15 @@ YOLO_WEIGHTS_PATH = MODEL_DIR / "final_master_model.pt"
 
 @dataclass
 class YoloDetection:
+    """Normalized detection shape shared by PP1, PP2, and search routes."""
+
     label: str
     confidence: float
     bbox: Tuple[int, int, int, int]  # x1, y1, x2, y2
 
 class YoloService:
+    """Loads local YOLO weights and exposes thread-safe detection."""
+
     def __init__(self):
         self.model = None
         self._predict_lock = threading.Lock()
@@ -48,6 +59,8 @@ class YoloService:
             logger.debug("YOLO_WARMUP_START")
             try:
                 # Tiny deterministic RGB image to trigger predictor/model setup.
+                # Operational note: warmup moves one-time setup cost out of the first
+                # real user request.
                 dummy = Image.new("RGB", (32, 32), color=(0, 0, 0))
                 with self._predict_lock:
                     with gpu_inference_guard("predict", "yolo"):
@@ -137,7 +150,9 @@ class YoloService:
                 # Get raw class name from model names dict
                 raw_label = self.model.names[cls_id]
                 
-                # Canonicalize label for downstream consistency
+                # Canonicalize label for downstream consistency. The model may
+                # emit raw training labels, but the rest of the system expects
+                # stable user-facing categories.
                 canonical = canonicalize_label(raw_label)
                 final_label = canonical if canonical else raw_label
 

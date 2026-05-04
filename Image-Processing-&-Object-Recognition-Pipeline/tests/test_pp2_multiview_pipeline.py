@@ -1,7 +1,10 @@
 import sys
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+from PIL import Image
+import numpy as np
 
 
 # Patch service imports before importing MultiViewPipeline to avoid heavy deps in unit tests.
@@ -24,6 +27,16 @@ for name, module in patched_modules.items():
     sys.modules[name] = module
 
 from app.services.pp2_multiview_pipeline import MultiViewPipeline
+from app.services.gemini_reasoner import (
+    GeminiFatalError,
+    GeminiQuotaError,
+    GeminiReasoner,
+    GeminiTransientError,
+    PHASE1_PP1_RESPONSE_SCHEMA,
+    PHASE2_PP2_RESPONSE_SCHEMA,
+)
+from app.services.pp2_fusion_service import MultiViewFusionService
+from app.services.unified_pipeline import UnifiedPipeline
 from app.schemas.pp2_schemas import (
     PP2PerViewDetection,
     PP2PerViewEmbedding,
@@ -31,6 +44,7 @@ from app.schemas.pp2_schemas import (
     PP2PerViewResult,
     PP2VerificationResult,
 )
+from app.config.settings import settings
 
 # Restore module table so unrelated tests use real implementations.
 for name, module in original_modules.items():
@@ -197,6 +211,63 @@ class TestMultiViewPipelineNormalization(unittest.TestCase):
         self.assertIsNone(verification)
 
 
+class TestMultiViewPipelineReasonerEnablement(unittest.TestCase):
+    def setUp(self):
+        self.pipeline = MultiViewPipeline(
+            yolo=MagicMock(),
+            florence=MagicMock(),
+            dino=MagicMock(),
+            verifier=MagicMock(),
+            fusion=MagicMock(),
+            faiss=MagicMock(),
+        )
+        self.original_pp2_enable = settings.PP2_ENABLE_REASONER
+        self.original_pp2_reasoner_mode = settings.PP2_REASONER_MODE
+        self.original_pp2_always_enrich = settings.PP2_REASONER_ALWAYS_ENRICH
+        self.original_reasoner = self.pipeline._gemini
+
+    def tearDown(self):
+        settings.PP2_ENABLE_REASONER = self.original_pp2_enable
+        settings.PP2_REASONER_MODE = self.original_pp2_reasoner_mode
+        settings.PP2_REASONER_ALWAYS_ENRICH = self.original_pp2_always_enrich
+        self.pipeline._gemini = self.original_reasoner
+
+    def test_get_gemini_returns_configured_reasoner_when_pp2_enabled(self):
+        settings.PP2_ENABLE_REASONER = True
+        self.pipeline._gemini = MagicMock()
+
+        reasoner = self.pipeline._get_gemini()
+
+        self.assertIs(reasoner, self.pipeline._gemini)
+
+    def test_phase2_only_mode_skips_per_view_and_runs_phase2_when_verification_passes(self):
+        settings.PP2_ENABLE_REASONER = True
+        settings.PP2_REASONER_MODE = "phase2_only"
+
+        self.assertFalse(self.pipeline._should_run_pp2_per_view_reasoner())
+        self.assertTrue(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=True))
+        self.assertFalse(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=False))
+
+    def test_per_view_and_phase2_mode_preserves_existing_phase2_toggle(self):
+        settings.PP2_ENABLE_REASONER = True
+        settings.PP2_REASONER_MODE = "per_view_and_phase2"
+        settings.PP2_REASONER_ALWAYS_ENRICH = False
+
+        self.assertTrue(self.pipeline._should_run_pp2_per_view_reasoner())
+        self.assertFalse(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=True))
+
+        settings.PP2_REASONER_ALWAYS_ENRICH = True
+        self.assertTrue(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=True))
+
+    def test_disabled_mode_skips_all_pp2_reasoner_paths(self):
+        settings.PP2_ENABLE_REASONER = True
+        settings.PP2_REASONER_MODE = "disabled"
+
+        self.assertFalse(self.pipeline._pp2_reasoner_enabled())
+        self.assertFalse(self.pipeline._should_run_pp2_per_view_reasoner())
+        self.assertFalse(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=True))
+
+
 class TestPP2Phase2GeminiBundle(unittest.TestCase):
     def setUp(self):
         self.gemini = MagicMock()
@@ -240,21 +311,341 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
             )
         ]
 
-        self.pipeline._run_pp2_phase2_gemini_sync(
+        result = self.pipeline._run_pp2_phase2_gemini_sync(
             per_view_results=per_view,
             canonical_label_by_index={0: "Helmet"},
+            crop_by_index={0: Image.new("RGB", (8, 8), color="black")},
+            selected_indices=[0],
             item_id="item-1",
             request_id="req-1",
         )
 
         bundle = self.gemini.run_phase2.call_args.kwargs["evidence_bundle_json"]
+        images = self.gemini.run_phase2.call_args.kwargs["images"]
         phase1_output = bundle["per_image"][0]["phase1_output"]
 
+        self.assertEqual(bundle["selected_view_indices"], [0])
         self.assertEqual(phase1_output["description"], "A black helmet with white writing.")
         self.assertEqual(phase1_output["detailed_description"], "A black helmet with white writing.")
         self.assertEqual(phase1_output["category_details"]["features"], ["white writing", "clear visor"])
         self.assertEqual(phase1_output["category_details"]["defects"], ["surface scratches"])
         self.assertEqual(phase1_output["category_details"]["attachments"], ["chin strap"])
+        self.assertEqual(bundle["per_image"][0]["source_tags"]["caption"], ["florence_caption"])
+        self.assertEqual(bundle["per_image"][0]["source_tags"]["ocr"], ["ocr_text"])
+        self.assertEqual(len(images), 1)
+        self.assertEqual(result["status"], "accepted")
+        self.assertIn("elapsed_ms", result)
+        self.assertGreaterEqual(result["elapsed_ms"], 0.0)
+
+    def test_phase2_bundle_includes_all_views_and_marks_selected_subset(self):
+        per_view = [
+            PP2PerViewResult(
+                view_index=0,
+                filename="view0.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="front",
+                    detailed_description="A brown wallet with logo.",
+                    ocr_text="BRANDX",
+                    grounded_features={"color": "brown", "features": ["logo"]},
+                    extraction_confidence=1.0,
+                    raw={"color_vqa": "brown"},
+                ),
+                embedding=PP2PerViewEmbedding(dim=16, vector_preview=[0.1] * 8, vector_id="vec0"),
+                quality_score=0.99,
+            ),
+            PP2PerViewResult(
+                view_index=1,
+                filename="view1.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="inside",
+                    detailed_description="The inside view shows card slots.",
+                    ocr_text="BRANDX",
+                    grounded_features={"color": "brown", "features": ["card slots"]},
+                    extraction_confidence=1.0,
+                    raw={"color_vqa": "brown"},
+                ),
+                embedding=PP2PerViewEmbedding(dim=16, vector_preview=[0.1] * 8, vector_id="vec1"),
+                quality_score=0.97,
+            ),
+            PP2PerViewResult(
+                view_index=2,
+                filename="view2.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="discarded",
+                    detailed_description="A background-only view.",
+                    ocr_text="NOISE",
+                    grounded_features={"color": "brown", "features": ["noise"]},
+                    extraction_confidence=1.0,
+                    raw={"color_vqa": "brown"},
+                ),
+                embedding=PP2PerViewEmbedding(dim=16, vector_preview=[0.1] * 8, vector_id="vec2"),
+                quality_score=0.10,
+            ),
+        ]
+
+        self.pipeline._run_pp2_phase2_gemini_sync(
+            per_view_results=per_view,
+            canonical_label_by_index={0: "Wallet", 1: "Wallet", 2: "Wallet"},
+            crop_by_index={
+                0: Image.new("RGB", (8, 8), color="brown"),
+                1: Image.new("RGB", (8, 8), color="brown"),
+                2: Image.new("RGB", (8, 8), color="white"),
+            },
+            selected_indices=[0, 1],
+            item_id="item-2",
+            request_id="req-2",
+        )
+
+        bundle = self.gemini.run_phase2.call_args.kwargs["evidence_bundle_json"]
+        images = self.gemini.run_phase2.call_args.kwargs["images"]
+
+        self.assertEqual(bundle["selected_view_indices"], [0, 1])
+        self.assertEqual([entry["view_index"] for entry in bundle["per_image"]], [0, 1, 2])
+        self.assertEqual(
+            [entry["selected_for_verification"] for entry in bundle["per_image"]],
+            [True, True, False],
+        )
+        self.assertEqual(len(images), 3)
+
+    def test_phase2_capacity_failure_returns_structured_fallback_without_error_trace_log(self):
+        self.gemini.run_phase2.side_effect = GeminiFatalError(
+            '{"error":"model requires more system memory (7.1 GiB) than is available (7.0 GiB)"}',
+            status_code=500,
+            provider_status="INSUFFICIENT_SYSTEM_MEMORY",
+        )
+
+        per_view = [
+            PP2PerViewResult(
+                view_index=0,
+                filename="view0.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="front",
+                    detailed_description="A brown wallet with logo.",
+                    ocr_text="BRANDX",
+                    grounded_features={"color": "brown", "features": ["logo"]},
+                    extraction_confidence=1.0,
+                    raw={"color_vqa": "brown"},
+                ),
+                embedding=PP2PerViewEmbedding(dim=16, vector_preview=[0.1] * 8, vector_id="vec0"),
+                quality_score=0.99,
+            )
+        ]
+
+        with self.assertLogs("app.services.pp2_multiview_pipeline", level="WARNING") as captured:
+            result = self.pipeline._run_pp2_phase2_gemini_sync(
+                per_view_results=per_view,
+                canonical_label_by_index={0: "Wallet"},
+                crop_by_index={0: Image.new("RGB", (8, 8), color="brown")},
+                selected_indices=[0],
+                item_id="item-capacity",
+                request_id="req-capacity",
+            )
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["provider_status"], "INSUFFICIENT_SYSTEM_MEMORY")
+        self.assertTrue(result["expected_capacity_failure"])
+        self.assertIn("elapsed_ms", result)
+        self.assertTrue(any("PP2_PHASE2_GEMINI_CAPACITY" in line for line in captured.output))
+        self.assertFalse(any("PP2_PHASE2_GEMINI_ERROR" in line for line in captured.output))
+
+    def test_apply_gemini_view_enrichment_updates_view_description_and_details(self):
+        per_view = [
+            PP2PerViewResult(
+                view_index=0,
+                filename="view0.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="front",
+                    detailed_description="A brown wallet.",
+                    ocr_text="BRANDX",
+                    grounded_features={"color": "brown", "features": ["logo"]},
+                    extraction_confidence=1.0,
+                    raw={"color_vqa": "brown"},
+                ),
+                embedding=PP2PerViewEmbedding(dim=16, vector_preview=[0.1] * 8, vector_id="vec0"),
+                quality_score=0.99,
+            )
+        ]
+
+        self.pipeline._apply_gemini_view_enrichment(
+            per_view_results=per_view,
+            gemini_evidence_by_index={
+                0: {
+                    "status": "success",
+                    "final_description": "A brown wallet with a visible logo and card slots.",
+                    "detailed_description": "A brown wallet with a visible logo on the front and card slots inside.",
+                    "color": "brown",
+                    "category_details": {
+                        "features": ["logo", "card slots"],
+                        "defects": [],
+                        "attachments": [],
+                    },
+                    "evidence_used": {
+                        "caption": ["wallet"],
+                        "ocr": ["BRANDX"],
+                        "grounding": ["logo", "card slots"],
+                        "color": ["florence_vqa_color"],
+                        "key_count": [],
+                    },
+                    "unsupported_claims": ["zipper compartment not visible"],
+                }
+            },
+        )
+
+        self.assertIn("card slots", per_view[0].extraction.detailed_description.lower())
+        self.assertIn("card slots", per_view[0].extraction.grounded_features["features"])
+        self.assertEqual(per_view[0].extraction.raw["gemini"]["status"], "success")
+        self.assertEqual(per_view[0].extraction.raw["smart_description"]["unsupported_claims"], ["zipper compartment not visible"])
+
+    def test_run_gemini_for_views_parallel_isolates_timeouts(self):
+        def fake_analyze_pp2_view(evidence_json, crop_image=None):
+            label = evidence_json.get("canonical_label")
+            if label == "Wallet":
+                time.sleep(1.2)
+                return {"status": "accepted", "pp2_view_status": "success", "final_description": "late"}
+            return {
+                "status": "accepted",
+                "pp2_view_status": "success",
+                "final_description": "fast",
+                "detailed_description": "A helmet with white writing.",
+                "category_details": {"features": ["white writing"], "defects": [], "attachments": []},
+            }
+
+        self.gemini.analyze_pp2_view.side_effect = fake_analyze_pp2_view
+
+        per_view = [
+            PP2PerViewResult(
+                view_index=0,
+                filename="view0.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="front",
+                    detailed_description="A brown wallet.",
+                    ocr_text="BRANDX",
+                    grounded_features={"color": "brown", "features": ["logo"]},
+                    extraction_confidence=1.0,
+                    raw={"color_vqa": "brown"},
+                ),
+                embedding=PP2PerViewEmbedding(dim=16, vector_preview=[0.1] * 8, vector_id="vec0"),
+                quality_score=0.99,
+            ),
+            PP2PerViewResult(
+                view_index=1,
+                filename="view1.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Helmet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="helmet",
+                    detailed_description="A black helmet.",
+                    ocr_text="ACTIVE",
+                    grounded_features={"color": "black", "features": ["logo"]},
+                    extraction_confidence=1.0,
+                    raw={"color_vqa": "black"},
+                ),
+                embedding=PP2PerViewEmbedding(dim=16, vector_preview=[0.1] * 8, vector_id="vec1"),
+                quality_score=0.97,
+            ),
+        ]
+
+        outputs = self.pipeline._run_gemini_for_views_parallel(
+            indices=[0, 1],
+            per_view_results=per_view,
+            crop_by_index={
+                0: Image.new("RGB", (8, 8), color="brown"),
+                1: Image.new("RGB", (8, 8), color="black"),
+            },
+            canonical_label_by_index={0: "Wallet", 1: "Helmet"},
+            timeout_s=1,
+            request_id="req-timeout",
+            item_id="item-timeout",
+        )
+
+        self.assertEqual(outputs[0]["status"], "timeout")
+        self.assertEqual(outputs[1]["status"], "success")
+        self.assertEqual(outputs[1]["final_description"], "fast")
+
+    def test_pp2_timing_log_includes_reasoner_breakdown(self):
+        with self.assertLogs("app.services.pp2_multiview_pipeline", level="INFO") as captured:
+            self.pipeline._log_pp2_timing_summary(
+                request_id="req-log",
+                item_id="item-log",
+                total_ms=987.65,
+                per_view_ms=[100.0, 140.0],
+                verify_ms=80.0,
+                florence_stage1_total_ms=240.0,
+                florence_detail_ms=75.0,
+                storage_ms=25.0,
+                early_exit_pair=None,
+                profile="balanced",
+                gemini_enabled=True,
+                reasoner_view_outputs={
+                    0: {"elapsed_ms": 110.5},
+                    1: {
+                        "elapsed_ms": 90.0,
+                        "reasoning_meta": {"provider": "gemini", "selected_model": "gemini-2.5-flash"},
+                    },
+                },
+                phase2_result={
+                    "status": "accepted",
+                    "elapsed_ms": 45.25,
+                    "reasoning_meta": {"provider": "gemini", "selected_model": "gemini-2.5-flash"},
+                },
+            )
+
+        timing_lines = [line for line in captured.output if "PP2_TIMING" in line]
+        self.assertEqual(len(timing_lines), 1)
+        timing_line = timing_lines[0]
+        self.assertIn("florence_stage1_total_ms=240.00", timing_line)
+        self.assertIn("florence_detail_ms=75.00", timing_line)
+        self.assertIn("reasoner_label=gemini-2.5-flash", timing_line)
+        self.assertIn("reasoner_view_total_ms=200.50", timing_line)
+        self.assertIn("reasoner_view_avg_ms=100.25", timing_line)
+        self.assertIn("reasoner_phase2_ms=45.25", timing_line)
+        self.assertIn("reasoner_total_ms=245.75", timing_line)
+
+    def test_phase2_apply_persists_reasoning_meta(self):
+        fused = SimpleNamespace(
+            category="Helmet",
+            caption="A black helmet.",
+            detailed_description="A black helmet with a clear visor.",
+            detailed_description_source="best_view_evidence_composer",
+            description_word_count={"final_description": 4, "detailed_description": 7},
+            description_evidence_used={"summary": ["pp2"], "detailed": ["pp2"]},
+            description_filters_applied=["pp2"],
+            merged_ocr_tokens=["ACTIVE", "GENERATION"],
+            attributes={"features": ["clear visor", "white writing"], "attachments": ["chin strap"]},
+            defects=["surface scratches"],
+            color="black",
+        )
+
+        applied = self.pipeline._apply_phase2_gemini_result_to_fused(
+            fused=fused,
+            phase2_result={
+                "status": "accepted",
+                "final_description": (
+                    "A black helmet with a clear visor and white writing on the shell. "
+                    "The chin strap is visible on one side and the chin vent is clearly defined. "
+                    "Surface scratches are visible near the lower edge. "
+                    'Visible text includes "ACTIVE". The rear shell also shows minor scuffing near the lower rim.'
+                ),
+                "color": "black",
+                "reasoning_meta": {
+                    "selected_model": "gemini-2.5-flash",
+                    "failover_reason": "quota_limit",
+                    "model_attempts": [
+                        {"model": "models/gemini-3.1-flash-lite-preview", "status": "quota_error"},
+                        {"model": "gemini-2.5-flash", "status": "success"},
+                    ],
+                },
+            },
+            timeout_s=4,
+        )
+
+        self.assertTrue(applied)
+        self.assertEqual(fused.attributes["phase2_gemini_reasoning"]["selected_model"], "gemini-2.5-flash")
 
     def test_phase2_timeout_falls_back_to_native_pp2_details(self):
         fused = SimpleNamespace(
@@ -283,6 +674,8 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
 
     def test_phase2_no_change_keeps_native_pp2_details(self):
         fused = SimpleNamespace(
+            category="Helmet",
+            caption="A black helmet.",
             detailed_description=(
                 "A black helmet with a clear visor. Visible features include white writing and chin strap. "
                 "Visible defects include surface scratches."
@@ -309,11 +702,78 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
 
         self.assertFalse(applied)
         self.assertIn("clear visor", fused.detailed_description.lower())
-        self.assertEqual(fused.attributes["phase2_gemini"]["status"], "accepted_no_change")
+        self.assertEqual(fused.attributes["phase2_gemini"]["status"], "below_min_words")
         self.assertEqual(fused.attributes["phase2_gemini"]["fallback"], "pp2_native_fused")
+
+    def test_phase2_too_short_rejected_by_min_word_gate(self):
+        fused = SimpleNamespace(
+            category="Helmet",
+            caption="A black helmet.",
+            detailed_description=(
+                "A black helmet with a clear visor. Visible features include white writing and chin strap. "
+                "Visible defects include surface scratches."
+            ),
+            detailed_description_source="best_view_evidence_composer",
+            description_word_count={"final_description": 4, "detailed_description": 18},
+            description_evidence_used={"summary": ["pp2"], "detailed": ["pp2"]},
+            description_filters_applied=["pp2"],
+            merged_ocr_tokens=["ACTIVE", "GENERATION"],
+            attributes={"features": ["clear visor", "white writing"], "attachments": ["chin strap"]},
+            defects=["surface scratches"],
+            color="black",
+        )
+
+        applied = self.pipeline._apply_phase2_gemini_result_to_fused(
+            fused=fused,
+            phase2_result={
+                "status": "accepted",
+                "final_description": "A black helmet with visor.",
+                "color": "black",
+            },
+            timeout_s=4,
+        )
+
+        self.assertFalse(applied)
+        self.assertEqual(fused.attributes["phase2_gemini"]["status"], "below_min_words")
+
+    def test_phase2_rejects_unsupported_claims(self):
+        fused = SimpleNamespace(
+            category="Wallet",
+            caption="A brown wallet.",
+            detailed_description="A brown wallet with a visible logo and wrist strap.",
+            detailed_description_source="best_view_evidence_composer",
+            description_word_count={"final_description": 4, "detailed_description": 10},
+            description_evidence_used={"summary": ["pp2"], "detailed": ["pp2"]},
+            description_filters_applied=["pp2"],
+            merged_ocr_tokens=["BRANDX"],
+            attributes={"features": ["logo"], "attachments": ["wrist strap"]},
+            defects=[],
+            color="brown",
+        )
+
+        applied = self.pipeline._apply_phase2_gemini_result_to_fused(
+            fused=fused,
+            phase2_result={
+                "status": "accepted",
+                "final_description": (
+                    'A brown wallet with a visible logo and a wrist strap on one side. '
+                    'It has a zipper compartment and hidden cards that are not actually visible in the verified views. '
+                    'Visible text includes "BRANDX".'
+                ),
+                "color": "brown",
+            },
+            timeout_s=4,
+        )
+
+        self.assertTrue(applied)
+        self.assertEqual(fused.attributes["phase2_gemini"]["status"], "accepted")
+        self.assertNotIn("zipper compartment", fused.detailed_description.lower())
+        self.assertIn("wrist strap", fused.detailed_description.lower())
 
     def test_phase2_equal_fact_coverage_can_win_with_modestly_richer_grounded_detail(self):
         fused = SimpleNamespace(
+            category="Helmet",
+            caption="A black helmet.",
             detailed_description="A black helmet with a clear visor.",
             detailed_description_source="best_view_evidence_composer",
             description_word_count={"final_description": 7, "detailed_description": 7},
@@ -330,7 +790,10 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
             phase2_result={
                 "status": "accepted",
                 "final_description": (
-                    "A black helmet with a clear visor. The chin strap is visible and there are surface scratches."
+                    "A black helmet with a clear visor and white writing on the shell. "
+                    "The chin strap is visible on one side and the chin vent is clearly defined. "
+                    "Surface scratches are visible near the lower edge. "
+                    'Visible text includes "ACTIVE". The rear shell also shows minor scuffing near the lower rim.'
                 ),
                 "color": "black",
             },
@@ -340,6 +803,393 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
         self.assertTrue(applied)
         self.assertIn("chin strap", fused.detailed_description.lower())
         self.assertEqual(fused.attributes["phase2_gemini"]["status"], "accepted")
+        self.assertEqual(fused.description_word_count["final_description"], len(fused.caption.split()))
+
+class TestMultiViewFusionAllViewDescriptions(unittest.TestCase):
+    def setUp(self):
+        self.fusion = MultiViewFusionService()
+
+    def test_fuse_uses_all_view_descriptions_without_leaking_sensitive_wallet_text(self):
+        per_view = [
+            PP2PerViewResult(
+                view_index=0,
+                filename="front.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.96),
+                extraction=PP2PerViewExtraction(
+                    caption="wallet front",
+                    detailed_description="A brown wallet with a visible front logo and edge wear.",
+                    ocr_text="BRANDX",
+                    grounded_features={"color": "brown", "features": ["front logo"], "defects": ["edge wear"]},
+                    extraction_confidence=1.0,
+                    raw={
+                        "smart_description": {
+                            "status": "success",
+                            "detailed_description": "A brown wallet with a visible front logo and edge wear.",
+                            "final_description": "A brown wallet with a visible front logo.",
+                        }
+                    },
+                ),
+                embedding=PP2PerViewEmbedding(dim=4, vector_preview=[0.1, 0.2, 0.3, 0.4], vector_id="vec0"),
+                quality_score=0.99,
+            ),
+            PP2PerViewResult(
+                view_index=1,
+                filename="inside.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="wallet inside",
+                    detailed_description='A brown wallet with multiple card slots inside. Visible text includes "123456".',
+                    ocr_text="123456",
+                    grounded_features={"color": "brown", "features": ["card slots"]},
+                    extraction_confidence=1.0,
+                    raw={
+                        "smart_description": {
+                            "status": "success",
+                            "detailed_description": 'A brown wallet with multiple card slots inside. Visible text includes "123456".',
+                            "final_description": "A brown wallet with multiple card slots inside.",
+                        }
+                    },
+                ),
+                embedding=PP2PerViewEmbedding(dim=4, vector_preview=[0.1, 0.2, 0.3, 0.4], vector_id="vec1"),
+                quality_score=0.97,
+            ),
+        ]
+
+        fused = self.fusion.fuse(
+            per_view=per_view,
+            vectors=[np.ones(4, dtype=np.float32), np.ones(4, dtype=np.float32)],
+            item_id="wallet-1",
+            used_view_indices=[0, 1],
+        )
+
+        self.assertEqual(fused.detailed_description_source, "all_view_evidence_composer")
+        self.assertIn("front logo", fused.detailed_description.lower())
+        self.assertIn("card slots", fused.detailed_description.lower())
+        self.assertNotIn("123456", fused.detailed_description)
+        self.assertEqual(fused.attributes["description_contributor_view_indices"], [0, 1])
+
+    def test_fuse_falls_back_when_only_one_public_view_description_survives(self):
+        per_view = [
+            PP2PerViewResult(
+                view_index=0,
+                filename="front.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.96),
+                extraction=PP2PerViewExtraction(
+                    caption="wallet front",
+                    detailed_description="A brown wallet with a front logo.",
+                    ocr_text="BRANDX",
+                    grounded_features={"color": "brown", "features": ["front logo"]},
+                    extraction_confidence=1.0,
+                    raw={"smart_description": {"status": "success", "detailed_description": "A brown wallet with a front logo."}},
+                ),
+                embedding=PP2PerViewEmbedding(dim=4, vector_preview=[0.1, 0.2, 0.3, 0.4], vector_id="vec0"),
+                quality_score=0.99,
+            ),
+            PP2PerViewResult(
+                view_index=1,
+                filename="inside.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="wallet inside",
+                    detailed_description='Visible text includes "999999".',
+                    ocr_text="999999",
+                    grounded_features={"color": "brown", "features": ["card slots"]},
+                    extraction_confidence=1.0,
+                    raw={"smart_description": {"status": "success", "detailed_description": 'Visible text includes "999999".'}},
+                ),
+                embedding=PP2PerViewEmbedding(dim=4, vector_preview=[0.1, 0.2, 0.3, 0.4], vector_id="vec1"),
+                quality_score=0.97,
+            ),
+        ]
+
+        fused = self.fusion.fuse(
+            per_view=per_view,
+            vectors=[np.ones(4, dtype=np.float32), np.ones(4, dtype=np.float32)],
+            item_id="wallet-2",
+            used_view_indices=[0, 1],
+        )
+
+        self.assertEqual(fused.detailed_description_source, "best_view_evidence_composer")
+        self.assertIn("front logo", fused.detailed_description.lower())
+        self.assertNotIn("999999", fused.detailed_description)
+
+
+class TestGeminiReasonerPhase2ResponseNormalization(unittest.TestCase):
+    def test_normalize_phase2_response_coerces_schema_fields(self):
+        normalized = GeminiReasoner.normalize_phase2_response(
+            {
+                "status": "accepted",
+                "message": "ok",
+                "label": "Wallet",
+                "color": "brown",
+                "final_description": (
+                    'A brown wallet with a visible logo. It also includes a strap attached. '
+                    'Visible wear includes edge wear. Visible text includes "BRANDX".'
+                ),
+                "category_details": {
+                    "features": ["logo", None],
+                    "defects": ["edge wear"],
+                    "attachments": ["strap attached"],
+                },
+                "key_count": None,
+                "tags": ["wallet", 123],
+                "evidence_used": {
+                    "color_source": "florence_vqa_color",
+                    "feature_sources": ["grounded_features"],
+                    "defect_sources": ["grounded_defects"],
+                    "attachment_sources": ["grounded_attachments"],
+                    "ocr_source": "ocr_text",
+                },
+            }
+        )
+
+        self.assertEqual(normalized["status"], "accepted")
+        self.assertEqual(normalized["category_details"]["features"], ["logo"])
+        self.assertEqual(normalized["tags"], ["wallet", "123"])
+
+    def test_normalize_phase2_response_rejects_non_object_payload(self):
+        normalized = GeminiReasoner.normalize_phase2_response(["bad"])
+        self.assertEqual(normalized["status"], "rejected")
+        self.assertIsNone(normalized["final_description"])
+
+    def test_normalize_phase1_response_coerces_schema_fields(self):
+        normalized = GeminiReasoner.normalize_phase1_response(
+            {
+                "status": "accepted",
+                "label": "Wallet",
+                "color": "brown",
+                "final_description": "A brown wallet with a logo.",
+                "detailed_description": "A brown wallet with a visible logo and edge wear.",
+                "category_details": {
+                    "features": ["logo", None],
+                    "defects": ["edge wear"],
+                    "attachments": ["wrist strap"],
+                },
+                "key_count": None,
+                "evidence_used": {
+                    "caption": ["wallet"],
+                    "ocr": ["BRANDX"],
+                    "grounding": ["logo"],
+                    "color": ["florence_vqa_color"],
+                    "key_count": [],
+                },
+                "unsupported_claims": ["coin pouch not visible"],
+                "label_change_reason": None,
+            },
+            fallback_label="Wallet",
+            fallback_color="brown",
+        )
+
+        self.assertEqual(normalized["status"], "accepted")
+        self.assertEqual(normalized["category_details"]["features"], ["logo"])
+        self.assertEqual(normalized["evidence_used"]["ocr"], ["BRANDX"])
+        self.assertEqual(normalized["unsupported_claims"], ["coin pouch not visible"])
+
+    def test_model_validation_raises_when_model_unavailable(self):
+        reasoner = GeminiReasoner(model_name="models/gemini-3.1-flash-lite-preview")
+
+        class FakeError(Exception):
+            def __init__(self):
+                super().__init__("404 NOT_FOUND")
+                self.status_code = 404
+
+        reasoner._client = SimpleNamespace(
+            models=SimpleNamespace(
+                get=lambda model=None: (_ for _ in ()).throw(FakeError())
+            )
+        )
+
+        with self.assertRaises(GeminiFatalError):
+            reasoner._ensure_model_available("models/gemini-3.1-flash-lite-preview")
+
+    def test_pp2_generate_config_uses_thinking_level_for_gemini3(self):
+        reasoner = GeminiReasoner(pp2_model_name="models/gemini-3.1-flash-lite-preview")
+        original_google = sys.modules.get("google")
+        original_google_genai = sys.modules.get("google.genai")
+        fake_types = SimpleNamespace(
+            ThinkingConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+            GenerateContentConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+        )
+        sys.modules["google"] = SimpleNamespace(genai=SimpleNamespace(types=fake_types))
+        sys.modules["google.genai"] = SimpleNamespace(types=fake_types)
+        try:
+            config = reasoner._build_pp2_generate_config()
+        finally:
+            if original_google is None:
+                del sys.modules["google"]
+            else:
+                sys.modules["google"] = original_google
+            if original_google_genai is None:
+                del sys.modules["google.genai"]
+            else:
+                sys.modules["google.genai"] = original_google_genai
+
+        self.assertEqual(getattr(config.thinkingConfig, "thinkingLevel", None), "medium")
+        self.assertIsNone(getattr(config.thinkingConfig, "thinkingBudget", None))
+        self.assertEqual(getattr(config, "response_mime_type", None), "application/json")
+        self.assertEqual(getattr(config, "response_json_schema", None), PHASE2_PP2_RESPONSE_SCHEMA)
+        self.assertIsNone(getattr(config, "responseSchema", None))
+
+    def test_pp2_generate_config_uses_thinking_budget_for_non_gemini3(self):
+        reasoner = GeminiReasoner(pp2_model_name="gemini-2.5-flash")
+        original_google = sys.modules.get("google")
+        original_google_genai = sys.modules.get("google.genai")
+        fake_types = SimpleNamespace(
+            ThinkingConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+            GenerateContentConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+        )
+        sys.modules["google"] = SimpleNamespace(genai=SimpleNamespace(types=fake_types))
+        sys.modules["google.genai"] = SimpleNamespace(types=fake_types)
+        try:
+            config = reasoner._build_pp2_generate_config()
+        finally:
+            if original_google is None:
+                del sys.modules["google"]
+            else:
+                sys.modules["google"] = original_google
+            if original_google_genai is None:
+                del sys.modules["google.genai"]
+            else:
+                sys.modules["google.genai"] = original_google_genai
+
+        self.assertEqual(getattr(config.thinkingConfig, "thinkingBudget", None), 256)
+        self.assertIsNone(getattr(config.thinkingConfig, "thinkingLevel", None))
+        self.assertEqual(getattr(config, "response_mime_type", None), "application/json")
+        self.assertEqual(getattr(config, "response_json_schema", None), PHASE2_PP2_RESPONSE_SCHEMA)
+        self.assertIsNone(getattr(config, "responseSchema", None))
+
+    def test_pp1_generate_config_uses_response_json_schema(self):
+        reasoner = GeminiReasoner(model_name="models/gemini-3.1-flash-lite-preview")
+        original_google = sys.modules.get("google")
+        original_google_genai = sys.modules.get("google.genai")
+        fake_types = SimpleNamespace(
+            ThinkingConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+            GenerateContentConfig=lambda **kwargs: SimpleNamespace(**kwargs),
+        )
+        sys.modules["google"] = SimpleNamespace(genai=SimpleNamespace(types=fake_types))
+        sys.modules["google.genai"] = SimpleNamespace(types=fake_types)
+        try:
+            config = reasoner._build_pp1_generate_config()
+        finally:
+            if original_google is None:
+                del sys.modules["google"]
+            else:
+                sys.modules["google"] = original_google
+            if original_google_genai is None:
+                del sys.modules["google.genai"]
+            else:
+                sys.modules["google.genai"] = original_google_genai
+
+        self.assertEqual(getattr(config.thinkingConfig, "thinkingLevel", None), "low")
+        self.assertEqual(getattr(config, "response_mime_type", None), "application/json")
+        self.assertEqual(getattr(config, "response_json_schema", None), PHASE1_PP1_RESPONSE_SCHEMA)
+        self.assertIsNone(getattr(config, "responseSchema", None))
+
+    def test_pp1_config_serializes_with_response_json_schema(self):
+        from google.genai import models
+
+        reasoner = GeminiReasoner(model_name="models/gemini-3.1-flash-lite-preview")
+        config = reasoner._build_pp1_generate_config()
+        payload = models._GenerateContentConfig_to_mldev(None, config)
+
+        self.assertEqual(payload["responseMimeType"], "application/json")
+        self.assertIn("responseJsonSchema", payload)
+        self.assertNotIn("responseSchema", payload)
+
+    def test_pp2_config_serializes_with_response_json_schema(self):
+        from google.genai import models
+
+        reasoner = GeminiReasoner(pp2_model_name="models/gemini-3.1-flash-lite-preview")
+        config = reasoner._build_pp2_generate_config()
+        payload = models._GenerateContentConfig_to_mldev(None, config)
+
+        self.assertEqual(payload["responseMimeType"], "application/json")
+        self.assertIn("responseJsonSchema", payload)
+        self.assertNotIn("responseSchema", payload)
+
+    def test_quota_error_retries_on_fallback_model(self):
+        reasoner = GeminiReasoner(model_name="models/gemini-3.1-flash-lite-preview")
+        calls = []
+
+        def fake_generate_text_once(prompt, images=None, config=None, model_name=None, image_first=False):
+            calls.append(model_name)
+            if model_name == "models/gemini-3.1-flash-lite-preview":
+                raise GeminiQuotaError("quota", status_code=429, provider_status="RESOURCE_EXHAUSTED")
+            return '{"status":"accepted"}'
+
+        reasoner._generate_text_once = fake_generate_text_once
+        text = reasoner._generate_text(
+            "prompt",
+            model_name="models/gemini-3.1-flash-lite-preview",
+            fallback_model_name="gemini-2.5-flash",
+        )
+        meta = reasoner.consume_last_request_meta()
+
+        self.assertEqual(text, '{"status":"accepted"}')
+        self.assertEqual(calls, ["models/gemini-3.1-flash-lite-preview", "gemini-2.5-flash"])
+        self.assertEqual(meta["selected_model"], "gemini-2.5-flash")
+        self.assertEqual(meta["failover_reason"], "quota_limit")
+
+    def test_non_quota_transient_does_not_fail_over(self):
+        reasoner = GeminiReasoner(model_name="models/gemini-3.1-flash-lite-preview")
+        calls = []
+
+        def fake_generate_text_once(prompt, images=None, config=None, model_name=None, image_first=False):
+            calls.append(model_name)
+            raise GeminiTransientError("temporary", status_code=503, provider_status="UNAVAILABLE")
+
+        reasoner._generate_text_once = fake_generate_text_once
+
+        with self.assertRaises(GeminiTransientError):
+            reasoner._generate_text(
+                "prompt",
+                model_name="models/gemini-3.1-flash-lite-preview",
+                fallback_model_name="gemini-2.5-flash",
+            )
+
+        self.assertEqual(calls, ["models/gemini-3.1-flash-lite-preview", "models/gemini-3.1-flash-lite-preview"])
+
+    def test_quota_error_with_unavailable_fallback_preserves_attempt_metadata(self):
+        reasoner = GeminiReasoner(model_name="models/gemini-3.1-flash-lite-preview")
+
+        def fake_generate_text_once(prompt, images=None, config=None, model_name=None, image_first=False):
+            if model_name == "models/gemini-3.1-flash-lite-preview":
+                raise GeminiQuotaError("quota", status_code=429, provider_status="RESOURCE_EXHAUSTED")
+            raise GeminiFatalError("fallback unavailable", status_code=404, provider_status="NOT_FOUND")
+
+        reasoner._generate_text_once = fake_generate_text_once
+
+        with self.assertRaises(GeminiFatalError):
+            reasoner._generate_text(
+                "prompt",
+                model_name="models/gemini-3.1-flash-lite-preview",
+                fallback_model_name="gemini-2.5-flash",
+            )
+
+        meta = reasoner.consume_last_request_meta()
+        self.assertEqual(meta["failover_reason"], "quota_limit")
+        self.assertEqual(meta["model_attempts"][0]["status"], "quota_error")
+        self.assertEqual(meta["model_attempts"][-1]["status"], "fatal_error")
+
+
+class TestUnifiedPipelineDescriptionValidation(unittest.TestCase):
+    def test_pp1_validation_strips_scene_and_unsupported_ocr_claims(self):
+        validated = UnifiedPipeline._validate_description_with_evidence(
+            candidate=(
+                'A brown wallet with a logo. It is sitting on a wooden table. '
+                'Visible text includes "BRANDX". Visible text includes "FAKE123".'
+            ),
+            label="Wallet",
+            color="brown",
+            category_details={"features": ["logo"], "defects": [], "attachments": []},
+            key_count=None,
+            ocr_text="BRANDX",
+        )
+
+        self.assertIn("A brown wallet with a logo.", validated["description"])
+        self.assertIn('"BRANDX"', validated["description"])
+        self.assertNotIn("wooden table", validated["description"])
+        self.assertNotIn("FAKE123", validated["description"])
 
 
 class TestHintScoringNegativeKeywords(unittest.TestCase):
@@ -584,7 +1434,7 @@ class TestOCRSubstringFallback(unittest.TestCase):
             ocr_text="NATIONAL IDENTITY CARDcoma",
             grounded_features={},
         )
-        self.assertEqual(hint, "Student ID")
+        self.assertEqual(hint, "NIC / National ID Card")
         self.assertTrue(signals["ocr_hit"])
 
     def test_short_keyword_not_substring_matched(self):

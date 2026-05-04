@@ -14,7 +14,7 @@ from app.models.item_models import ensure_founder_prefill_feedback_schema
 from app.services.yolo_service import YoloService
 from app.services.florence_service import FlorenceService
 from app.services.dino_embedder import DINOEmbedder
-from app.services.gemini_reasoner import GeminiReasoner
+from app.services.reasoner_factory import create_reasoner_from_settings
 from app.services.unified_pipeline import UnifiedPipeline
 from app.services.faiss_service import FaissService
 from app.services.pp2_geometric_verifier import GeometricVerifier
@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
             logger.warning("YOLO warmup failed; continuing with loaded model.", exc_info=True)
         florence_service = FlorenceService()
         dino_embedder = DINOEmbedder()
-        gemini_reasoner = GeminiReasoner()
+        reasoner = create_reasoner_from_settings()
 
         # Initialize Logic Services
         geometric_verifier = GeometricVerifier()
@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
         unified_pipeline = UnifiedPipeline(
             yolo=yolo_service,
             florence=florence_service,
-            gemini=gemini_reasoner,
+            gemini=reasoner,
             dino=dino_embedder,
         )
 

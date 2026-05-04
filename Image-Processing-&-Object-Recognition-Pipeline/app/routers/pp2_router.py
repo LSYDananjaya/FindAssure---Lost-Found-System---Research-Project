@@ -1,3 +1,13 @@
+"""FastAPI routes for PP2 multi-view image analysis.
+
+Module overview:
+- This router validates the 2-to-3 image PP2 contract.
+- It creates request-scoped upload/storage objects, then delegates actual
+  computer-vision work to MultiViewPipeline.
+- Async endpoints persist uploads first because FastAPI upload streams cannot
+  safely be used after the request returns.
+"""
+
 import asyncio
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -44,6 +54,8 @@ PRE_ANALYSIS_STAGE_META = {
 
 
 class _SavedUpload:
+    """Small wrapper that lets background jobs reopen saved upload files."""
+
     def __init__(self, filename: str, path: str):
         self.filename = filename
         self.file = open(path, "rb")
@@ -84,6 +96,8 @@ def _terminal_payload(image_count: int, status: str, *, result=None, error: str 
 
 
 def _persist_uploads(files: List[UploadFile]) -> List[tuple[str, str]]:
+    """Save uploads for async PP2 processing after the HTTP request ends."""
+
     saved_files: List[tuple[str, str]] = []
     for upload in files:
       suffix = os.path.splitext(upload.filename or "")[1] or ".jpg"
@@ -106,6 +120,8 @@ def _cleanup_saved_files(saved_files: List[tuple[str, str]]) -> None:
 
 
 async def _run_pp2_analysis_job(app, task_id: str, saved_files: List[tuple[str, str]]) -> None:
+    """Run the multi-view pipeline in the background and update job status."""
+
     image_count = len(saved_files)
     upload_wrappers: List[_SavedUpload] = []
     try:
@@ -146,6 +162,10 @@ async def verify_pair(
     """
     Verify similarity between exactly 2 images.
     Returns cosine similarity and geometric verification results.
+
+    Design note: pair verification is the core PP2 idea. It combines visual
+    embeddings and geometric evidence so the system does not blindly merge
+    unrelated photos.
     """
     if len(files) != 2:
         raise HTTPException(
@@ -226,6 +246,9 @@ async def analyze_multiview(
     """
     Phase 2: Multi-View Analysis Endpoint.
     Requires 2 or 3 images.
+
+    Design note: PP2 exists because multiple views can improve confidence, but
+    only after verification confirms that the views likely refer to one item.
     """
     normalized_files = files or []
     file_count = len(normalized_files)
@@ -239,12 +262,14 @@ async def analyze_multiview(
     logger.info("PP2_REQ_START request_id=%s file_count=%d", request_id, file_count)
 
     try:
-        # Retrieve Pipeline from App State
+        # Retrieve Pipeline from App State. The router handles HTTP validation;
+        # MultiViewPipeline owns model calls, verification, fusion, and storage.
         pipeline = request.app.state.multiview_pipeline
         if not pipeline:
             raise HTTPException(status_code=500, detail="MultiViewPipeline not initialized.")
 
-        # Initialize scoped StorageService with DB access
+        # Initialize scoped StorageService with DB access. Storage is scoped to
+        # this request so DB session lifetime stays separate from model state.
         storage = StorageService(db)
 
         # Call pipeline (files are passed directly)

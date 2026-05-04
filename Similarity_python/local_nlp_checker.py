@@ -1,4 +1,11 @@
-# local_nlp_checker.py
+"""Local text-similarity checker used when scoring owner answers.
+
+Module overview:
+- Normalizes founder and owner answer text before comparison.
+- Combines semantic embeddings, lexical overlap, keyword coverage, and question-type rules.
+- Provides a deterministic fallback/partner to Gemini so verification still works offline.
+"""
+
 import os
 # Force transformers/sentence-transformers to avoid TensorFlow in this service.
 os.environ.setdefault("USE_TF", "0")
@@ -58,6 +65,8 @@ def py(v):
     return v
 
 class LocalNLP:
+    """Local NLP scorer for comparing one expected answer with one spoken answer."""
+
     def __init__(self):
         self.nlp = spacy.load("en_core_web_lg")
         self.sbert = SentenceTransformer("all-mpnet-base-v2")
@@ -154,6 +163,7 @@ class LocalNLP:
         return None
 
     def infer_question_type(self, question_text, founder_answer=""):
+        """Classify the question so strict fields like colors and numbers can be checked directly."""
         q = self.normalize(question_text)
         founder_norm = self.normalize(founder_answer)
 
@@ -173,6 +183,7 @@ class LocalNLP:
         return "descriptive"
 
     def apply_question_type_rules(self, base_score, question_type, founder, owner):
+        """Apply exact-match guards where semantic similarity alone would be too forgiving."""
         config = QUESTION_TYPE_CONFIG.get(question_type, QUESTION_TYPE_CONFIG["descriptive"])
 
         if question_type == "boolean":

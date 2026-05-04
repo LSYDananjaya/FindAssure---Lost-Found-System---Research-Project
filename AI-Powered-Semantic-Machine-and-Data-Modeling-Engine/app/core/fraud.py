@@ -1,3 +1,11 @@
+"""Metadata-based fraud helper for semantic-engine routes.
+
+Module overview:
+- Loads an IsolationForest model when available, otherwise initializes one.
+- Converts user metadata into a compact behavioral feature vector.
+- Returns a simple fraud score and suspicious flag for API consumers.
+"""
+
 from sklearn.ensemble import IsolationForest
 import numpy as np
 import pickle
@@ -5,6 +13,8 @@ import os
 from app.config import settings
 
 class FraudDetectionEngine:
+    """Singleton wrapper around the metadata anomaly model."""
+
     _instance = None
 
     def __new__(cls):
@@ -50,7 +60,8 @@ class FraudDetectionEngine:
         prediction = self.model.predict(features)[0]
         anomaly_score = self.model.score_samples(features)[0]
         
-        # Convert to 0-100 scale (lower = more suspicious)
+        # Convert to 0-100 scale for API readability while preserving the
+        # anomaly model's suspicious/normal flag.
         fraud_score = max(0, min(100, (1 - abs(anomaly_score)) * 100))
         
         return {

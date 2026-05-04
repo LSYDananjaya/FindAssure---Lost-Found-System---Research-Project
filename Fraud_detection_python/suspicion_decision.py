@@ -1,3 +1,11 @@
+"""Transparent suspicion scoring rules for behavior features.
+
+Module overview:
+- Uses a small weighted formula so each feature contribution is explainable.
+- Treats eye contact as risk-reducing and missing/looking-away behavior as risk-increasing.
+- Applies a fixed threshold to produce the final suspicious/not-suspicious flag.
+"""
+
 def compute_suspicion_score(features):
     """
     Weighted linear risk model (transparent & explainable)
@@ -23,4 +31,5 @@ def compute_suspicion_score(features):
 
 
 def is_suspicious(score, threshold=0.55):
+    """Convert the normalized score into a boolean decision."""
     return score >= threshold

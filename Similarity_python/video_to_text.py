@@ -1,3 +1,11 @@
+"""Video-to-text helper for owner answer videos.
+
+Module overview:
+- Extracts a temporary WAV audio stream from a video file.
+- Delegates transcription to the shared Whisper backend.
+- Cleans temporary media files after the transcript is produced.
+"""
+
 import os
 import subprocess
 from transcription_backend import transcribe_audio

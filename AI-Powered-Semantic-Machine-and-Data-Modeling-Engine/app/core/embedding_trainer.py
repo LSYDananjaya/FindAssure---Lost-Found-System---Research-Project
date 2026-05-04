@@ -1,28 +1,9 @@
-"""
-Embedding Fine-Tuning from User Feedback
-=========================================
+"""Embedding fine-tuning from confirmed user feedback.
 
-Fine-tunes the sentence-transformer embedding model using real (lost, found)
-text pairs collected from confirmed user matches.
-
-How it works:
-  1. Users search for lost items and see ranked results.
-  2. When a user confirms "Yes, this is mine", the (lost_description, found_description)
-     pair is saved to the `embedding_training_pairs` MongoDB collection.
-  3. Once enough pairs are collected (default 50), this module fine-tunes the
-     sentence-transformer so it produces better embeddings for real-world descriptions.
-
-This is different from train_english_only.py (manual curated pairs) because:
-  - These pairs come from REAL USERS confirming actual matches
-  - They reflect the exact language and phrasing real users write
-  - The model continuously improves as more users interact with the system
-
-Training approach:
-  - Loads existing fine-tuned model (or base model as fallback)
-  - Merges feedback pairs WITH the original curated dataset (so we don't lose
-    what the base model already learned)
-  - Uses MultipleNegativesRankingLoss (best for semantic search)
-  - Saves the updated model back to data/models/fine_tuned_bert/
+Module overview:
+- Converts confirmed lost/found matches into sentence-transformer training pairs.
+- Merges feedback pairs with curated pairs to reduce forgetting.
+- Saves the updated embedding model so SemanticEngine can reload it without a server restart.
 """
 
 import json

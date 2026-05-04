@@ -1,9 +1,19 @@
+"""Frame-level face feature extraction for BiFI confidence scoring.
+
+Module overview:
+- Uses DeepFace for dominant emotion labels.
+- Uses MediaPipe FaceMesh for facial landmark vectors.
+- Returns missing features as None so callers can decide fallback behavior.
+"""
+
 import numpy as np
 import cv2
 import mediapipe as mp
 from deepface import DeepFace
 
 class FeatureExtractor:
+    """Extract emotion and landmark features from sampled video frames."""
+
     def __init__(self):
         self.mesh = mp.solutions.face_mesh.FaceMesh(
             # Process sampled frames independently for more robust per-frame detection.

@@ -1,3 +1,11 @@
+"""Gemini batch scorer for owner-verification answer similarity.
+
+Module overview:
+- Sends all question/answer pairs in one request to keep model reasoning consistent.
+- Expects strict JSON so the Flask route can merge Gemini output with local NLP scores.
+- Returns a fallback marker on API errors instead of raising into the request path.
+"""
+
 import os
 import json
 import requests
@@ -11,6 +19,7 @@ API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-fl
 
 
 def gemini_batch_similarity(q_list):
+    """Ask Gemini to score multiple founder/owner answer pairs in one call."""
     if not GEMINI_KEY:
         return {"error": "Missing GEMINI_API_KEY"}
 
@@ -71,6 +80,7 @@ Return ONLY JSON:
                 "fallback_mode": True
             }
 
+        # Gemini may wrap JSON in Markdown fences; strip them before parsing.
         text = data["candidates"][0]["content"]["parts"][0]["text"]
         text = text.replace("```json", "").replace("```", "").strip()
 

@@ -1,9 +1,19 @@
+"""Knowledge-graph helper for category context suggestions.
+
+Module overview:
+- Loads a prebuilt NetworkX graph of related lost/found item categories.
+- Returns neighboring categories as context suggestions for search responses.
+- Falls back to an empty graph when the graph artifact is unavailable.
+"""
+
 import networkx as nx
 import pickle
 import os
 from app.config import settings
 
 class DataModelingEngine:
+    """Singleton wrapper around the category knowledge graph."""
+
     _instance = None
 
     def __new__(cls):

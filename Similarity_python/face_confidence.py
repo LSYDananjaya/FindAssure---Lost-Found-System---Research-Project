@@ -1,4 +1,11 @@
-# face_confidence.py
+"""Face-confidence wrapper for owner answer videos.
+
+Module overview:
+- Samples frames from each video and extracts emotion/face-mesh signals.
+- Uses the BiFI scorer to label suspicious behavior per video.
+- Aggregates per-video labels into a final face-confidence decision.
+"""
+
 import os, uuid
 from bifi.video_utils import extract_frames
 from bifi.feature_extractor import FeatureExtractor
@@ -26,6 +33,8 @@ def analyze_face_confidence(video_files):
         video.save(path)
 
         try:
+            # A small frame sample keeps the endpoint responsive while still
+            # covering changes across the short answer video.
             frames = extract_frames(path, max_frames=8)
             if not frames:
                 raise ValueError("Could not extract frames")
@@ -51,6 +60,8 @@ def analyze_face_confidence(video_files):
             if not emotions:
                 emotions = ["neutral"] * len(mesh_vecs)
 
+            # Emotion and mesh movement are fused by the scorer; this wrapper
+            # only handles IO and aggregation.
             score = scorer.score_video(emotions, mesh_vecs)
 
             if score["label"] == "suspicious":

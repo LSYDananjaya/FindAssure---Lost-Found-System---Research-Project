@@ -1,3 +1,5 @@
+"""Small text utility helpers shared by semantic-engine modules."""
+
 import re
 
 def clean_text(text: str) -> str:

@@ -1,6 +1,9 @@
-"""
-Lightweight Semantic Engine using TF-IDF (no PyTorch/Transformers needed)
-This works on systems with limited RAM and no GPU
+"""Lightweight TF-IDF semantic engine.
+
+Module overview:
+- Provides a no-transformers fallback for systems with limited RAM or no GPU.
+- Rebuilds TF-IDF vectors from in-memory found-item metadata.
+- Mirrors the main engine's add/load/search behavior with simpler scoring.
 """
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity

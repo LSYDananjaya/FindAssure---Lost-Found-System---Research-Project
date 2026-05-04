@@ -1,3 +1,11 @@
+"""Build the category knowledge graph from ontology rules.
+
+Module overview:
+- Reads source ontology relationships from JSON.
+- Creates an undirected NetworkX graph for related-category suggestions.
+- Saves the graph artifact consumed by DataModelingEngine.
+"""
+
 import networkx as nx
 import json
 import pickle
@@ -8,6 +16,7 @@ ONTOLOGY_PATH = os.path.join(BASE_DIR, '../data/raw/ontology_rules.json')
 GRAPH_SAVE_PATH = os.path.join(BASE_DIR, '../data/models/knowledge_graph.pkl')
 
 def build_knowledge_graph():
+    """Create and persist the category relationship graph."""
     print("Building Knowledge Graph...")
     G = nx.Graph()
     

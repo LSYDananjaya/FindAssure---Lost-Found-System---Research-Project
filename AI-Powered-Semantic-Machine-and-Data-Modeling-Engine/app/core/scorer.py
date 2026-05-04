@@ -1,13 +1,10 @@
-"""
-Scoring Engine — Feature computation, rule-based scoring, LightGBM re-ranking.
+"""Scoring engine for feature computation and candidate reranking.
 
-Implements DESIGN_DOC §C2, §C3, §H3, §H4, §G3.
-
-Components:
-  - FeatureComputer:     computes feature vector for a (lost, found) pair
-  - ReRanker:            applies rule-based formula OR LightGBM to rank candidates
-  - apply_must_match_rule: DESIGN_DOC §C3 hard identifier matching logic
-  - get_model_variant:    deterministic A/B routing per session
+Module overview:
+- Computes text, attribute, identifier, time, and category signals per candidate.
+- Applies hard identifier guards before ranking when key details must match.
+- Uses rule-based scoring by default and a trained LightGBM reranker when available.
+- Logs model variant decisions deterministically by session for controlled rollout.
 """
 
 import hashlib
@@ -56,7 +53,7 @@ def cross_encoder_score(query_text: str, doc_text: str) -> float:
         return -1.0
     try:
         raw = float(ce.predict([(query_text[:256], doc_text[:256])]))
-        # ms-marco outputs logits; sigmoid → [0,1]
+        # ms-marco outputs logits; sigmoid maps them to [0, 1].
         score = 1.0 / (1.0 + math.exp(-raw))
         return round(score, 4)
     except Exception as e:

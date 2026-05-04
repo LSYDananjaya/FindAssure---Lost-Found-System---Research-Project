@@ -1,3 +1,11 @@
+"""Simple reinforcement-learning ranking helper.
+
+Module overview:
+- Stores a Q-table for coarse ranking-weight adjustments.
+- Uses category match and semantic-score range as a compact state.
+- Persists learned values so feedback can influence future ranking behavior.
+"""
+
 import numpy as np
 import pickle
 import os
@@ -31,6 +39,8 @@ class RLRankingAgent:
             self.q_table = {}
             print("New Q-Table initialized.")
         
+        # Conservative learning settings avoid large ranking swings from a
+        # small amount of feedback.
         self.alpha = 0.1  # Learning rate
         self.gamma = 0.9  # Discount factor
         self.epsilon = 0.1  # Exploration rate

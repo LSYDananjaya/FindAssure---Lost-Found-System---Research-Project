@@ -1,3 +1,12 @@
+"""Suspicion-analysis API for owner answer videos.
+
+Module overview:
+- Accepts owner answer videos from the verification service.
+- Extracts face-contact and missing-face behavior metrics with MediaPipe.
+- Scores suspicion with transparent rules, adds XAI-style contributions, and stores behavior sessions.
+- Adds Gemini explanation as optional enrichment without changing the deterministic decision.
+"""
+
 import json
 import os
 import cv2
@@ -33,6 +42,8 @@ UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"mp4", "avi", "mov", "mkv"}
 FPS_ASSUMED = 30
 
+# These thresholds are intentionally simple so the behavior score is explainable
+# and can be traced back to visible eye-contact and missing-face evidence.
 MAX_HEAD_ANGLE = 15
 MIN_EYE_OPENNESS = 0.2
 FRAME_SKIP = 2
@@ -56,11 +67,13 @@ RIGHT_EYE_INDICES = [33, 160, 158, 133, 153, 144]
 # HELPERS
 # =====================================================
 def allowed_file(filename):
+    """Accept only video extensions that OpenCV can process in this service."""
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 
 def calculate_ear(eye):
+    """Compute eye aspect ratio from landmark points to estimate eye openness."""
     A = np.linalg.norm(eye[1] - eye[5])
     B = np.linalg.norm(eye[2] - eye[4])
     C = np.linalg.norm(eye[0] - eye[3])
@@ -74,6 +87,7 @@ def build_user_selector(owner_id):
     return {"$or": selectors}
 
 def touch_owner(owner_id):
+    """Update lightweight owner activity/risk fields without requiring a full profile rewrite."""
     selector = build_user_selector(owner_id)
     now = datetime.utcnow()
 
@@ -99,6 +113,7 @@ def touch_owner(owner_id):
 # VIDEO ANALYSIS
 # =====================================================
 def analyze_video(video_path):
+    """Scan sampled frames and count eye-contact, look-away, and missing-face evidence."""
     cap = cv2.VideoCapture(video_path)
 
     results = {
@@ -177,6 +192,7 @@ def analyze_video(video_path):
 # FEATURE ENGINEERING
 # =====================================================
 def compute_features(summary):
+    """Convert aggregate frame counts into normalized model features."""
     tf = summary["total_frames"]
 
     return {
@@ -193,6 +209,7 @@ def compute_features(summary):
 # =====================================================
 @app.route("/analyze-suspicion", methods=["POST"])
 def analyze_suspicion():
+    """Analyze uploaded owner videos and persist one behavior-session record."""
 
     if "data" not in request.form:
         return jsonify({"error": "Missing data field"}), 400
@@ -273,6 +290,7 @@ def analyze_suspicion():
 
     # -------------------------------------------------
     # Decision + XAI
+    # The rule score makes the decision; XAI and Gemini only explain that result.
     # -------------------------------------------------
     features = compute_features(summary)
     suspicion_score = compute_suspicion_score(features)
@@ -372,6 +390,7 @@ def analyze_suspicion():
 # =====================
 @app.route("/fraud-summary/<owner_id>", methods=["GET"])
 def fraud_summary(owner_id):
+    """Return the accumulated fraud summary for one owner."""
     owner_id = owner_id.strip()
     result = analyze_fraud_for_owner(owner_id, users_col, verification_col, behavior_col, owners_col)
 
@@ -386,6 +405,7 @@ def fraud_summary(owner_id):
 # =====================
 @app.route("/fraud-summary-all", methods=["GET"])
 def fraud_summary_all():
+    """Return fraud summaries for all known owner identifiers."""
     results = []
 
     owner_ids = set()

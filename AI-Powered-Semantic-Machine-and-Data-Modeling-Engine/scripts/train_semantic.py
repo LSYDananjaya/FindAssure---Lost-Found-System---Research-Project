@@ -1,3 +1,11 @@
+"""Train the base semantic embedding model from curated multilingual pairs.
+
+Module overview:
+- Loads curated lost/found text pairs from data/raw.
+- Fine-tunes a sentence-transformer with a train/evaluation split.
+- Saves the resulting model for SemanticEngine startup.
+"""
+
 from sentence_transformers import SentenceTransformer, InputExample, losses, evaluation
 from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator
 from torch.utils.data import DataLoader
@@ -11,6 +19,7 @@ DATA_PATH = os.path.join(BASE_DIR, '../data/raw/text_pairs.json')
 MODEL_SAVE_PATH = os.path.join(BASE_DIR, '../data/models/fine_tuned_bert')
 
 def train_model():
+    """Run curated-pair embedding fine-tuning and save the model artifact."""
     print("=" * 70)
     print("ADVANCED SEMANTIC SIMILARITY FINE-TUNING")
     print("=" * 70)

@@ -1,7 +1,17 @@
+"""Behavioral face-signal scorer for answer videos.
+
+Module overview:
+- Converts emotion, blink, mouth, and landmark stability into a confidence score.
+- Weights emotional consistency and facial behavior separately.
+- Produces simple labels that the Flask service can aggregate per video.
+"""
+
 import numpy as np
 from collections import Counter
 
 class TruthfulnessScorer:
+    """Score whether sampled face behavior looks stable or suspicious."""
+
     def __init__(self):
         self.jitter_low = 0.008
         self.jitter_mid = 0.015
@@ -42,6 +52,7 @@ class TruthfulnessScorer:
         return (left_ear + right_ear) / 2, mar
 
     def score_video(self, emotions, mesh_vecs):
+        """Fuse emotion and facial movement features into one video label."""
         # ---------- Emotion Score ----------
         emotion_map = {
             "neutral": 0.90, "happy": 0.85,

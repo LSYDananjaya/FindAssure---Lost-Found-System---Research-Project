@@ -1,3 +1,11 @@
+"""Location suggestion API for matching lost-owner locations to found items.
+
+Module overview:
+- Loads campus ground/building maps into lookup structures.
+- Chooses the correct matcher based on whether the owner gave hall, floor, building, or ground data.
+- Expands matches from strict to broader stages so uncertain locations still return useful candidates.
+"""
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
@@ -15,6 +23,7 @@ BUILDING_FLOORS = {}
 
 
 def load_location_data():
+    """Load hand-maintained map JSON into in-memory lookup data."""
     global GROUND_LOCATIONS, BUILDING_FLOORS
 
     data_folder = "data"
@@ -34,6 +43,8 @@ load_location_data()
 
 
 class LocationMatcher:
+    """Coordinates ground and building matching for one owner-location request."""
+
     def __init__(self, ground_data: List[Dict], building_data: Dict):
         self.ground_data = ground_data
         self.building_data = building_data
@@ -70,6 +81,7 @@ class LocationMatcher:
         return lookup
 
     def get_matched_items(self, owner: Dict):
+        """Return item IDs whose found locations satisfy the selected confidence stage."""
         owner_loc = owner.get("owner_location")
         floor = owner.get("floor_id")
         hall = owner.get("hall_name")
@@ -99,6 +111,8 @@ class LocationMatcher:
         matched_ids = self._filter_items(category_data, owner_loc, floor_int, hall, stage, matched)
 
         if not matched_ids:
+            # If the selected stage is too narrow, broaden only the item filter.
+            # This avoids returning an empty list when map data is sparse.
             matched = set()
             matched_ids = self._filter_items(category_data, owner_loc, floor_int, hall, 3, matched)
 
@@ -169,6 +183,7 @@ class LocationMatcher:
 
 @app.route("/api/find-items", methods=["POST"])
 def find_items():
+    """Validate the HTTP payload, run location matching, and return candidate item IDs."""
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"success": False, "error": "No data provided"}), 400
@@ -192,6 +207,8 @@ def find_items():
         return jsonify({"success": False, "error": "Stage must be 1–3"}), 400
     
     if stage == 4:
+        # Stage 4 means location confidence is unavailable, so category items
+        # are returned without spatial filtering.
         all_ids = []
         all_locations = set()
 

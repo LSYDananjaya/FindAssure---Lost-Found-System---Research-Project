@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-"""
-batch_extract_found_attributes.py
-==================================
-Offline batch job: runs Gemini attribute extraction on all found_items that
-do NOT yet have `extracted_attributes_json`, then writes results back to MongoDB.
+"""Batch attribute extraction for stored found items.
+
+Module overview:
+- Finds found-item documents that do not yet have extracted attributes.
+- Runs the normalizer's found-item extraction path with rate limiting.
+- Writes structured attributes and searchable tokens back to MongoDB.
 
 Usage:
     cd AI-Powered-Semantic-Machine-and-Data-Modeling-Engine
@@ -39,6 +40,7 @@ BATCH_SIZE = int(os.getenv("BATCH_EXTRACT_BATCH_SIZE", "50"))
 
 
 async def run_batch_extraction():
+    """Process MongoDB found items in batches and store extracted attributes."""
     if not settings.GEMINI_API_KEY:
         logger.warning(
             "GEMINI_API_KEY is not set. Extraction will use passthrough fallback "

@@ -1,6 +1,9 @@
-"""
-Utility script to rebuild FAISS index with improved settings
-Run this after updating to cosine similarity
+"""Rebuild the FAISS semantic index from MongoDB.
+
+Module overview:
+- Removes local index and metadata cache files.
+- Reinitializes SemanticEngine with current cosine-similarity settings.
+- Reloads found items from MongoDB and verifies index/metadata alignment.
 """
 
 import sys
@@ -12,6 +15,7 @@ from app.core.database import get_database
 import asyncio
 
 async def rebuild_index():
+    """Recreate local FAISS artifacts from source database records."""
     print("=" * 60)
     print("REBUILDING SEMANTIC INDEX")
     print("=" * 60)

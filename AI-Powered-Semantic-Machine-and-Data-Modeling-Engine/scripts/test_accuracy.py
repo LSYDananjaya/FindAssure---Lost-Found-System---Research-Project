@@ -1,6 +1,9 @@
-"""
-Test script to validate semantic matching accuracy improvements
-Run this after implementing the changes to see the improvement
+"""Manual semantic-search accuracy check script.
+
+Module overview:
+- Creates representative in-memory found items.
+- Runs sample lost-item queries against SemanticEngine.
+- Prints ranking behavior for quick local inspection.
 """
 
 import sys
@@ -15,6 +18,7 @@ def print_separator(char="=", length=60):
     print(char * length)
 
 async def test_accuracy():
+    """Populate sample items and print search results for fixed queries."""
     print_separator()
     print("SEMANTIC MATCHING ACCURACY TEST")
     print_separator()

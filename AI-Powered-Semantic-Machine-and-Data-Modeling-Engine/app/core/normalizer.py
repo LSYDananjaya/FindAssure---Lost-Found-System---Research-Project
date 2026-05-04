@@ -1,11 +1,9 @@
-"""
-LostTextNormalizer — Gemini-powered text normalization and attribute extraction.
+"""Gemini-powered text normalization and attribute extraction.
 
-Implements:
-  - correct_grammar():            real-time grammar correction for user inputs
-  - normalize_lost_description(): request-time Gemini extraction with MongoDB cache (TTL = 1hr)
-  - extract_found_attributes():   offline/batch Gemini extraction for found items
-  - Graceful fallback: if GEMINI_API_KEY is absent, returns a passthrough struct from raw text.
+Module overview:
+- Corrects grammar without changing user meaning.
+- Extracts structured lost/found item attributes for retrieval and scoring.
+- Caches Gemini outputs and falls back to passthrough structures when Gemini is unavailable.
 """
 
 import hashlib

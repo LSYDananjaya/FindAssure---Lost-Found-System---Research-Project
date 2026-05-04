@@ -1,6 +1,9 @@
-"""
-CandidateRetriever — Merges FAISS vector search + MongoDB $text keyword search
-into a single deduplicated candidate pool per DESIGN_DOC §C1.
+"""Hybrid candidate retrieval for lost/found matching.
+
+Module overview:
+- Pulls semantic candidates from FAISS through SemanticEngine.
+- Pulls keyword candidates from MongoDB text search when tokens are available.
+- Merges and deduplicates both paths before scoring.
 """
 
 import logging
@@ -172,7 +175,8 @@ class CandidateRetriever:
         """
         search_tokens = must_match_tokens + keywords[:5]
 
-        # Run vector and keyword searches (keyword is async)
+        # Run vector and keyword searches separately so either path can return
+        # candidates even when the other path is weak or unavailable.
         vector_candidates = self.get_vector_candidates(
             category=category,
             query_text=query_text,

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import emailjs from '@emailjs/browser'
 import Reveal from '../Reveal'
 import SectionIntro from '../SectionIntro'
@@ -21,6 +21,12 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
   const [statusType, setStatusType] = useState('success') // 'success' or 'error'
   const [statusText, setStatusText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [alert, setAlert] = useState({
+    visible: false,
+    type: 'success',
+    title: '',
+    message: '',
+  })
   
   const formRef = useRef()
   const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || ''
@@ -31,10 +37,38 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
     isConfiguredValue(templateId) &&
     isConfiguredValue(publicKey)
 
+  useEffect(() => {
+    if (!alert.visible) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAlert((currentAlert) => ({
+        ...currentAlert,
+        visible: false,
+      }))
+    }, 5200)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [alert.message, alert.title, alert.type, alert.visible])
+
+  const showContactAlert = (type, title, message) => {
+    setAlert({
+      visible: true,
+      type,
+      title,
+      message,
+    })
+  }
+
   const sendEmail = (e) => {
     e.preventDefault()
     setIsSubmitting(true)
     setSubmitted(false) // clear previous message
+    setAlert((currentAlert) => ({
+      ...currentAlert,
+      visible: false,
+    }))
 
     if (!isEmailConfigured) {
       const formData = new FormData(formRef.current)
@@ -54,6 +88,11 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
       setSubmitted(true)
       setStatusType('success')
       setStatusText('Your email app has been opened with the inquiry details. Send the draft to contact the project team.')
+      showContactAlert(
+        'success',
+        'Email draft ready',
+        'Your email app opened with the inquiry details. Send the prepared draft to reach the project team.'
+      )
       return
     }
 
@@ -68,6 +107,11 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
           setStatusText('Thank you! Your message has been sent successfully.')
           setIsSubmitting(false)
           formRef.current.reset()
+          showContactAlert(
+            'success',
+            'Message sent',
+            'Your inquiry was sent successfully. The FindAssure team will review it soon.'
+          )
         },
         (error) => {
           console.error('EmailJS Error:', error)
@@ -75,6 +119,11 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
           setStatusType('error')
           setStatusText(`Failed to send message. ${error.text || 'Check console for details.'}`)
           setIsSubmitting(false)
+          showContactAlert(
+            'error',
+            'Message not sent',
+            error.text || 'Please try again or contact the project team by email.'
+          )
         }
       )
   }
@@ -214,6 +263,21 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
               </p>
             </form>
           </Reveal>
+        </div>
+      </div>
+
+      <div
+        aria-hidden={!alert.visible}
+        aria-live={alert.type === 'error' ? 'assertive' : 'polite'}
+        className="contact-alert"
+        data-type={alert.type}
+        data-visible={alert.visible}
+        role={alert.type === 'error' ? 'alert' : 'status'}
+      >
+        <span className="contact-alert-mark" aria-hidden="true" />
+        <div>
+          <p className="contact-alert-title">{alert.title}</p>
+          <p className="contact-alert-message">{alert.message}</p>
         </div>
       </div>
     </section>

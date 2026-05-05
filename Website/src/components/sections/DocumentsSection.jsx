@@ -1,20 +1,25 @@
 import Reveal from '../Reveal'
 import SectionIntro from '../SectionIntro'
-import DownloadPlaceholderButton from '../DownloadPlaceholderButton'
+import DownloadActionButton from '../DownloadActionButton'
 
 function DocumentsSection({ documents }) {
   return (
     <section className="section-anchor section-shell" id="documents">
       <div className="shell">
         <SectionIntro
-          description="Every document entry is data-driven and intentionally uses placeholder actions until the final files are approved for publication."
+          description="Approved reports, checklists, and publication materials are grouped here so reviewers can find the project evidence without searching across separate folders."
           eyebrow="Documents"
-          title="A structured document library that is easy to update later."
+          title="Research documents and assessment materials."
         />
 
         <div className="mt-12 grid gap-4">
           {documents.map((document, index) => {
-            const hasDownloadGrid = document.downloads?.length > 1
+            const documentActions = document.downloads?.length
+              ? document.downloads.filter((download) => download.fileUrl)
+              : document.fileUrl
+                ? [{ label: document.actionLabel, fileUrl: document.fileUrl }]
+                : []
+            const hasDownloadGrid = documentActions.length > 1
 
             return (
               <Reveal className="h-full" delay={index * 45} distance={20} key={document.title}>
@@ -27,20 +32,15 @@ function DocumentsSection({ documents }) {
                     <div className="document-card-index inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent-soft)] text-sm font-bold text-[var(--accent-deep)]">
                       0{index + 1}
                     </div>
-                    {document.downloads && !hasDownloadGrid && (
+                    {documentActions.length > 0 && !hasDownloadGrid && (
                       <div className="document-card-actions">
-                        {document.downloads.map((download) => (
-                          <DownloadPlaceholderButton
+                        {documentActions.map((download) => (
+                          <DownloadActionButton
                             fileUrl={download.fileUrl}
                             key={download.label}
                             label={download.label}
                           />
                         ))}
-                      </div>
-                    )}
-                    {!document.downloads && (
-                      <div className="document-card-actions">
-                        <DownloadPlaceholderButton fileUrl={document.fileUrl} label={document.actionLabel} />
                       </div>
                     )}
                   </div>
@@ -55,10 +55,10 @@ function DocumentsSection({ documents }) {
                         </span>
                       </div>
                       <h3 className="mt-4 font-display text-[1.6rem] font-semibold tracking-[-0.04em] text-[var(--ink)]">
-                        {document.type}
+                        {document.title}
                       </h3>
                       <p className="mt-2 text-sm leading-7 text-[var(--muted)]">
-                        {document.title}
+                        {document.type}
                       </p>
                     </div>
                     <p className="document-card-summary text-sm leading-7 text-[var(--muted)]">
@@ -70,8 +70,8 @@ function DocumentsSection({ documents }) {
                   </div>
                   {hasDownloadGrid && (
                     <div className="document-card-download-grid" aria-label={`${document.title} downloads`}>
-                      {document.downloads.map((download) => (
-                        <DownloadPlaceholderButton
+                      {documentActions.map((download) => (
+                        <DownloadActionButton
                           fileUrl={download.fileUrl}
                           key={download.label}
                           label={download.label}

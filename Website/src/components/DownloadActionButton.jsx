@@ -88,7 +88,7 @@ function normalizeDownloadUrls(fileUrl) {
   return directDownloadUrl ? [directDownloadUrl] : []
 }
 
-function DownloadPlaceholderButton({ fileUrl, label }) {
+function DownloadActionButton({ fileUrl, label }) {
   const [isAnimating, setIsAnimating] = useState(false)
   const timeoutRef = useRef(null)
   const directDownloadUrls = normalizeDownloadUrls(fileUrl)
@@ -130,13 +130,13 @@ function DownloadPlaceholderButton({ fileUrl, label }) {
   const directDownloadUrl = directDownloadUrls[0]
   const content = (
     <>
-      <span className="download-placeholder-button-inner">
-        <span className="download-placeholder-icon-shell">
-          <DownloadIcon className="download-placeholder-icon" />
+      <span className="download-action-button-inner">
+        <span className="download-action-icon-shell">
+          <DownloadIcon className="download-action-icon" />
         </span>
-        <span className="download-placeholder-label">{label}</span>
+        <span className="download-action-label">{label}</span>
       </span>
-      <span aria-hidden="true" className="download-placeholder-sheen" />
+      <span aria-hidden="true" className="download-action-sheen" />
     </>
   )
 
@@ -144,11 +144,12 @@ function DownloadPlaceholderButton({ fileUrl, label }) {
     return (
       <a
         aria-disabled="false"
-        className="download-placeholder-button md:min-w-[11rem]"
+        className="download-action-button md:min-w-[11rem]"
         data-animating={isAnimating}
         href={directDownloadUrl}
         onClick={handleClick}
         rel="noopener noreferrer"
+        title={label}
       >
         {content}
       </a>
@@ -158,9 +159,10 @@ function DownloadPlaceholderButton({ fileUrl, label }) {
   return (
     <button
       aria-disabled="true"
-      className="download-placeholder-button md:min-w-[11rem]"
+      className="download-action-button md:min-w-[11rem]"
       data-animating={isAnimating}
       onClick={handleClick}
+      title="Maintained by the project team"
       type="button"
     >
       {content}
@@ -168,4 +170,4 @@ function DownloadPlaceholderButton({ fileUrl, label }) {
   )
 }
 
-export default DownloadPlaceholderButton
+export default DownloadActionButton

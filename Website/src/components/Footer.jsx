@@ -9,9 +9,8 @@ function Footer({ footerLinks, projectMeta }) {
               {projectMeta.name}
             </p>
             <p className="mt-1 text-sm leading-7 text-[var(--muted)]">
-              Public-facing research showcase built for academic review and future
-              updates. Replace placeholder links and team details from the central
-              content data file when final assets are available.
+              Public-facing research showcase for academic review, project
+              documentation, team visibility, and future institutional discussion.
             </p>
           </div>
         </div>

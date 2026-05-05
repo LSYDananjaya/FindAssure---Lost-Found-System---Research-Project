@@ -1,33 +1,98 @@
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import emailjs from '@emailjs/browser'
 import Reveal from '../Reveal'
 import SectionIntro from '../SectionIntro'
+
+const EMAILJS_PLACEHOLDERS = new Set([
+  'YOUR_SERVICE_ID',
+  'YOUR_TEMPLATE_ID',
+  'YOUR_PUBLIC_KEY',
+  'your_service_id_here',
+  'your_template_id_here',
+  'your_public_key_here',
+])
+
+function isConfiguredValue(value) {
+  return Boolean(value && !EMAILJS_PLACEHOLDERS.has(value.trim()))
+}
 
 function ContactSection({ contactCards, contactDetails, projectMeta }) {
   const [submitted, setSubmitted] = useState(false)
   const [statusType, setStatusType] = useState('success') // 'success' or 'error'
   const [statusText, setStatusText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [alert, setAlert] = useState({
+    visible: false,
+    type: 'success',
+    title: '',
+    message: '',
+  })
   
   const formRef = useRef()
+  const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || ''
+  const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || ''
+  const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || ''
+  const isEmailConfigured =
+    isConfiguredValue(serviceId) &&
+    isConfiguredValue(templateId) &&
+    isConfiguredValue(publicKey)
+
+  useEffect(() => {
+    if (!alert.visible) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAlert((currentAlert) => ({
+        ...currentAlert,
+        visible: false,
+      }))
+    }, 5200)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [alert.message, alert.title, alert.type, alert.visible])
+
+  const showContactAlert = (type, title, message) => {
+    setAlert({
+      visible: true,
+      type,
+      title,
+      message,
+    })
+  }
 
   const sendEmail = (e) => {
     e.preventDefault()
     setIsSubmitting(true)
     setSubmitted(false) // clear previous message
+    setAlert((currentAlert) => ({
+      ...currentAlert,
+      visible: false,
+    }))
 
-    // To use this, sign up at https://www.emailjs.com/
-    // Create an Email Service, an Email Template, and get your Public Key from Account -> API Keys
-    // Add your keys here or in a .env file (e.g. VITE_EMAILJS_SERVICE_ID=your_id)
-    const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'YOUR_SERVICE_ID'
-    const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'YOUR_TEMPLATE_ID'
-    const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'YOUR_PUBLIC_KEY'
+    if (!isEmailConfigured) {
+      const formData = new FormData(formRef.current)
+      const name = formData.get('user_name') || ''
+      const email = formData.get('user_email') || ''
+      const subject = formData.get('subject') || `${projectMeta.shortName} research inquiry`
+      const message = formData.get('message') || ''
+      const body = [
+        `Name: ${name}`,
+        `Email: ${email}`,
+        '',
+        String(message),
+      ].join('\n')
 
-    if (serviceId === 'YOUR_SERVICE_ID') {
+      window.location.href = `mailto:${contactDetails.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
       setIsSubmitting(false)
       setSubmitted(true)
-      setStatusType('error')
-      setStatusText('EmailJS is not configured. Please add your credentials in the code or .env file.')
+      setStatusType('success')
+      setStatusText('Your email app has been opened with the inquiry details. Send the draft to contact the project team.')
+      showContactAlert(
+        'success',
+        'Email draft ready',
+        'Your email app opened with the inquiry details. Send the prepared draft to reach the project team.'
+      )
       return
     }
 
@@ -42,6 +107,11 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
           setStatusText('Thank you! Your message has been sent successfully.')
           setIsSubmitting(false)
           formRef.current.reset()
+          showContactAlert(
+            'success',
+            'Message sent',
+            'Your inquiry was sent successfully. The FindAssure team will review it soon.'
+          )
         },
         (error) => {
           console.error('EmailJS Error:', error)
@@ -49,6 +119,11 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
           setStatusType('error')
           setStatusText(`Failed to send message. ${error.text || 'Check console for details.'}`)
           setIsSubmitting(false)
+          showContactAlert(
+            'error',
+            'Message not sent',
+            error.text || 'Please try again or contact the project team by email.'
+          )
         }
       )
   }
@@ -89,16 +164,7 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
               ))}
             </div>
 
-            <Reveal className="mt-8" delay={220} distance={14} variant="scale-soft">
-              <div className="rounded-[1.5rem] border border-dashed border-[color:var(--line)] bg-[var(--canvas)] p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                  System Status
-                </p>
-                <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
-                  The inquiry system is fully active and directly connected to our core research team for prompt review.
-                </p>
-              </div>
-            </Reveal>
+           
           </Reveal>
 
           <Reveal className="surface rounded-[2rem] p-8 md:p-10" delay={80} distance={24} variant="fade-left">
@@ -117,8 +183,8 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
             </div>
 
             <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
-              Send us a message directly from the website. We'll get back to you 
-              as soon as possible using the provided contact details.
+              Send a message through the website. The form either forwards the
+              inquiry directly or opens a prepared email draft for the project team.
             </p>
 
             <form
@@ -196,35 +262,22 @@ function ContactSection({ contactCards, contactDetails, projectMeta }) {
                 </span>
               </p>
             </form>
-
-
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
-              <div className="rounded-[1.4rem] bg-[var(--card-soft)] p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                  Location
-                </p>
-                <p className="mt-2 text-sm text-[var(--ink)]">
-                  {contactDetails.location}
-                </p>
-              </div>
-              <div className="rounded-[1.4rem] bg-[var(--card-soft)] p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                  Phone
-                </p>
-                <p className="mt-2 text-sm text-[var(--ink)]">
-                  {contactDetails.phone}
-                </p>
-              </div>
-              <div className="rounded-[1.4rem] bg-[var(--card-soft)] p-4">
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                  Reference
-                </p>
-                <p className="mt-2 text-sm text-[var(--ink)]">
-                  {projectMeta.shortName} public project website
-                </p>
-              </div>
-            </div>
           </Reveal>
+        </div>
+      </div>
+
+      <div
+        aria-hidden={!alert.visible}
+        aria-live={alert.type === 'error' ? 'assertive' : 'polite'}
+        className="contact-alert"
+        data-type={alert.type}
+        data-visible={alert.visible}
+        role={alert.type === 'error' ? 'alert' : 'status'}
+      >
+        <span className="contact-alert-mark" aria-hidden="true" />
+        <div>
+          <p className="contact-alert-title">{alert.title}</p>
+          <p className="contact-alert-message">{alert.message}</p>
         </div>
       </div>
     </section>

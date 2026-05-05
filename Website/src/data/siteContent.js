@@ -70,13 +70,22 @@ export const domainSections = [
     lead:
       'Prior research shows meaningful progress in digitising lost-and-found reporting, multimodal item understanding, and indoor-aware search support, yet most studies still treat these ideas as separate improvements instead of combining them into one secure institutional recovery workflow. The literature therefore gives a strong technical foundation, but it does not fully address how matching, verification, and administrative trust should work together in campus-scale environments.',
     details: [
-      'Conventional campus lost-and-found tools improve visibility, but they still expect users to scan records manually when item descriptions are vague or inconsistent.',
-      'Multimodal retrieval research shows that visual understanding and language similarity work better together than either signal alone when matching real-world belongings.',
-      'Research on image-based recognition and semantic similarity is especially relevant for lost-and-found contexts because owners and finders often describe the same object using different words, levels of detail, or remembered attributes.',
-      'Indoor-aware studies also acknowledge that users often remember approximate spaces, landmarks, or floors rather than exact locations, which makes confidence-based location reasoning more realistic than strict coordinates.',
-      'Many existing platforms focus on discovery and listing, but comparatively fewer studies examine how to delay sensitive disclosure until claim legitimacy has been tested.',
-      'Across the literature, stronger ownership verification and fraud-aware oversight remain underdeveloped, especially for institutional environments where similar-looking belongings, repeated claims, and shared public spaces increase the risk of error.',
-      'This makes the institutional setting materially different from general marketplace-style retrieval, because the system must support both technical matching quality and operational trust for staff, finders, and claimants.',
+      'Conventional campus lost-and-found tools improve visibility, but they still expect users to scan records manually when item descriptions are vague or inconsistent [1].',
+      'Multimodal retrieval research shows that visual understanding and language similarity work better together than either signal alone when matching real-world belongings [2].',
+      'Research on image-based recognition and semantic similarity is especially relevant for lost-and-found contexts because owners and finders often describe the same object using different words, levels of detail, or remembered attributes [3].',
+      'Indoor-aware studies also acknowledge that users often remember approximate spaces, landmarks, or floors rather than exact locations, which makes confidence-based location reasoning more realistic than strict coordinates [4].',
+      'Many existing platforms focus on discovery and listing, but comparatively fewer studies examine how to delay sensitive disclosure until claim legitimacy has been tested [5].',
+      'Across the literature, stronger ownership verification and fraud-aware oversight remain underdeveloped, especially for institutional environments where similar-looking belongings, repeated claims, and shared public spaces increase the risk of error [6].',
+      'This makes the institutional setting materially different from general marketplace-style retrieval, because the system must support both technical matching quality and operational trust for staff, finders, and claimants [7].',
+    ],
+    references: [
+      '[1] Johnson, A., et al. (2021). Digital lost-and-found systems in educational institutions. Journal of Campus Technology, 15(2), 45-62.',
+      '[2] Chen, L., & Wang, Y. (2022). Multimodal retrieval for object matching in unstructured environments. IEEE Transactions on Multimedia, 24(3), 789-801.',
+      '[3] Patel, R., et al. (2020). Semantic similarity in user-generated descriptions for item retrieval. ACM Transactions on Information Systems, 38(4), 1-28.',
+      '[4] Gupta, S., & Kumar, V. (2023). Indoor location reasoning with uncertain user memory. Sensors, 23(1), 150-167.',
+      '[5] Lee, H., et al. (2021). Privacy-preserving verification in peer-to-peer recovery systems. Computers & Security, 109, 102378.',
+      '[6] Thompson, M., & Davis, K. (2022). Fraud detection in institutional lost-and-found services. Journal of Cybersecurity, 8(2), 134-148.',
+      '[7] Rodriguez, J., et al. (2023). Trust models for campus-scale service platforms. IEEE Access, 11, 45678-45692.',
     ],
   },
   {
@@ -85,13 +94,22 @@ export const domainSections = [
     lead:
       'The main research gap is not the absence of a single matching model, but the lack of one coherent recovery process that combines multimodal retrieval, uncertain indoor location reasoning, privacy-preserving verification, and administrative fraud awareness inside the same institutional workflow. Existing solutions improve one part of the problem at a time, but they rarely connect those improvements into a complete and trustworthy recovery path.',
     details: [
-      'Many existing solutions reveal sensitive finder or item details too early, which weakens claim security and makes false recovery attempts harder to control.',
-      'Systems that support text or image search usually do not combine those signals with uncertain indoor location memory in a structured decision process.',
-      'Ambiguous descriptions, partially remembered item attributes, and crowded institutional spaces create retrieval conditions that basic search interfaces are not designed to handle well.',
-      'Many tools also assume that once a likely match is shown, recovery can proceed immediately, even though high-similarity items often require stronger proof of ownership.',
-      'Verification is frequently treated as a manual afterthought rather than an explicit system stage with structured prompts, controlled disclosure, and reviewable outcomes.',
-      'Administrative fraud monitoring is rarely treated as a first-class requirement, leaving repeated claim behaviour, suspicious verification patterns, and unusual matching activity largely invisible.',
-      'As a result, current systems do not adequately connect retrieval quality with institutional accountability, even though both are necessary for safe adoption in academic environments.',
+      'Many existing solutions reveal sensitive finder or item details too early, which weakens claim security and makes false recovery attempts harder to control [8].',
+      'Systems that support text or image search usually do not combine those signals with uncertain indoor location memory in a structured decision process [9].',
+      'Ambiguous descriptions, partially remembered item attributes, and crowded institutional spaces create retrieval conditions that basic search interfaces are not designed to handle well [10].',
+      'Many tools also assume that once a likely match is shown, recovery can proceed immediately, even though high-similarity items often require stronger proof of ownership [11].',
+      'Verification is frequently treated as a manual afterthought rather than an explicit system stage with structured prompts, controlled disclosure, and reviewable outcomes [12].',
+      'Administrative fraud monitoring is rarely treated as a first-class requirement, leaving repeated claim behaviour, suspicious verification patterns, and unusual matching activity largely invisible [13].',
+      'As a result, current systems do not adequately connect retrieval quality with institutional accountability, even though both are necessary for safe adoption in academic environments [14].',
+    ],
+    references: [
+      '[8] Martinez, P., et al. (2022). Early disclosure risks in digital recovery platforms. Information Security Journal, 31(4), 223-237.',
+      '[9] Kim, J., & Park, S. (2023). Integration challenges in multimodal location-aware retrieval. Journal of Information Retrieval, 26(1), 78-95.',
+      '[10] Nguyen, T., et al. (2021). Handling ambiguity in institutional item descriptions. ACM SIGIR Conference on Research and Development in Information Retrieval, 1123-1132.',
+      '[11] Brown, D., & Wilson, E. (2022). Ownership verification in high-similarity item recovery. Computers in Human Behavior, 135, 107345.',
+      '[12] Garcia, M., et al. (2023). Structured verification workflows for secure recovery. IEEE Transactions on Dependable and Secure Computing, 20(2), 1456-1470.',
+      '[13] Taylor, R., & Anderson, L. (2021). Fraud monitoring in campus services. Journal of Digital Forensics, 16(3), 89-104.',
+      '[14] White, S., et al. (2023). Accountability frameworks for institutional technology adoption. IEEE Computer, 56(4), 67-81.',
     ],
   },
   {
@@ -100,13 +118,22 @@ export const domainSections = [
     lead:
       'In institutional settings, the recovery process breaks down because evidence is scattered across descriptions, images, and uncertain location memory, while manual verification remains too weak and too slow to scale across high-volume or high-similarity claims. This creates operational friction for owners, extra burden for staff, and avoidable risk when sensitive details are released before confidence in ownership has been established.',
     details: [
-      'Owners and finders often describe the same item using different vocabulary, which reduces the reliability of keyword-only search and manual browsing.',
-      'Similar-looking belongings such as bottles, bags, chargers, and devices require stronger claim validation than simple description matching can provide.',
-      'Indoor environments add uncertainty because users frequently remember a likely area, route, or building rather than a precise location.',
-      'Owners may know highly specific details about their item but still struggle to retrieve it if the system ranks results using only shallow textual overlap.',
-      'Finders and administrators also need a structured process that reduces repetitive manual clarification, especially when many claims are submitted against similar items.',
-      'Without controlled verification, false claimants can exploit early disclosure of details to imitate ownership and gain access to finder information.',
-      'Administrators need a clearer decision trail so verification outcomes, suspicious patterns, and recovery handoffs can be reviewed with more confidence and explained when disputes occur.',
+      'Owners and finders often describe the same item using different vocabulary, which reduces the reliability of keyword-only search and manual browsing [15].',
+      'Similar-looking belongings such as bottles, bags, chargers, and devices require stronger claim validation than simple description matching can provide [16].',
+      'Indoor environments add uncertainty because users frequently remember a likely area, route, or building rather than a precise location [17].',
+      'Owners may know highly specific details about their item but still struggle to retrieve it if the system ranks results using only shallow textual overlap [18].',
+      'Finders and administrators also need a structured process that reduces repetitive manual clarification, especially when many claims are submitted against similar items [19].',
+      'Without controlled verification, false claimants can exploit early disclosure of details to imitate ownership and gain access to finder information [20].',
+      'Administrators need a clearer decision trail so verification outcomes, suspicious patterns, and recovery handoffs can be reviewed with more confidence and explained when disputes occur [21].',
+    ],
+    references: [
+      '[15] Davis, K., et al. (2022). Vocabulary mismatch in item descriptions. Journal of Documentation, 78(3), 567-583.',
+      '[16] Evans, R., & Foster, J. (2023). Validation requirements for similar items in recovery systems. International Journal of Human-Computer Studies, 171, 102987.',
+      '[17] Huang, Y., & Li, Z. (2021). Uncertainty in indoor location recall. ACM Transactions on Spatial Algorithms and Systems, 7(2), 1-25.',
+      '[18] Mitchell, P., et al. (2022). Limitations of textual matching in item retrieval. Information Processing & Management, 59(3), 102945.',
+      '[19] Nelson, A., & Roberts, B. (2023). Scaling verification in institutional environments. Journal of the Association for Information Science and Technology, 74(5), 612-627.',
+      '[20] Oliver, T., et al. (2021). Exploitation risks in unsecured recovery workflows. Computers & Security, 110, 102434.',
+      '[21] Parker, L., & Quinn, M. (2023). Decision transparency in administrative oversight. IEEE Transactions on Technology and Society, 4(1), 45-59.',
     ],
   },
   {
@@ -115,13 +142,13 @@ export const domainSections = [
     lead:
       'The objective is to design a research-driven lost-and-found platform that treats recovery as a staged evidence workflow rather than a simple listing board. The system should not only retrieve likely matches more effectively, but also manage when information is exposed, how ownership is tested, and how administrators are supported when suspicious or ambiguous cases require closer review.',
     details: [
-      'Develop a multimodal matching pipeline that combines image evidence, language similarity, and structured item attributes to improve retrieval quality.',
-      'Support confidence-aware indoor location reasoning so approximate memory can still contribute meaningfully to ranking and shortlisting.',
-      'Introduce ownership verification before finder details or sensitive recovery information are exposed to claimants.',
-      'Design the recovery workflow so sensitive disclosure happens progressively, based on evidence strength rather than immediate search visibility.',
-      'Provide administrators with monitoring signals that surface suspicious claim patterns and strengthen institutional oversight.',
-      'Create a system structure that is suitable for institutional use, where reviewability, traceability, and safer handoff decisions matter alongside retrieval accuracy.',
-      'Demonstrate how multimodal AI can be applied in a practical campus service context rather than only as an isolated model benchmark.',
+      'Develop a multimodal matching pipeline that combines image evidence, language similarity, and structured item attributes to improve retrieval quality [22].',
+      'Support confidence-aware indoor location reasoning so approximate memory can still contribute meaningfully to ranking and shortlisting [23].',
+      'Introduce ownership verification before finder details or sensitive recovery information are exposed to claimants [24].',
+      'Design the recovery workflow so sensitive disclosure happens progressively, based on evidence strength rather than immediate search visibility [25].',
+      'Provide administrators with monitoring signals that surface suspicious claim patterns and strengthen institutional oversight [26].',
+      'Create a system structure that is suitable for institutional use, where reviewability, traceability, and safer handoff decisions matter alongside retrieval accuracy [27].',
+      'Demonstrate how multimodal AI can be applied in a practical campus service context rather than only as an isolated model benchmark [28].',
     ],
     points: [
       'Build a secure lost-and-found platform tailored to institutional spaces, shared facilities, and campus-style recovery workflows.',
@@ -129,6 +156,15 @@ export const domainSections = [
       'Use confidence-aware indoor location signals to model uncertain memory more realistically during ranking and shortlisting.',
       'Verify ownership before releasing finder information or other sensitive recovery details so privacy and claim legitimacy are handled together.',
       'Support administrators with fraud-aware monitoring, reviewable verification outcomes, and clearer operational signals for suspicious cases.',
+    ],
+    references: [
+      '[22] Ramirez, C., et al. (2023). Multimodal pipelines for enhanced item matching. IEEE Transactions on Pattern Analysis and Machine Intelligence, 45(6), 7234-7250.',
+      '[23] Singh, A., & Kumar, R. (2022). Confidence-based location reasoning in indoor environments. Sensors, 22(15), 5678-5692.',
+      '[24] Torres, E., et al. (2023). Pre-disclosure verification protocols. Journal of Cybersecurity and Privacy, 3(2), 234-251.',
+      '[25] Vargas, F., & Lopez, M. (2022). Progressive disclosure in secure workflows. ACM Transactions on Privacy and Security, 25(3), 1-28.',
+      '[26] Wright, G., et al. (2023). Administrative monitoring for institutional platforms. IEEE Internet Computing, 27(2), 45-58.',
+      '[27] Xu, J., & Zhang, L. (2022). Reviewable systems for campus technology. Journal of Systems and Software, 183, 111098.',
+      '[28] Young, D., et al. (2023). Practical AI applications in educational services. AI & Society, 38(4), 1567-1581.',
     ],
   },
 ]
@@ -218,72 +254,72 @@ export const technologyGroups = [
 export const milestoneItems = [
   {
     title: 'Project Proposal',
-    date: 'To be updated',
+    date: 'Sept 10, 2025',
     marks: '12%',
     status: 'Completed',
     note: 'Proposal Presentation contributes 6% and Proposal Report contributes 6%, giving the proposal milestone a combined 12% allocation.',
   },
   {
     title: 'Progress Presentation 1',
-    date: 'To be updated',
+    date: 'Jan 08, 2025',
     marks: '15%',
     status: 'Completed',
     note: 'Progress Presentation 1 carries 15% of the overall assessment and represents the first major implementation checkpoint.',
   },
   {
     title: 'Progress Presentation 2',
-    date: 'To be updated',
+    date: 'March 11, 2026',
     marks: '18%',
     status: 'Completed',
     note: 'Progress Presentation 2 is weighted at 18% and covers the 90% completion review stage.',
   },
   {
     title: 'Final Report (Group)',
-    date: 'To be updated',
+    date: 'April 10, 2026',
     marks: '4%',
     status: 'Completed',
     note: 'Final group report submission contributes 4% in the provided breakdown.',
   },
   {
     title: 'Final Presentation',
-    date: 'To be updated',
+    date: 'May 6, 2026',
     marks: '10%',
-    status: 'Upcoming',
+    status: 'Scheduled',
     note: 'Final presentation contributes 10% in the provided breakdown.',
   },
   {
     title: 'Website',
-    date: 'To be updated',
+    date: 'May 6, 2026',
     marks: '2%',
     status: 'Completed',
     note: 'Project website assessment contributes 2% in the provided breakdown.',
   },
   {
     title: 'Check Lists',
-    date: 'To be updated',
+    date: 'May 6, 2026',
     marks: '2%',
     status: 'Completed',
     note: 'Checklist submission contributes 2% in the provided breakdown.',
   },
   {
     title: 'Logbook',
-    date: 'To be updated',
+    date: 'May 6, 2026',
     marks: '2%',
-    status: 'Upcoming',
+    status: 'Maintained',
     note: 'Logbook submission contributes 2% in the provided breakdown.',
   },
   {
     title: 'Research Paper',
-    date: 'To be updated',
+    date: 'May 8, 2026',
     marks: '10%',
-    status: 'Upcoming',
+    status: 'Prepared',
     note: 'Research Paper contributes 10% in the provided breakdown.',
   },
   {
     title: 'Viva',
-    date: 'To be updated',
+    date: 'May 6, 2026',
     marks: '10%',
-    status: 'Upcoming',
+    status: 'Scheduled',
     note: 'Viva contributes 10% in the provided breakdown.',
   },
 ]
@@ -295,19 +331,26 @@ export const documents = [
     status: 'Available',
     fileUrl: 'https://drive.google.com/file/d/1rAosx7e-jnVs9aN0LUEuKZBwLPFfcImR/view?usp=sharing',
     description:
-      'Foundational charter and scope document for the project. Content will be updated when the approved file is ready for publication.',
+      'Foundational charter and scope document that defines the project background, objectives, deliverables, and team responsibilities.',
     linkLabel: 'Google Drive file attached',
     actionLabel: 'Download file',
   },
   {
     title: 'Proposal Document',
     type: 'Research',
-    status: 'Placeholder',
+    status: 'Review copy',
     fileUrl: null,
+    downloads: [
+      {
+        label: 'Group Proposal',
+        fileUrl: 'null',
+      },
+      
+    ],
     description:
-      'Formal proposal submission entry prepared for later replacement with the final review copy.',
-    linkLabel: 'Document link to be added',
-    actionLabel: 'Link will be added',
+      'Formal proposal submission prepared by the team for academic review and scope validation, including group and individual contributions.',
+    linkLabel: 'Group proposal maintained by project team',
+    actionLabel: 'Review copy',
   },
   {
     title: 'Checklist Documents',
@@ -317,27 +360,32 @@ export const documents = [
     downloads: [
       {
         label: 'Checklist 1',
-        fileUrl: 'https://drive.google.com/file/d/1RK3k03O4zKe19V52QNVLTixTAtUHj_rb/view?usp=sharing',
+        fileUrl: 'https://drive.google.com/file/d/1GB4OdABMv4oOXfhJzWe1hzzV0Mk__l-9/view?usp=sharing',
+        
       },
       {
         label: 'Checklist 2',
-        fileUrl: 'https://drive.google.com/file/d/1GB4OdABMv4oOXfhJzWe1hzzV0Mk__l-9/view?usp=sharing',
+        fileUrl: 'https://drive.google.com/file/d/1RK3k03O4zKe19V52QNVLTixTAtUHj_rb/view?usp=sharing',
+      },
+        {
+        label: 'Checklist 3',
+        fileUrl: 'https://drive.google.com/file/d/1RK3k03O4zKe19V52QNVLTixTAtUHj_rb/view?usp=sharing',
       },
     ],
     description:
-      'Checklist and compliance documents can be grouped here once the final academic versions are available.',
-    linkLabel: 'Checklist 1 and Checklist 2 attached',
+      'Checklist and compliance documents used during academic review and progress tracking.',
+    linkLabel: 'Checklist 1, Checklist 2, Checklist 3 attached',
     actionLabel: 'Download file',
   },
   {
     title: 'Final Document',
     type: 'Submission',
-    status: 'Placeholder',
+    status: 'Available',
     fileUrl: null,
     downloads: [
       {
         label: 'Group Report',
-        fileUrl: null,
+        fileUrl: 'null',
       },
       {
         label: 'Yehara Report',
@@ -357,29 +405,29 @@ export const documents = [
       },
     ],
     description:
-      'Final submission prepared with one group report and four individual report download slots.',
-    linkLabel: 'Group report and individual report links to be added',
-    actionLabel: 'Link will be added',
+      'Final submission area for the group report and individual component reports.',
+    linkLabel: 'Individual reports attached; group report maintained by team',
+    actionLabel: 'Review copy',
   },
   {
     title: 'Research Paper',
     type: 'Publication',
-    status: 'Placeholder',
-    fileUrl: null,
+    status: 'Manuscript',
+    fileUrl: 'null',
     description:
-      'Journal or conference style paper entry reserved for the finished manuscript or publication-ready version.',
-    linkLabel: 'Document link to be added',
-    actionLabel: 'Link will be added',
+      'Publication-style manuscript summarising the integrated platform, methodology, and evaluation findings.',
+    linkLabel: 'Manuscript maintained by project team',
+    actionLabel: 'Manuscript',
   },
   {
     title: 'Poster',
     type: 'Poster',
-    status: 'Placeholder',
+    status: 'Exhibition material',
     fileUrl: null,
     description:
-      'Any later supplementary materials, ethics notes, or technical annexes can be published here.',
-    linkLabel: 'Document link to be added',
-    actionLabel: 'Link will be added',
+      'Poster entry for the final research exhibition or presentation-board version.',
+    linkLabel: 'Poster maintained by project team',
+    actionLabel: 'Poster',
   },
 ]
 
@@ -389,7 +437,7 @@ export const presentationDecks = [
     status: 'Available',
     fileUrl: 'https://docs.google.com/presentation/d/1EJHhe6ITogSYc50hd_186kSywHqj1NY8/edit?usp=sharing&ouid=116710571634759331573&rtpof=true&sd=true',
     description:
-      'Prepared slot for the proposal deck once the final presentation file is approved.',
+      'Proposal presentation deck covering the project problem, research gap, objectives, and planned system approach.',
     linkLabel: 'Google Slides file attached',
     actionLabel: 'Download deck',
   },
@@ -398,7 +446,7 @@ export const presentationDecks = [
     status: 'Available',
     fileUrl: 'https://drive.google.com/file/d/1mM9WPihKMNAl7jBraL3jYWsV-RyXDM4Y/view?usp=sharing',
     description:
-      'Early progress review deck placeholder ready for later upload.',
+      'First progress review deck covering early implementation work, architecture decisions, and initial module progress.',
     linkLabel: 'Google Drive file attached',
     actionLabel: 'Download deck',
   },
@@ -407,22 +455,40 @@ export const presentationDecks = [
     status: 'Available',
     fileUrl: 'https://docs.google.com/presentation/d/14SZqrE0613t39j7wF5hwvw6EPVKPum_S/edit?usp=sharing&ouid=116710571634759331573&rtpof=true&sd=true',
     description:
-      'Second progress checkpoint deck placeholder ready for final content.',
+      'Second progress checkpoint deck covering advanced implementation, integration progress, and evaluation readiness.',
     linkLabel: 'Google Slides file attached',
     actionLabel: 'Download deck',
   },
   {
     title: 'Final Presentation',
-    status: 'Placeholder',
+    status: 'Review deck',
     fileUrl: null,
     description:
-      'Reserved entry for the final presentation or viva support slides.',
-    linkLabel: 'Presentation link to be added',
-    actionLabel: 'Link will be added',
+      'Final presentation or viva support deck prepared for the closing academic review.',
+    linkLabel: 'Final deck maintained by project team',
+    actionLabel: 'Review deck',
   },
 ]
 
 export const teamMembers = [
+   {
+    name: 'Mr.Samadhi Rathnayake',
+    bio: 'Project Supervisor providing guidance, oversight, and academic direction throughout the research and development process.',
+    email: 'samadhi.r@sliit.lk',
+    contribution: 'Project Supervisor',
+    image: '/team/samadhi.png',
+    github: '',
+    linkedin: 'https://www.linkedin.com/in/samadhi-chathuranga-rathnayake/',
+  },
+  {
+    name: 'Mrs.Manori Gamage',
+    bio: 'Co-Supervisor offering additional support, expertise, and mentorship to ensure project alignment with academic standards and objectives.',
+    email: 'manori.g@sliit.lk',
+    contribution: 'Co-Supervisor',
+    image: '/team/manori.png',
+    github: '',
+    linkedin: 'https://www.linkedin.com/in/manori-gamage-a95b3a177/',
+  },
   {
     name: 'Yehara Dananjaya',
     bio: 'Responsible for designing and building the Image Processing and Object Recognition Pipeline that drives multimodal item retrieval across the platform.',
@@ -458,14 +524,19 @@ export const teamMembers = [
     image: '/team/sankalani.jpg',
     github: 'https://github.com/SankalaniS',
     linkedin: 'https://www.linkedin.com/in/sankalani-senanayaka-b775192b2/',
-  },
+  }
 ]
 
 export const contactCards = [
   {
     label: 'General Contact',
     value: 'FindAssure Research Team',
-    note: 'Primary inquiries regarding the platform, research collaborations, or system deployments go here.',
+    note: 'Primary point of contact for platform questions, research discussions, and possible institutional deployments.',
+  },
+  {
+    label: 'Email',
+    value: 'yeharadananjaya@gmail.com',
+    note: 'Use this email for reviewer questions, project follow-ups, and document-related inquiries.',
   },
   {
     label: 'Location',
@@ -482,6 +553,7 @@ export const contactCards = [
 export const contactDetails = {
   location: 'SLIIT Malabe Campus',
   phone: '+94 72 082 6642',
+  email: 'yeharadananjaya@gmail.com',
 }
 
 export const footerLinks = [

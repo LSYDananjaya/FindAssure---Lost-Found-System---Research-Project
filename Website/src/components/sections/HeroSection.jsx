@@ -59,7 +59,7 @@ function HeroSection({
               <div className="hero-facts mt-8 flex flex-wrap gap-3">
                 {quickFacts.map((fact, index) => (
                   <Reveal className="inline-flex" delay={index * 45} distance={12} key={fact}>
-                    <span className="hero-fact rounded-full border border-[color:var(--line)] bg-[var(--card-soft)] px-4 py-2 text-sm font-semibold text-[var(--ink)]">
+                    <span className="hero-fact">
                       {fact}
                     </span>
                   </Reveal>

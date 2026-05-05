@@ -139,7 +139,7 @@ function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-50 pt-4 md:pt-5">
+      <header className="site-header fixed inset-x-0 top-0 z-50 pt-4 md:pt-5">
         <div className="shell">
           <div className="mobile-header-wrapper">
             <div className="mobile-header-shell">
@@ -228,6 +228,7 @@ function Header({
           </div>
         </div>
       </header>
+      <div aria-hidden="true" className="site-header-spacer" />
 
       <div
         aria-hidden={!isOpen}

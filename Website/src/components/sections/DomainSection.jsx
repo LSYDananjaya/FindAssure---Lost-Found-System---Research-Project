@@ -219,9 +219,9 @@ function DomainSection({ domainSections, methodologySteps, technologyGroups }) {
     <section className="domain-section section-anchor section-shell section-band" id="domain">
       <div className="shell">
         <SectionIntro
-          description="The domain section now behaves more like a reviewer-friendly scope brief, expanding each research topic into a clearer narrative that can be scanned quickly without losing academic intent."
-          eyebrow="Domain"
-          title="Research context expanded into a richer project scope narrative."
+          description="This section provides a structured overview of the research foundation, identifies gaps in existing solutions, defines the core problem, and outlines the project objectives."
+          eyebrow="Research Domain"
+          title="Context, Gap, Problem, and Objectives"
         />
 
         <div className="domain-scope-shell mt-12">
@@ -232,13 +232,11 @@ function DomainSection({ domainSections, methodologySteps, technologyGroups }) {
                   Project Scope
                 </p>
                 <h3 className="mt-3 font-display text-[clamp(2rem,3vw,3.25rem)] font-semibold tracking-[-0.06em] text-[var(--ink)]">
-                  Four research threads, one clearer explanation path.
+                  Four interconnected research areas forming a cohesive framework.
                 </h3>
               </div>
               <p className="max-w-[42rem] text-[0.98rem] leading-8 text-[var(--muted)]">
-                Select a scope item to read the reviewer-facing breakdown. Each topic expands the original
-                research framing into a stronger narrative while keeping the methodology and platform stack
-                below available as supporting evidence.
+                Click on each topic below to explore the detailed breakdown. Topics link research foundations to methodology and technology stack.
               </p>
             </div>
 
@@ -292,28 +290,39 @@ function DomainSection({ domainSections, methodologySteps, technologyGroups }) {
                     </ul>
                   </div>
                 ) : null}
+
+                {activeSection.references ? (
+                  <div className="domain-scope-references">
+                    <p className="domain-scope-references-label">References</p>
+                    <ol className="domain-scope-references-list">
+                      {activeSection.references.map((ref, index) => (
+                        <li key={index}>{ref}</li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : null}
               </Reveal>
             </div>
           </Reveal>
         </div>
 
-        <div className="domain-detail-layout mt-12 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
+        <div className="domain-detail-layout mt-12 grid gap-8 xl:grid-cols-2">
           <Reveal className="surface domain-methodology rounded-[2rem] p-7 md:p-8" distance={24}>
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                  Methodology workflow
+                  Methodology
                 </p>
                 <h3 className="mt-2 font-display text-3xl font-semibold tracking-[-0.05em] text-[var(--ink)]">
-                  Evidence moves from submission to verified recovery.
+                  From submission to verified recovery: a multi-stage evidence-based process.
                 </h3>
               </div>
               <span className="rounded-full bg-[var(--accent-soft)] px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-[var(--accent-deep)]">
-                Multi-stage process
+                Workflow Stages
               </span>
             </div>
 
-            <div className="mt-8 grid gap-4">
+            <div className="mt-8 grid gap-6">
               {methodologySteps.map((step, index) => (
                 <Reveal delay={80 + index * 45} distance={18} key={step.title}>
                   <div className="grid gap-4 rounded-[1.4rem] border border-[color:var(--line)] bg-[var(--card-soft)] p-5 md:grid-cols-[auto_1fr]">
@@ -338,15 +347,13 @@ function DomainSection({ domainSections, methodologySteps, technologyGroups }) {
             <div className="domain-tech-overview">
               <div className="domain-tech-overview-copy">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                  Technologies Used
+                  Technology Stack
                 </p>
                 <h3 className="mt-2 font-display text-3xl font-semibold tracking-[-0.05em] text-[var(--ink)]">
-                  Full project stack across apps, services, data, and AI systems.
+                  Comprehensive stack spanning user interfaces, backend services, data storage, and AI pipelines.
                 </h3>
                 <p className="mt-4 max-w-[60ch] text-[0.98rem] leading-8 text-[var(--muted)]">
-                  The project combines user-facing interfaces, a Node service layer, persistent storage
-                  systems, and multiple Python AI pipelines. The groups below summarize the architecture
-                  reviewers actually see across the full implementation, not just the website.
+                  The implementation integrates frontend applications, Node.js services, database systems, and specialized Python AI modules. The following groups detail the actual technologies used across the project.
                 </p>
               </div>
               <div className="domain-tech-overview-meta">
@@ -361,7 +368,7 @@ function DomainSection({ domainSections, methodologySteps, technologyGroups }) {
               </div>
             </div>
 
-            <div className="domain-tech-grid mt-7">
+            <div className="domain-tech-grid mt-7 grid gap-6">
               {technologyGroups.map((group, index) => (
                 <Reveal delay={180 + index * 45} distance={16} key={group.label}>
                   <article className="domain-tech-group rounded-[1.5rem] p-5 md:p-6">

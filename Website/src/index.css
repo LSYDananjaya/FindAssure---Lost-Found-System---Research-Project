@@ -173,7 +173,7 @@ img {
 }
 
 .section-anchor {
-  scroll-margin-top: 6rem;
+  scroll-margin-top: 7.25rem;
 }
 
 .eyebrow {
@@ -524,6 +524,13 @@ img {
   box-shadow: 0 14px 24px color-mix(in srgb, var(--accent-soft) 42%, transparent);
 }
 
+.button-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+  transform: none;
+  box-shadow: none;
+}
+
 .button-primary:active {
   transform: scale(0.97);
 }
@@ -596,7 +603,7 @@ img {
   box-shadow: none;
 }
 
-.download-placeholder-button {
+.download-action-button {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -619,8 +626,8 @@ img {
     box-shadow 180ms var(--ease-smooth);
 }
 
-.download-placeholder-button:hover,
-.download-placeholder-button:focus-visible {
+.download-action-button:hover,
+.download-action-button:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 98%, transparent), color-mix(in srgb, var(--accent-soft) 24%, transparent));
@@ -629,7 +636,7 @@ img {
     0 14px 24px color-mix(in srgb, var(--shadow-muted) 72%, transparent);
 }
 
-.download-placeholder-button:focus-visible {
+.download-action-button:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 4px color-mix(in srgb, var(--accent-soft) 72%, transparent),
@@ -637,11 +644,16 @@ img {
     0 14px 24px color-mix(in srgb, var(--shadow-muted) 72%, transparent);
 }
 
-.download-placeholder-button:active {
+.download-action-button:active {
   transform: scale(0.98);
 }
 
-.download-placeholder-button-inner {
+.download-action-button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.download-action-button-inner {
   position: relative;
   z-index: 1;
   display: inline-flex;
@@ -653,7 +665,7 @@ img {
   padding: 0.52rem 1.1rem 0.52rem 0.7rem;
 }
 
-.download-placeholder-icon-shell {
+.download-action-icon-shell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -670,19 +682,19 @@ img {
     filter 180ms var(--ease-smooth);
 }
 
-.download-placeholder-icon {
+.download-action-icon {
   width: 1rem;
   height: 1rem;
   transition: transform 180ms var(--ease-emil-out);
 }
 
-.download-placeholder-label {
+.download-action-label {
   font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-.download-placeholder-sheen {
+.download-action-sheen {
   position: absolute;
   inset: 1px;
   border-radius: inherit;
@@ -693,22 +705,22 @@ img {
   pointer-events: none;
 }
 
-.download-placeholder-button[data-animating="true"] {
+.download-action-button[data-animating="true"] {
   transform: scale(0.985);
 }
 
-.download-placeholder-button[data-animating="true"] .download-placeholder-icon-shell {
+.download-action-button[data-animating="true"] .download-action-icon-shell {
   filter: blur(0.5px);
   transform: translateY(2px);
 }
 
-.download-placeholder-button[data-animating="true"] .download-placeholder-icon {
+.download-action-button[data-animating="true"] .download-action-icon {
   transform: translateY(1px);
 }
 
-.download-placeholder-button[data-animating="true"] .download-placeholder-sheen {
+.download-action-button[data-animating="true"] .download-action-sheen {
   opacity: 0.5;
-  animation: download-placeholder-sheen 220ms var(--ease-out-expo);
+  animation: download-action-sheen 220ms var(--ease-out-expo);
 }
 
 .document-card {
@@ -736,7 +748,7 @@ img {
   align-content: start;
 }
 
-.document-card-actions .download-placeholder-button {
+.document-card-actions .download-action-button {
   width: min(100%, 13.5rem);
 }
 
@@ -749,12 +761,12 @@ img {
   border-top: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
 }
 
-.document-card-download-grid .download-placeholder-button {
+.document-card-download-grid .download-action-button {
   width: 100%;
   min-width: 0;
 }
 
-.document-card-download-grid .download-placeholder-button-inner {
+.document-card-download-grid .download-action-button-inner {
   justify-content: flex-start;
 }
 
@@ -846,8 +858,8 @@ img {
     grid-template-columns: 1fr;
   }
 
-  .document-card-actions .download-placeholder-button,
-  .document-card-download-grid .download-placeholder-button,
+  .document-card-actions .download-action-button,
+  .document-card-download-grid .download-action-button,
   .document-card-link {
     width: 100%;
     max-width: none;
@@ -858,7 +870,7 @@ img {
   }
 }
 
-@keyframes download-placeholder-sheen {
+@keyframes download-action-sheen {
   0% {
     opacity: 0;
     transform: translateX(-135%);
@@ -922,6 +934,23 @@ img {
 
 .nav-link:active {
   transform: scale(0.98);
+}
+
+.site-header {
+  transition:
+    opacity 180ms var(--ease-smooth),
+    transform 220ms var(--ease-emil-out);
+  will-change: transform, opacity;
+}
+
+.site-header-spacer {
+  height: 5.75rem;
+}
+
+@media (min-width: 1024px) {
+  .site-header-spacer {
+    height: 6.75rem;
+  }
 }
 
 .header-shell {
@@ -2809,6 +2838,7 @@ footer a:focus-visible::after {
 
   .button-primary,
   .button-secondary,
+  .site-header,
   .nav-link,
   .header-shell,
   .theme-toggle,
@@ -2831,10 +2861,10 @@ footer a:focus-visible::after {
   .timeline-item,
   .timeline-node,
   .timeline-progress-rail,
-  .download-placeholder-button,
-  .download-placeholder-icon-shell,
-  .download-placeholder-icon,
-  .download-placeholder-sheen,
+  .download-action-button,
+  .download-action-icon-shell,
+  .download-action-icon,
+  .download-action-sheen,
   .domain-scope-topic,
   .domain-tech-group,
   .domain-tech-chip,
@@ -2870,10 +2900,10 @@ footer a:focus-visible::after {
     grid-template-rows: 1fr;
   }
 
-  .download-placeholder-button[data-animating="true"],
-  .download-placeholder-button[data-animating="true"] .download-placeholder-icon-shell,
-  .download-placeholder-button[data-animating="true"] .download-placeholder-icon,
-  .download-placeholder-button[data-animating="true"] .download-placeholder-sheen {
+  .download-action-button[data-animating="true"],
+  .download-action-button[data-animating="true"] .download-action-icon-shell,
+  .download-action-button[data-animating="true"] .download-action-icon,
+  .download-action-button[data-animating="true"] .download-action-sheen {
     animation: none;
     filter: none;
     opacity: 1;

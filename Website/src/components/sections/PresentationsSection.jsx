@@ -1,15 +1,15 @@
 import Reveal from '../Reveal'
 import SectionIntro from '../SectionIntro'
-import DownloadPlaceholderButton from '../DownloadPlaceholderButton'
+import DownloadActionButton from '../DownloadActionButton'
 
 function PresentationsSection({ presentationDecks }) {
   return (
     <section className="section-anchor section-shell section-band" id="slides">
       <div className="shell">
         <SectionIntro
-          description="Presentation decks follow the same data structure as documents, making it straightforward to swap placeholder actions for final files."
+          description="Proposal, progress, and final review decks are listed together so the presentation trail is easy to follow."
           eyebrow="Slides / Presentations"
-          title="Presentation entries prepared for proposal, progress, and final review decks."
+          title="Presentation materials for proposal, progress, and final review."
         />
 
         <div className="mt-12 grid gap-5 md:grid-cols-2">
@@ -39,7 +39,9 @@ function PresentationsSection({ presentationDecks }) {
                   <div className="rounded-[1.2rem] border border-dashed border-[color:var(--line)] bg-[var(--shell)] px-4 py-3 text-sm text-[var(--muted)]">
                     {deck.linkLabel}
                   </div>
-                  <DownloadPlaceholderButton fileUrl={deck.fileUrl} label={deck.actionLabel} />
+                  {deck.fileUrl && (
+                    <DownloadActionButton fileUrl={deck.fileUrl} label={deck.actionLabel} />
+                  )}
                 </div>
               </article>
             </Reveal>

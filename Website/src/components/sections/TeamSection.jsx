@@ -6,7 +6,7 @@ function TeamSection({ teamMembers }) {
     <section className="section-anchor section-shell" id="about">
       <div className="shell">
         <SectionIntro
-          description="Meet the people behind FindAssure — a multidisciplinary team combining AI research, platform engineering, and evaluation expertise."
+          description="Meet the people behind FindAssure - a multidisciplinary team combining AI research, platform engineering, and evaluation expertise."
           eyebrow="About Us"
           title="The research team behind FindAssure."
         />
@@ -20,7 +20,7 @@ function TeamSection({ teamMembers }) {
                     <div className="team-profile-image-wrapper">
                       <img
                         src={member.image}
-                        alt={`${member.name} — ${member.role}`}
+                        alt={`${member.name} - ${member.contribution}`}
                         className="team-profile-image"
                         loading="lazy"
                       />

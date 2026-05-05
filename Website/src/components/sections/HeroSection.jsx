@@ -50,7 +50,7 @@ function HeroSection({
                   Explore research domain
                 </a>
                 <a className="button-secondary" href="#documents">
-                  View publication placeholders
+                  View project documents
                 </a>
               </div>
             </Reveal>
@@ -118,9 +118,9 @@ function HeroSection({
 
             <div className="mt-6 rounded-[1.7rem] border border-[color:var(--line)] bg-[var(--hero-panel)] px-5 py-5">
               <p className="text-sm leading-7 text-[var(--muted)]">
-                The website presents the system as a credible research platform rather
-                than a marketing landing page: submission, matching, verification, and
-                administrative review all remain visible in one coherent frame.
+                The website presents the full research workflow: submission, matching,
+                verification, and administrative review remain visible as one coherent
+                system rather than separate feature claims.
               </p>
             </div>
 

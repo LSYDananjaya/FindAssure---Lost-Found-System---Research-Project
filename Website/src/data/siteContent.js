@@ -261,14 +261,14 @@ export const milestoneItems = [
   },
   {
     title: 'Progress Presentation 1',
-    date: 'Dec 19, 2025',
+    date: 'Jan 08, 2025',
     marks: '15%',
     status: 'Completed',
     note: 'Progress Presentation 1 carries 15% of the overall assessment and represents the first major implementation checkpoint.',
   },
   {
     title: 'Progress Presentation 2',
-    date: 'March 17, 2026',
+    date: 'March 11, 2026',
     marks: '18%',
     status: 'Completed',
     note: 'Progress Presentation 2 is weighted at 18% and covers the 90% completion review stage.',

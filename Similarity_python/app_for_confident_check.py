@@ -580,12 +580,14 @@ def verify_owner():
         previous_best_face_score = None
         current_face_improved = None
 
+        # Rule 1: Missing transcript
         if missing_answer_count > 0:
             is_owner = False
             rejection_reason = (
                 f"Critical failure: Missing valid answer transcript in "
                 f"{missing_answer_count}/{len(enriched)} response(s)."
             )
+         # Rule 2: Any question score <= 25%   
         elif has_zero_match:
             is_owner = False
             rejection_reason = (
@@ -593,6 +595,7 @@ def verify_owner():
                 f"{to_percent(min_score)} similarity (<=25%). Owner failed at least one "
                 "critical question."
             )
+         # Rule 3: Face missing or face check failed   
         elif has_missing_face_video or face_score is None:
             is_owner = False
             if missing_face_video_keys:
@@ -615,6 +618,7 @@ def verify_owner():
                 rejection_reason = (
                     "Critical failure: Face not detected in owner verification video."
                 )
+        # Rule 4: Average audio confidence < 50%
         else:
             if avg_audio_confidence is not None and avg_audio_confidence < LOW_AUDIO_OWNER_THRESHOLD:
                 is_owner = False
@@ -622,18 +626,21 @@ def verify_owner():
                     f"Audio confidence too low ({to_percent(avg_audio_confidence)} < "
                     f"{int(LOW_AUDIO_OWNER_THRESHOLD * 100)}%)."
                 )
+            # Rule 5: Average guessing risk >= 40%
             elif avg_guessing_risk >= AVG_GUESSING_RISK_REJECT_THRESHOLD:
                 is_owner = False
                 rejection_reason = (
                     f"Average guessing risk too high ({to_percent(avg_guessing_risk)} > "
                     f"{int(AVG_GUESSING_RISK_REJECT_THRESHOLD * 100)}%)."
                 )
+            # Rule 6: Multiple high-risk answers (guessing pattern)
             elif avg_guessing_risk >= HIGH_GUESSING_RISK_THRESHOLD and high_guessing_count >= 3:
                 is_owner = False
                 rejection_reason = (
                     "High guessing pattern detected across answers "
                     f"({high_guessing_count}/{len(guessing_risk_scores)} high-risk responses)."
                 )
+            # FINAL CALCULATION: If no rejections, check overall score >= 70%
             else:
                 is_owner = avg_final >= 0.70
                 rejection_reason = None if is_owner else None

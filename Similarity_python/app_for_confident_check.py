@@ -64,10 +64,12 @@ def classify_status(score):
 
 
 def to_percent(v):
+    """Format an internal 0..1 score as a readable percentage string."""
     return None if v is None else f"{int(round(v * 100))}%"
 
 
 def extract_face_score(face_confidence_result):
+    """Average all per-video face overall scores into one face confidence score."""
     if not face_confidence_result:
         return None
     videos = face_confidence_result.get("videos", [])
@@ -82,6 +84,7 @@ def extract_face_score(face_confidence_result):
     return sum(overalls) / len(overalls)
 
 def build_user_selector(owner_id):
+    """Build a MongoDB selector that supports Firebase UID and ObjectId owners."""
     owner_id = str(owner_id).strip()
     selectors = [{"firebaseUid": owner_id}]
     if ObjectId.is_valid(owner_id):
@@ -90,6 +93,7 @@ def build_user_selector(owner_id):
 
 
 def touch_owner(owner_id):
+    """Update owner activity metadata after a verification attempt."""
     selector = build_user_selector(owner_id)
     now = datetime.utcnow()
 
@@ -142,6 +146,7 @@ def trigger_suspicion_async(data, saved_paths):
     form_data = {"data": json.dumps(data)}
 
     def _run():
+        """Background request body so suspicion analysis does not delay verification."""
         try:
             r = requests.post(
                 f"{SUSPICION_SERVICE_URL}/analyze-suspicion",
@@ -161,6 +166,7 @@ def trigger_suspicion_async(data, saved_paths):
 # -----------------------------
 @app.route("/verify-owner", methods=["POST"])
 def verify_owner():
+    """Verify ownership by combining video transcripts, audio behavior, face checks, and answer similarity."""
     start_time = time.time()
     saved_paths = {}
     face_keys = []
@@ -246,6 +252,7 @@ def verify_owner():
         # VIDEO -> TEXT (PARALLEL)
         # -----------------------------
         def process_single_video(answer_data):
+            """Transcribe one answer video and attach audio-confidence diagnostics."""
             key = answer_data["video_key"]
             video_path = saved_paths.get(key)
 

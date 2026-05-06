@@ -2,11 +2,12 @@ import axios from 'axios';
 import FormData from 'form-data';
 import { Readable } from 'stream';
 
-// Python backend URL
+// Flask services used by the ownership verification workflow.
 const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:5000';
 const PYTHON_SUSPICION_BACKEND_URL =
   process.env.PYTHON_SUSPICION_BACKEND_URL || 'http://127.0.0.1:5005';
 
+// One expected answer/question record sent to the Python verification service.
 export interface PythonVerificationAnswer {
   question_id: number;
   video_key: string;
@@ -18,18 +19,21 @@ export interface PythonVerificationAnswer {
   question_weight?: number;
 }
 
+// Full JSON payload attached to the multipart request under the "data" field.
 export interface PythonVerificationRequest {
   owner_id: string;
   category: string;
   answers: PythonVerificationAnswer[];
 }
 
+// Multer file data kept in memory by the Node controller before forwarding.
 export interface VideoFile {
   buffer: Buffer;
   originalname: string;
   mimetype: string;
 }
 
+// Per-question result returned by Python after transcription and scoring.
 export interface PythonVerificationResult {
   question_id: number;
   question_type?: string;
@@ -50,6 +54,7 @@ export interface PythonVerificationResult {
   };
 }
 
+// Overall Python response used to update the verification and item status.
 export interface PythonVerificationResponse {
   owner_id: string;
   category: string;
@@ -70,13 +75,15 @@ export interface PythonVerificationResponse {
 }
 
 /**
- * Call Python backend to verify ownership with video files
+ * Build multipart form-data and call the Python ownership verification service.
+ * The JSON metadata is sent in "data"; each video file is sent using its video_key.
  */
 export const verifyOwnershipWithPython = async (
   data: PythonVerificationRequest,
   videoFiles: Map<string, VideoFile>
 ): Promise<PythonVerificationResponse> => {
   try {
+    // Rebuild form-data when calling multiple Python endpoints because streams are single-use.
     const buildFormData = (): FormData => {
       const formData = new FormData();
 
@@ -99,7 +106,7 @@ export const verifyOwnershipWithPython = async (
     const verifyFormData = buildFormData();
     const suspicionFormData = buildFormData();
 
-    // Fire-and-forget: trigger suspicion analysis in parallel and do not block owner verification.
+    // trigger suspicion analysis in parallel and do not block owner verification.
     void axios
       .post(
         `${PYTHON_SUSPICION_BACKEND_URL}/analyze-suspicion`,

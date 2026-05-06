@@ -18,6 +18,7 @@ import re
 from sentence_transformers import SentenceTransformer, util
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 
+# Constants for text processing
 NEGATIONS = {
     "no", "not", "never", "dont", "don't", "didnt", "didn't",
     "cannot", "can't", "wont", "won't"
@@ -68,10 +69,16 @@ class LocalNLP:
     """Local NLP scorer for comparing one expected answer with one spoken answer."""
 
     def __init__(self):
+        """Load local NLP models and vectorizers once for repeated scoring."""
+        # Load spaCy model for tokenization, POS tagging, and vector similarity
         self.nlp = spacy.load("en_core_web_lg")
+        # Load SentenceTransformer model for semantic embeddings
         self.sbert = SentenceTransformer("all-mpnet-base-v2")
+        # Initialize TF-IDF vectorizer for keyword-based similarity
         self.tfidf = TfidfVectorizer()
+        # Initialize character n-gram vectorizer for spelling/phrase similarity
         self.char_vec = CountVectorizer(analyzer="char", ngram_range=(3, 6))
+        # Cache for embeddings to avoid recomputation
         self.cache_emb = {}
 
     # -----------------------------
@@ -79,6 +86,7 @@ class LocalNLP:
     # -----------------------------
 
     def normalize(self, text):
+        """Lowercase text and remove noisy characters before comparison."""
         if not text:
             return ""
         t = text.lower()
@@ -87,6 +95,7 @@ class LocalNLP:
         return t
 
     def tokenize(self, text):
+        """Run spaCy tokenization on normalized text."""
         return self.nlp(self.normalize(text))
 
     def extract_keywords(self, text):
@@ -98,15 +107,19 @@ class LocalNLP:
         keywords = set()
 
         for t in doc:
+            # Skip punctuation and numbers
             if t.is_punct or t.like_num:
                 continue
 
+            # Skip stop words unless they are negations
             if t.is_stop and t.text.lower() not in NEGATIONS:
                 continue
 
+            # Skip generic words
             if t.lemma_.lower() in GENERIC_WORDS:
                 continue
 
+            # Keep nouns, verbs, adjectives, proper nouns
             if t.pos_ in {"NOUN", "VERB", "ADJ", "PROPN"}:
                 kw = re.sub(r"[^a-z0-9_-]", "", t.lemma_.lower())
                 if kw:
@@ -135,6 +148,7 @@ class LocalNLP:
         return len(keywords) <= 2
 
     def extract_numbers(self, text):
+        """Extract numeric answers from digits and number words."""
         normalized = self.normalize(text)
         values = set(re.findall(r"\b\d+\b", normalized))
         for token in normalized.split():
@@ -144,10 +158,12 @@ class LocalNLP:
         return values
 
     def extract_colors(self, text):
+        """Extract known color words from the answer."""
         normalized = self.normalize(text)
         return {token for token in normalized.split() if token in COLOR_WORDS}
 
     def extract_identifier_tokens(self, text):
+        """Extract brand/model/label style tokens for identifier questions."""
         normalized = self.normalize(text)
         return {
             token for token in normalized.split()
@@ -155,6 +171,7 @@ class LocalNLP:
         }
 
     def extract_boolean_label(self, text):
+        """Map yes/no style text to a simple boolean label."""
         normalized_tokens = set(self.normalize(text).split())
         if normalized_tokens & BOOLEAN_TRUE:
             return "yes"
@@ -167,25 +184,32 @@ class LocalNLP:
         q = self.normalize(question_text)
         founder_norm = self.normalize(founder_answer)
 
+        # Check for boolean questions (yes/no)
         if any(phrase in q for phrase in {
             "is there", "does it", "did it", "was it", "were there", "do you",
             "has it", "have you", "is it", "are there"
         }):
             return "boolean"
+        # Check for numeric questions
         if any(word in q for word in {"number", "serial", "digit", "code", "year", "size", "count", "many"}):
             return "numeric"
+        # Check for color questions
         if "color" in q or self.extract_colors(founder_norm):
             return "color"
+        # Check for brand/identifier questions
         if any(word in q for word in {"brand", "logo", "model", "name", "label", "text", "written", "identifier", "institute"}):
             return "brand_identifier"
+        # Check for location questions
         if any(word in q for word in {"where", "location", "place", "building", "floor", "hall", "room", "area"}):
             return "location"
+        # Default to descriptive
         return "descriptive"
 
     def apply_question_type_rules(self, base_score, question_type, founder, owner):
         """Apply exact-match guards where semantic similarity alone would be too forgiving."""
         config = QUESTION_TYPE_CONFIG.get(question_type, QUESTION_TYPE_CONFIG["descriptive"])
 
+        # Handle boolean questions: strict match required
         if question_type == "boolean":
             founder_bool = self.extract_boolean_label(founder)
             owner_bool = self.extract_boolean_label(owner)
@@ -194,6 +218,7 @@ class LocalNLP:
                     return max(base_score, config["match_floor"]), "boolean_exact_match"
                 return min(base_score, config["mismatch_cap"]), "boolean_mismatch"
 
+        # Handle numeric questions: exact number match required
         elif question_type == "numeric":
             founder_nums = self.extract_numbers(founder)
             owner_nums = self.extract_numbers(owner)
@@ -202,6 +227,7 @@ class LocalNLP:
                     return max(base_score, config["match_floor"]), "numeric_exact_match"
                 return min(base_score, config["mismatch_cap"]), "numeric_mismatch"
 
+        # Handle color questions: exact color match required
         elif question_type == "color":
             founder_colors = self.extract_colors(founder)
             owner_colors = self.extract_colors(owner)
@@ -210,6 +236,7 @@ class LocalNLP:
                     return max(base_score, config["match_floor"]), "color_exact_match"
                 return min(base_score, config["mismatch_cap"]), "color_mismatch"
 
+        # Handle brand/identifier questions: token overlap required
         elif question_type == "brand_identifier":
             founder_ids = self.extract_identifier_tokens(founder)
             owner_ids = self.extract_identifier_tokens(owner)
@@ -218,6 +245,7 @@ class LocalNLP:
                     return max(base_score, config["match_floor"]), "identifier_overlap"
                 return min(base_score, config["mismatch_cap"]), "identifier_mismatch"
 
+        # Handle location questions: keyword overlap required
         elif question_type == "location":
             founder_kw = self.extract_keywords(founder)
             owner_kw = self.extract_keywords(owner)
@@ -233,40 +261,50 @@ class LocalNLP:
     # -----------------------------
 
     def _cosine_sparse(self, X):
+        """Calculate cosine similarity for two sparse vector rows."""
         a = X[0].toarray().ravel()
         b = X[1].toarray().ravel()
         denom = np.linalg.norm(a) * np.linalg.norm(b)
         return 0.0 if denom == 0 else float(np.dot(a, b) / denom)
 
     def tfidf_sim(self, A, B):
+        """Compare keyword sets using TF-IDF cosine similarity."""
         if not A or not B:
             return 0.0
         X = self.tfidf.fit_transform([" ".join(A), " ".join(B)])
         return float(np.clip(self._cosine_sparse(X), 0, 1))
 
     def char_ngram_sim(self, a, b):
+        """Compare text using character n-grams to catch spelling/phrase similarity."""
         if not a or not b:
             return 0.0
         X = self.char_vec.fit_transform([a, b])
         return float(np.clip(self._cosine_sparse(X), 0, 1))
 
     def jaccard(self, A, B):
+        """Calculate set-overlap similarity between founder and owner keywords."""
         return 0.0 if not A or not B else float(len(A & B) / len(A | B))
 
     def embed(self, text):
+        """Return a cached SentenceTransformer embedding for the text."""
+        # Check if embedding is already cached
         if text in self.cache_emb:
             return self.cache_emb[text]
+        # Compute embedding using SentenceTransformer
         emb = self.sbert.encode(text, convert_to_numpy=True)
+        # Cache the embedding for future use
         self.cache_emb[text] = emb
         return emb
 
     def sbert_sim(self, a, b):
+        """Compare answer meaning using SentenceTransformer embeddings."""
         if not a or not b:
             return 0.0
         sim = float(util.cos_sim(self.embed(a), self.embed(b)))
         return float(np.clip((sim + 1) / 2, 0, 1))
 
     def spacy_sim(self, a, b):
+        """Compare answer meaning using spaCy vector similarity."""
         if not a or not b:
             return 0.0
         va, vb = self.nlp(a).vector, self.nlp(b).vector
@@ -278,6 +316,7 @@ class LocalNLP:
     # -----------------------------
 
     def compute_features(self, founder, owner, fk, ok):
+        """Calculate all local similarity features for one answer pair."""
         sf = " ".join(sorted(fk))
         so = " ".join(sorted(ok))
 
@@ -290,6 +329,8 @@ class LocalNLP:
         }
 
     def fuse_score(self, f, coverage):
+        """Fuse local similarity features and apply founder-keyword coverage."""
+        # Compute weighted sum of similarity features
         base = (
             f["tfidf"] * 0.25 +
             f["jaccard"] * 0.25 +
@@ -297,7 +338,7 @@ class LocalNLP:
             f["sbert"] * 0.20 +
             f["spacy"] * 0.15
         )
-        # Coverage acts as a multiplier (0..1). keep as float.
+        # Apply coverage as multiplier and ensure result is in [0,1]
         return float(np.clip(base * float(coverage), 0, 1))
 
     # -----------------------------
@@ -305,10 +346,12 @@ class LocalNLP:
     # -----------------------------
 
     def score_pair(self, founder, owner, question_text="", question_type=None, question_weight=None):
+        """Return the final local similarity score and reasoning for one question."""
         resolved_question_type = question_type or self.infer_question_type(question_text, founder)
         config = QUESTION_TYPE_CONFIG.get(resolved_question_type, QUESTION_TYPE_CONFIG["descriptive"])
         resolved_question_weight = float(question_weight) if question_weight is not None else float(config["weight"])
 
+        # Handle empty owner answers
         if not owner or len(owner.strip()) < 3:
             return {
                 "fused": 0.0,
@@ -322,7 +365,7 @@ class LocalNLP:
         founder_norm = self.normalize(founder)
         owner_norm = self.normalize(owner)
 
-        #  EXACT MATCH CHECK FIRST (handles cases like "toyota" == "toyota")
+        # Check for exact match first
         if founder_norm == owner_norm:
             return {
                 "fused": 1.0,
@@ -340,7 +383,7 @@ class LocalNLP:
                 }
             }
 
-        #  OPPOSITE/NEGATION CHECK (yes vs no, true vs false, etc.)
+        # Check for opposite/negation answers
         opposite_pairs = [
             ("yes", "no"), ("no", "yes"),
             ("true", "false"), ("false", "true"),
@@ -374,19 +417,12 @@ class LocalNLP:
                     }
                 }
 
-        # SUBSTRING MATCH - Only for whole words or meaningful phrases
-        # Split into words for whole word matching
+        # Check for substring/word subset matches
         founder_words = set(founder_norm.split())
         owner_words = set(owner_norm.split())
         
-        # Check if one is a complete subset of the other (whole word match)
-        # IMPORTANT: Both must be non-empty (to avoid empty set matching everything)
         if founder_words and owner_words and len(founder_words) > 0 and len(owner_words) > 0:
-            # Check subset only if both have meaningful words
-            # Prevent empty set from matching 
             if founder_words.issubset(owner_words) or owner_words.issubset(founder_words):
-                # One answer contains all words from the other
-           
                 substring_score = 0.85
                 return {
                     "fused": substring_score,
@@ -404,13 +440,11 @@ class LocalNLP:
                     }
                 }
             
-            # Check for significant word overlap (at least 60% of words match)
             common_words = founder_words & owner_words
             if common_words:
                 overlap_ratio = len(common_words) / max(len(founder_words), len(owner_words))
                 if overlap_ratio >= 0.6:
-                    # Significant word overlap
-                    word_overlap_score = 0.70 + (overlap_ratio * 0.2)  # 70-90% based on overlap
+                    word_overlap_score = 0.70 + (overlap_ratio * 0.2)
                     return {
                         "fused": word_overlap_score,
                         "coverage": overlap_ratio,
@@ -427,9 +461,11 @@ class LocalNLP:
                         }
                     }
 
+        # Extract keywords
         founder_kw = self.extract_keywords(founder)
         owner_kw = self.extract_keywords(owner)
 
+        # Handle generic answers
         if self.is_generic_answer(owner_kw):
             return {
                 "fused": 0.05,
@@ -439,9 +475,10 @@ class LocalNLP:
                 "type_adjustment_reason": None,
             }
 
+        # Check keyword coverage
         coverage = self.keyword_coverage(founder_kw, owner_kw)
 
-        # HARD FAIL if owner misses too many founder keywords.
+        # Hard fail if insufficient coverage
         if coverage < 0.5:
             return {
                 "fused": float(0.05),
@@ -452,6 +489,7 @@ class LocalNLP:
                 "type_adjustment_reason": None,
             }
 
+        # Compute similarity features
         feats = self.compute_features(founder, owner, founder_kw, owner_kw)
         fused = self.fuse_score(feats, coverage)
         fused, type_reason = self.apply_question_type_rules(
@@ -461,7 +499,7 @@ class LocalNLP:
             owner,
         )
 
-        # sanitize everything into native types
+        # Return final result
         return {
             "features": {k: py(v) for k, v in feats.items()},
             "fused": float(py(fused)),

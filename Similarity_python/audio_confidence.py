@@ -46,6 +46,7 @@ VERY_ABNORMAL_WORD_GAP_SEC = 0.90
 
 
 def _safe_round(v, n=3):
+    """Round numeric diagnostics safely for JSON responses."""
     try:
         return round(float(v), n)
     except Exception:
@@ -78,12 +79,14 @@ def extract_audio_from_video(video_path: str) -> str:
 
 
 def _count_words(text: str) -> int:
+    """Count transcript words used for speech rate and filler ratios."""
     if not text:
         return 0
     return len(re.findall(r"\b[a-zA-Z0-9']+\b", text))
 
 
 def _count_fillers(text: str) -> int:
+    """Count filler words that can indicate hesitation."""
     if not text:
         return 0
 
@@ -98,6 +101,7 @@ def _count_fillers(text: str) -> int:
 
 
 def _count_uncertainty_phrases(text: str) -> int:
+    """Count phrases such as 'maybe' or 'not sure' that suggest uncertainty."""
     if not text:
         return 0
     normalized = re.sub(r"[^a-zA-Z0-9\s']", " ", text.lower())
@@ -110,6 +114,7 @@ def _count_uncertainty_phrases(text: str) -> int:
 
 
 def _count_questioning_phrases(text: str) -> int:
+    """Count question-like phrases that suggest the speaker is guessing."""
     if not text:
         return 0
     normalized = re.sub(r"[^a-zA-Z0-9\s'?!]", " ", text.lower())
@@ -123,6 +128,7 @@ def _count_questioning_phrases(text: str) -> int:
 
 
 def _repetition_ratio(text: str) -> float:
+    """Estimate how repetitive the transcript is."""
     if not text:
         return 0.0
     tokens = re.findall(r"\b[a-zA-Z0-9']+\b", text.lower())
@@ -133,6 +139,7 @@ def _repetition_ratio(text: str) -> float:
 
 
 def _load_wav_mono(audio_path: str):
+    """Load a WAV file as a normalized mono float signal."""
     sr, data = wavfile.read(audio_path)
     if data is None:
         return sr, np.array([], dtype=np.float32)
@@ -152,6 +159,7 @@ def _load_wav_mono(audio_path: str):
 
 
 def _estimate_pitch_autocorr(frame: np.ndarray, sr: int) -> float:
+    """Estimate voice pitch for one audio frame using autocorrelation."""
     frame = frame - np.mean(frame)
     if frame.size == 0:
         return 0.0
@@ -298,6 +306,7 @@ def _asr_confidence_score(segments: List[Dict[str, Any]]) -> float:
 
 
 def _pause_metrics(segments: List[Dict[str, Any]]) -> Dict[str, float]:
+    """Measure pauses between Whisper speech segments."""
     if not segments or len(segments) < 2:
         return {
             "avg_pause_sec": 0.0,
@@ -327,6 +336,7 @@ def _pause_metrics(segments: List[Dict[str, Any]]) -> Dict[str, float]:
 
 
 def _word_gap_metrics(segments: List[Dict[str, Any]]) -> Dict[str, float]:
+    """Measure gaps between individual word timestamps."""
     words = []
     for seg in segments or []:
         for w in seg.get("words") or []:
@@ -368,6 +378,7 @@ def _word_gap_metrics(segments: List[Dict[str, Any]]) -> Dict[str, float]:
 
 
 def _speech_rate_score(wpm: float) -> float:
+    """Score whether the speaking speed is within a natural range."""
     if wpm <= 0:
         return 0.20
     if 95 <= wpm <= 155:
@@ -380,6 +391,7 @@ def _speech_rate_score(wpm: float) -> float:
 
 
 def _pause_score(avg_pause_sec: float, long_pause_count: int, very_long_pause_count: int) -> float:
+    """Convert pause duration/counts into a confidence score."""
     score = 1.0
 
     # Stronger penalties for noticeable hesitation.
@@ -397,6 +409,7 @@ def _pause_score(avg_pause_sec: float, long_pause_count: int, very_long_pause_co
 
 
 def _filler_score(filler_rate: float) -> float:
+    """Convert filler-word frequency into a confidence score."""
     if filler_rate <= 0.02:
         return 0.95
     if filler_rate <= 0.05:
@@ -407,6 +420,7 @@ def _filler_score(filler_rate: float) -> float:
 
 
 def _start_latency_score(start_latency_sec: float) -> float:
+    """Score how quickly the owner begins answering after recording starts."""
     if start_latency_sec <= 0.8:
         return 0.95
     if start_latency_sec <= 1.5:

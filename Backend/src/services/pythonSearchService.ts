@@ -5,6 +5,7 @@ const PYTHON_SEMANTIC_BACKEND_URL =
   process.env.PYTHON_BACKEND_URL ||
   'http://127.0.0.1:8001';
 
+// Search query sent from Node to the semantic Python search backend.
 export interface PythonSearchRequest {
   text: string;
   category?: string;
@@ -12,6 +13,7 @@ export interface PythonSearchRequest {
   session_id?: string;
 }
 
+// One matched found item returned by the Python semantic search service.
 export interface PythonSearchMatch {
   id: string;
   description: string;
@@ -20,6 +22,7 @@ export interface PythonSearchMatch {
   reason: string;
 }
 
+// Full search response used by the owner search screens and backend services.
 export interface PythonSearchResponse {
   matches: PythonSearchMatch[];
   total_matches: number;
@@ -30,6 +33,10 @@ export interface PythonSearchResponse {
   corrected_text?: string | null;
 }
 
+/**
+ * Call the Python semantic search service with the owner's lost-item text.
+ * Returns ranked candidate found items and any query correction/context metadata.
+ */
 export const searchLostItemWithPython = async (
   payload: PythonSearchRequest
 ): Promise<PythonSearchResponse> => {

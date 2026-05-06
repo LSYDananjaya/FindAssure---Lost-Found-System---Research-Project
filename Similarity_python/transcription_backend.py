@@ -21,6 +21,7 @@ _model_config: Tuple[str, str, str] | None = None
 
 
 def _resolve_device() -> str:
+    """Choose the Whisper runtime device from env or available hardware."""
     device = os.getenv("WHISPER_DEVICE", "auto").strip().lower()
     if device in {"cuda", "cpu"}:
         return device
@@ -32,6 +33,7 @@ def _resolve_device() -> str:
 
 
 def _resolve_compute_type(device: str) -> str:
+    """Choose Whisper compute precision for the selected device."""
     compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "").strip().lower()
     if compute_type:
         return compute_type

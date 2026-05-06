@@ -13,6 +13,7 @@ class BiFIScorer:
     """Score consistency across face and mesh vectors for a single video."""
 
     def similarity(self, v1, v2):
+        """Return cosine similarity between two feature vectors."""
         if v1 is None or v2 is None:
             return 0.0
         try:
@@ -21,6 +22,7 @@ class BiFIScorer:
             return 0.0
 
     def classify(self, score):
+        """Convert a numeric consistency score into a behavior label."""
         if score >= 0.80:
             return "truthful"
         elif score >= 0.55:
@@ -50,4 +52,5 @@ class BiFIScorer:
         }
 
     def score_all(self, feature_list):
+        """Return the provided per-video feature scores in API response shape."""
         return {"videos": feature_list}

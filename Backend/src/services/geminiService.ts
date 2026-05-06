@@ -74,6 +74,7 @@ type KnowledgeBaseTemplate = {
   weight?: number;
 };
 
+// Maps user-entered category words to the internal fallback question categories.
 const CATEGORY_ALIASES: Record<KnowledgeBaseCategory, string[]> = {
   wallet: ['wallet', 'billfold', 'pocket wallet'],
   handbag: ['handbag', 'bag', 'purse', 'tote', 'shoulder bag', 'ladies bag'],
@@ -90,6 +91,7 @@ const CATEGORY_ALIASES: Record<KnowledgeBaseCategory, string[]> = {
   generic: [],
 };
 
+// Local fallback question bank used when Gemini is unavailable or returns weak output.
 const QUESTION_KNOWLEDGE_BASE: Record<KnowledgeBaseCategory, KnowledgeBaseTemplate[]> = {
   wallet: [
     { question: 'What is the wallet color?' },
@@ -275,6 +277,7 @@ const QUESTION_KNOWLEDGE_BASE: Record<KnowledgeBaseCategory, KnowledgeBaseTempla
   ],
 };
 
+// Extra fallback questions selected when the item description contains matching cue words.
 const DESCRIPTION_DYNAMIC_TEMPLATES: KnowledgeBaseTemplate[] = [
   { question: 'What brand logo is visible?', cues: ['brand', 'logo', 'apple', 'samsung', 'hp', 'dell', 'asus', 'lenovo', 'sony', 'jbl', 'boat', 'anker'] },
   { question: 'What color is the item body?', cues: ['black', 'white', 'blue', 'red', 'green', 'silver', 'gold', 'pink', 'brown', 'gray', 'grey'] },
@@ -288,6 +291,7 @@ const DESCRIPTION_DYNAMIC_TEMPLATES: KnowledgeBaseTemplate[] = [
   { question: 'Any number digits visible?', cues: ['number', 'digit', 'serial', 'imei', 'id'] },
 ];
 
+/** Normalize free text into lowercase searchable tokens. */
 const tokenizeText = (value: string): string[] =>
   value
     .toLowerCase()
@@ -295,6 +299,7 @@ const tokenizeText = (value: string): string[] =>
     .split(/\s+/)
     .filter(Boolean);
 
+/** Detect the best internal knowledge-base category from category and description text. */
 const detectKnowledgeBaseCategory = (category: string, description: string): KnowledgeBaseCategory => {
   const mergedText = `${category} ${description}`.toLowerCase();
 
@@ -310,6 +315,7 @@ const detectKnowledgeBaseCategory = (category: string, description: string): Kno
   return 'generic';
 };
 
+/** Build fallback verification questions from the local knowledge base and description cues. */
 const buildKnowledgeBaseQuestions = (
   category: string,
   description: string,
@@ -362,6 +368,7 @@ const buildKnowledgeBaseQuestions = (
   return uniqueQuestions.slice(0, targetCount);
 };
 
+// Extra prompt instructions that guide Gemini differently for each item category.
 const CATEGORY_SPECIFIC_PROMPTS: Record<KnowledgeBaseCategory, string> = {
   wallet: `Wallet Prompt:
 - Ask about inside details first.
@@ -429,6 +436,7 @@ const CATEGORY_SPECIFIC_PROMPTS: Record<KnowledgeBaseCategory, string> = {
 - Ask one secure detail only careful owner would know.`,
 };
 
+// Patterns that reject weak, unsafe, or ambiguous generated questions.
 const DISALLOWED_QUESTION_PATTERNS: RegExp[] = [
   /\bwhere\b.*\blose|lost\b/i,
   /\bwhen\b.*\blose|lost\b/i,
@@ -437,12 +445,14 @@ const DISALLOWED_QUESTION_PATTERNS: RegExp[] = [
   /\bfirst\b|\bsecond\b|\bthird\b|\btop\b|\bbottom\b|\bleft\b|\bright\b/i,
 ];
 
+// Relative importance used later when questions are scored.
 const QUESTION_LEVEL_WEIGHTS: Record<VerificationQuestionLevel, number> = {
   core: 1.35,
   strong: 1.15,
   supporting: 1.0,
 };
 
+/** Infer the expected answer type so verification can apply stricter scoring rules. */
 const inferQuestionType = (question: string): VerificationQuestionType => {
   const q = question.toLowerCase();
 
@@ -464,6 +474,7 @@ const inferQuestionType = (question: string): VerificationQuestionType => {
   return 'descriptive';
 };
 
+/** Infer how important a question is for ownership proof. */
 const inferQuestionLevel = (question: string, type: VerificationQuestionType): VerificationQuestionLevel => {
   const q = question.toLowerCase();
 
@@ -486,6 +497,7 @@ const inferQuestionLevel = (question: string, type: VerificationQuestionType): V
   return 'supporting';
 };
 
+/** Create the metadata object stored with each verification question. */
 const buildQuestionMetadata = (
   question: string,
   template?: KnowledgeBaseTemplate | null
@@ -502,6 +514,7 @@ const buildQuestionMetadata = (
   };
 };
 
+/** Build a lookup map so known fallback templates can reuse their configured metadata. */
 const buildTemplateLookup = () => {
   const entries = Object.values(QUESTION_KNOWLEDGE_BASE).flat();
   const map = new Map<string, KnowledgeBaseTemplate>();
@@ -513,6 +526,7 @@ const buildTemplateLookup = () => {
 
 const QUESTION_TEMPLATE_LOOKUP = buildTemplateLookup();
 
+/** Generate type, level, and weight metadata for every question. */
 export const deriveQuestionMetadata = (questions: string[]): VerificationQuestionMetadata[] =>
   questions.map((question) =>
     buildQuestionMetadata(
@@ -523,6 +537,7 @@ export const deriveQuestionMetadata = (questions: string[]): VerificationQuestio
 
 const MIN_SECURE_KEYWORD_MATCHES = 2;
 
+// Category-specific keywords used to ensure Gemini includes secure ownership-proof questions.
 const secureKeywordsByCategory: Record<KnowledgeBaseCategory, string[]> = {
   wallet: ['inside', 'card', 'bank', 'hidden', 'slot'],
   handbag: ['inside', 'compartment', 'zip', 'lining', 'tag'],
@@ -539,6 +554,7 @@ const secureKeywordsByCategory: Record<KnowledgeBaseCategory, string[]> = {
   generic: ['mark', 'sticker', 'number', 'attachment', 'feature'],
 };
 
+/** Build the strict Gemini prompt for exactly 10 ownership-confirmation questions. */
 const buildGeminiPrompt = (category: string, description: string): string => {
   const kbCategory = detectKnowledgeBaseCategory(category, description);
   const categoryPrompt = CATEGORY_SPECIFIC_PROMPTS[kbCategory];
@@ -579,6 +595,7 @@ Example format:
 ["Question 1?", "Question 2?", "..."]`;
 };
 
+/** Remove numbering, duplicates, empty values, and ensure each question ends with '?'. */
 const cleanQuestions = (questions: string[]): string[] => {
   const seen = new Set<string>();
   const cleaned: string[] = [];
@@ -595,6 +612,7 @@ const cleanQuestions = (questions: string[]): string[] => {
   return cleaned;
 };
 
+/** Rewrite simple yes/no style questions into descriptive short-answer prompts. */
 const rewriteBinaryQuestion = (question: string): string => {
   const q = question.trim().replace(/\?+$/, '');
   let m = q.match(/^is there\s+(?:an?\s+|any\s+)?(.+)$/i);
@@ -612,9 +630,11 @@ const rewriteBinaryQuestion = (question: string): string => {
   return question.endsWith('?') ? question : `${question}?`;
 };
 
+/** Normalize all generated questions so founder/owner answers can be short phrases. */
 const normalizeQuestionsForPhraseAnswers = (questions: string[]): string[] =>
   questions.map((q) => rewriteBinaryQuestion(q.trim()));
 
+/** Validate Gemini output before accepting it into the verification workflow. */
 const passesGeminiQualityGate = (questions: string[], category: string, description: string): boolean => {
   if (!Array.isArray(questions) || questions.length !== 10) return false;
   if (questions.some((q) => DISALLOWED_QUESTION_PATTERNS.some((rx) => rx.test(q)))) return false;
@@ -705,6 +725,7 @@ const BRAND_WORDS = [
 ];
 const MATERIAL_WORDS = ['leather', 'plastic', 'metal', 'fabric', 'cloth', 'rubber', 'silicone', 'canvas'];
 
+/** Clean a suggested answer and limit it to a short phrase. */
 const sanitizeAnswerPhrase = (value: string): string => {
   const cleaned = value.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!cleaned) return '';
@@ -714,6 +735,7 @@ const sanitizeAnswerPhrase = (value: string): string => {
   return words.join(' ');
 };
 
+/** Find the first dictionary value that appears in the given text. */
 const findFirstWordMatch = (text: string, dictionary: string[]): string | null => {
   const lower = text.toLowerCase();
   for (const item of dictionary) {
@@ -732,6 +754,7 @@ const NEGATIVE_ANSWER_PATTERNS: RegExp[] = [
   /\bdon\'t know\b/i,
 ];
 
+/** Remove unusable suggested answers such as unknown, unclear, or not sure. */
 const normalizeSuggestedAnswer = (answer: string): string => {
   const sanitized = sanitizeAnswerPhrase(answer);
   if (NEGATIVE_ANSWER_PATTERNS.some((rx) => rx.test(sanitized))) {
@@ -740,6 +763,7 @@ const normalizeSuggestedAnswer = (answer: string): string => {
   return sanitized;
 };
 
+/** Expand one-word answers into clearer 2-4 word phrases based on the question type. */
 const ensureThreeToFourWordPhrase = (answer: string, question: string): string => {
   const sanitized = sanitizeAnswerPhrase(answer);
   if (!sanitized) return '';
@@ -761,6 +785,7 @@ const ensureThreeToFourWordPhrase = (answer: string, question: string): string =
   return `${joined} detail`.trim();
 };
 
+/** Infer a safe fallback founder answer only from details already present in the description. */
 const inferAnswerFromDescription = (question: string, description: string): string | null => {
   const q = question.toLowerCase();
   const d = description.toLowerCase();
@@ -820,12 +845,14 @@ const inferAnswerFromDescription = (question: string, description: string): stri
   return null;
 };
 
+/** Build local fallback suggested answers for each generated question. */
 const buildFallbackFounderAnswers = (questions: string[], description: string): string[] =>
   questions.map((q) => {
     const inferred = inferAnswerFromDescription(q, description);
     return inferred ? ensureThreeToFourWordPhrase(inferred, q) : '';
   });
 
+/** Check that a suggested answer is supported by the founder's original description. */
 const isAnswerGroundedInDescription = (answer: string, description: string): boolean => {
   const a = answer.toLowerCase().trim();
   const d = description.toLowerCase();
@@ -836,6 +863,7 @@ const isAnswerGroundedInDescription = (answer: string, description: string): boo
   return answerTokens.some((token) => d.includes(token));
 };
 
+/** Parse Gemini's suggested-answer JSON and sanitize each answer. */
 const parseGeminiAnswers = (text: string): string[] | null => {
   try {
     const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -848,6 +876,10 @@ const parseGeminiAnswers = (text: string): string[] | null => {
   }
 };
 
+/**
+ * Generate short suggested founder answers for the selected questions.
+ * Gemini is used when available, but ungrounded answers fall back to local inference.
+ */
 export const generateSuggestedFounderAnswers = async ({
   category,
   description,

@@ -13,6 +13,7 @@ class TruthfulnessScorer:
     """Score whether sampled face behavior looks stable or suspicious."""
 
     def __init__(self):
+        """Set thresholds and weights used for face-behavior scoring."""
         self.jitter_low = 0.008
         self.jitter_mid = 0.015
         self.blink_low = 0.2
@@ -21,9 +22,11 @@ class TruthfulnessScorer:
         self.behavior_weight = 0.4
 
     def _dist(self, a, b):
+        """Calculate Euclidean distance between two face landmark points."""
         return np.linalg.norm(a - b)
 
     def _compute_eye_mar(self, mesh_reshaped):
+        """Compute eye aspect ratio and mouth aspect ratio from landmarks."""
         left_outer, left_inner = 33, 133
         left_top, left_bottom = 159, 145
         right_outer, right_inner = 263, 362

@@ -15,6 +15,7 @@ class FeatureExtractor:
     """Extract emotion and landmark features from sampled video frames."""
 
     def __init__(self):
+        """Create the MediaPipe FaceMesh detector used for landmark extraction."""
         self.mesh = mp.solutions.face_mesh.FaceMesh(
             # Process sampled frames independently for more robust per-frame detection.
             static_image_mode=True,

@@ -343,7 +343,7 @@ export const documents = [
     downloads: [
       {
         label: 'Group Proposal',
-        fileUrl: 'null',
+        fileUrl: 'https://drive.google.com/file/d/130Sv_FGkYmhdSfTtBpW8r2il1OQWMdXg/view?usp=sharing',
       },
       
     ],
@@ -369,7 +369,7 @@ export const documents = [
       },
         {
         label: 'Checklist 3',
-        fileUrl: 'https://drive.google.com/file/d/1RK3k03O4zKe19V52QNVLTixTAtUHj_rb/view?usp=sharing',
+          fileUrl: 'https://drive.google.com/file/d/1TK8REX_-LDjrsA0X7IfQxc03TLrwYfk_/view?usp=sharing',
       },
     ],
     description:
@@ -385,7 +385,7 @@ export const documents = [
     downloads: [
       {
         label: 'Group Report',
-        fileUrl: 'null',
+        fileUrl: 'https://drive.google.com/file/d/1YP2M8IHgQRINJ1D1hUEWIfDPicbW700s/view?usp=sharing',
       },
       {
         label: 'Yehara Report',
@@ -413,7 +413,7 @@ export const documents = [
     title: 'Research Paper',
     type: 'Publication',
     status: 'Manuscript',
-    fileUrl: 'null',
+    fileUrl: 'https://drive.google.com/file/d/1aQ9url7wPZbEiEl-fM7Oj4r5pZgKQ3Fh/view?usp=sharing',
     description:
       'Publication-style manuscript summarising the integrated platform, methodology, and evaluation findings.',
     linkLabel: 'Manuscript maintained by project team',

@@ -18,12 +18,17 @@ from typing import Optional
 
 from PIL import Image, ImageEnhance
 
+# This enhancer is optional because super-resolution can be expensive and may
+# not help every OCR case. Callers can keep the same interface when disabled.
+
 
 class SwinIREnhancer:
     def __init__(self, enable: bool = True) -> None:
+        """Initialize OCR enhancement settings."""
         self.enable = enable
 
     def enhance_for_ocr(self, image: Image.Image) -> Image.Image:
+        """Enhance an image for OCR using SwinIR when enabled."""
         if not self.enable:
             return image
 

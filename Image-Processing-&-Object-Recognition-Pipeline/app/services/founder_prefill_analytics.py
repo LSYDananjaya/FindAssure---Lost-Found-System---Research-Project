@@ -13,21 +13,28 @@ from app.domain.color_utils import extract_color_from_text, normalize_color
 
 ANALYTICS_VERSION = "founder-prefill-v1"
 
+# Analytics helpers compare founder-provided fields against model prefill
+# evidence. They favor stable percentages and lists over raw text so UI/report
+# consumers can render compact before/after summaries.
+
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
 def _normalize_text(value: Any) -> str:
+    """Normalize text for comparison by lowercasing and collapsing punctuation."""
     if not isinstance(value, str):
         return ""
     return " ".join(_TOKEN_RE.findall(value.lower()))
 
 
 def _tokenize(value: Any) -> List[str]:
+    """Split normalized text into comparison tokens."""
     normalized = _normalize_text(value)
     return normalized.split() if normalized else []
 
 
 def _levenshtein_distance(left: str, right: str) -> int:
+    """Compute edit distance between two strings."""
     if left == right:
         return 0
     if not left:
@@ -75,12 +82,14 @@ def _token_jaccard_change_pct(left_tokens: Sequence[str], right_tokens: Sequence
 
 
 def _round_metric(value: Optional[float]) -> Optional[float]:
+    """Round a metric value while preserving missing values."""
     if value is None:
         return None
     return round(float(value), 2)
 
 
 def _normalize_category(value: Any) -> Optional[str]:
+    """Canonicalize a category value into a comparable string."""
     if not isinstance(value, str) or not value.strip():
         return None
     canonical = canonicalize_label(value)
@@ -88,6 +97,7 @@ def _normalize_category(value: Any) -> Optional[str]:
 
 
 def _flatten_strings(value: Any) -> List[str]:
+    """Collect string values recursively from nested payload data."""
     if isinstance(value, str):
         return [value]
     if isinstance(value, dict):
@@ -107,12 +117,14 @@ def _flatten_strings(value: Any) -> List[str]:
 
 
 def _contains_phrase(text: str, phrase: str) -> bool:
+    """Return whether text contains a phrase after normalization."""
     if not text or not phrase:
         return False
     return f" {phrase} " in f" {text} "
 
 
 def _extract_vocab_matches(texts: Iterable[str], vocabulary: Sequence[str]) -> List[str]:
+    """Find vocabulary phrases that appear in the supplied texts."""
     normalized_texts = [_normalize_text(text) for text in texts if _normalize_text(text)]
     matches: List[str] = []
     for term in vocabulary:
@@ -125,6 +137,7 @@ def _extract_vocab_matches(texts: Iterable[str], vocabulary: Sequence[str]) -> L
 
 
 def _normalize_phrase_list(values: Iterable[Any]) -> List[str]:
+    """Normalize, deduplicate, and sort phrase-like values."""
     normalized: List[str] = []
     for value in values:
         if not isinstance(value, str):
@@ -136,6 +149,7 @@ def _normalize_phrase_list(values: Iterable[Any]) -> List[str]:
 
 
 def _collect_pp2_texts(analysis_evidence: Dict[str, Any]) -> Tuple[List[str], List[str], List[str]]:
+    """Collect category, color, and brand text evidence from PP2 analysis payloads."""
     fused = analysis_evidence.get("fused") if isinstance(analysis_evidence, dict) else {}
     per_view = analysis_evidence.get("per_view") if isinstance(analysis_evidence, dict) else []
     if not isinstance(fused, dict):
@@ -164,6 +178,7 @@ def _collect_pp2_texts(analysis_evidence: Dict[str, Any]) -> Tuple[List[str], Li
 
 
 def _collect_pp1_texts(analysis_evidence: Dict[str, Any]) -> Tuple[List[str], List[str], List[str]]:
+    """Collect category, color, and brand text evidence from PP1 analysis payloads."""
     pp1 = analysis_evidence.get("pp1") if isinstance(analysis_evidence, dict) else {}
     if not isinstance(pp1, dict):
         return [], [], []
@@ -186,6 +201,7 @@ def _collect_side_evidence(
     analysis_mode: Optional[str],
     analysis_evidence: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
+    """Collect comparable evidence for one side of founder prefill analytics."""
     normalized_category = _normalize_category(category)
     spec = CATEGORY_SPECS.get(normalized_category or "", {})
     feature_vocab = spec.get("features", [])
@@ -225,6 +241,7 @@ def _collect_side_evidence(
 
 
 def _overlap_pct(left: Sequence[str], right: Sequence[str]) -> Optional[float]:
+    """Compute percentage overlap between two token sequences."""
     left_set = set(left)
     right_set = set(right)
     union = left_set.union(right_set)
@@ -234,10 +251,12 @@ def _overlap_pct(left: Sequence[str], right: Sequence[str]) -> Optional[float]:
 
 
 def _difference(left: Sequence[str], right: Sequence[str]) -> List[str]:
+    """Return sorted values present on the left side but not the right side."""
     return sorted(set(left).difference(set(right)))
 
 
 def _compute_overall_change(scores: Dict[str, Optional[float]]) -> Optional[float]:
+    """Combine individual change scores into an overall change metric."""
     weights = {
         "categoryChangePct": 20.0,
         "descriptionEditPct": 20.0,
@@ -263,6 +282,7 @@ def _compute_overall_change(scores: Dict[str, Optional[float]]) -> Optional[floa
 
 
 def _matrix_pairs(matrix: Any) -> List[Tuple[Tuple[int, int], float]]:
+    """Extract pair similarity entries from a similarity matrix payload."""
     if not isinstance(matrix, list):
         return []
     pairs: List[Tuple[Tuple[int, int], float]] = []
@@ -277,6 +297,7 @@ def _matrix_pairs(matrix: Any) -> List[Tuple[Tuple[int, int], float]]:
 
 
 def _extract_multiview_verification(analysis_mode: Optional[str], analysis_evidence: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Extract PP2 multiview verification metrics from analysis evidence."""
     if analysis_mode != "pp2" or not isinstance(analysis_evidence, dict):
         return None
     verification = analysis_evidence.get("verification")
@@ -353,6 +374,7 @@ def _extract_multiview_verification(analysis_mode: Optional[str], analysis_evide
 
 
 def compute_founder_prefill_analytics(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Compute before/after analytics for founder prefill evidence payloads."""
     analysis_mode = payload.get("analysisMode")
     predicted_category = payload.get("predictedCategory")
     predicted_description = payload.get("predictedDescription")

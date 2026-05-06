@@ -18,8 +18,9 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     PERF_PROFILE: str = "balanced"
     PP1_MAX_DETECTIONS: int = 1
-    PP1_GEMINI_INCLUDE_IMAGE: bool = False
-    PP1_GEMINI_MODEL: str = "models/gemini-3.1-flash-lite-preview"
+    PP1_ENABLE_REASONER: bool = True
+    PP1_GEMINI_INCLUDE_IMAGE: bool = True
+    PP1_GEMINI_MODEL: str = "models/gemini-2.5-flash"
     PP1_GEMINI_FALLBACK_MODEL: str = "gemini-2.5-flash"
     PP1_GEMINI_TEMPERATURE: float = 0.1
     PP1_GEMINI_MAX_OUTPUT_TOKENS: int = 320
@@ -39,9 +40,9 @@ class Settings(BaseSettings):
     PP2_FORCE_GROUNDING: bool = False
     PP2_DISABLE_MULTIVIEW_VERIFICATION: bool = False
     PP2_OCR_FIRST_TINY_BBOX_AREA_RATIO: float = 0.05
-    PP2_ENABLE_REASONER: bool = False
+    PP2_ENABLE_REASONER: bool = True
     PP2_REASONER_MODE: str = "per_view_and_phase2"
-    PP2_REASONER_MODEL: str = "models/gemini-3.1-flash-lite-preview"
+    PP2_REASONER_MODEL: str = "models/gemini-2.5-flash"
     PP2_REASONER_FALLBACK_MODEL: str = "gemini-2.5-flash"
     PP2_REASONER_THINKING_BUDGET: int = 256
     PP2_REASONER_THINKING_LEVEL: str = "medium"
@@ -51,8 +52,8 @@ class Settings(BaseSettings):
     PP2_REASONER_INCLUDE_IMAGES: bool = True
     PP2_REASONER_MIN_WORDS: int = 24
     PP2_REASONER_ON_NEAR_MISS: bool = True
-    PP2_REASONER_TIMEOUT_S: int = 4
-    PP2_PHASE2_TIMEOUT_S: int = 4
+    PP2_REASONER_TIMEOUT_S: int = 60
+    PP2_PHASE2_TIMEOUT_S: int = 60
     DINO_MODEL_PATH: str | None = None
     DINO_INPUT_SIZE: int = 224
     DINO_ENABLE_AMP: bool = True

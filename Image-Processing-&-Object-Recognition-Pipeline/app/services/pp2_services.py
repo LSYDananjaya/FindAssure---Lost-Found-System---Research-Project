@@ -1,6 +1,13 @@
+"""Legacy PP2 service stubs kept for compatibility with older imports."""
+
 from typing import List, Dict, Any
 import numpy as np
 from app.schemas.pp2_schemas import PP2PerViewResult, PP2VerificationResult, PP2FusedProfile, PP2Response
+
+# The production PP2 path uses pp2_multiview_pipeline, pp2_multiview_verifier,
+# pp2_fusion_service, storage_service, and faiss_service. These lightweight
+# classes remain as a compatibility layer for tests or callers that still import
+# from app.services.pp2_services.
 
 class MultiViewVerifier:
     def verify(self, results: List[PP2PerViewResult]) -> PP2VerificationResult:

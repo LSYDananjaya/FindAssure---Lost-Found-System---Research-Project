@@ -54,6 +54,10 @@ from app.services.gpu_semaphore import gpu_inference_guard
 
 logger = logging.getLogger(__name__)
 
+# Florence is used in several modes: object detection, captioning, OCR,
+# grounding, and lightweight crop analysis. Keep output normalization close to
+# this service so downstream pipeline code receives stable dictionaries.
+
 
 def _lite_worker_main(req_q: Any, resp_q: Any, service_cfg: Dict[str, Any]) -> None:
     """
@@ -124,6 +128,7 @@ class OCRLine:
 
 
 def _safe_str(x: Any) -> str:
+    """Convert a value to a stripped string without propagating conversion failures."""
     if x is None:
         return ""
     if isinstance(x, str):
@@ -135,6 +140,7 @@ def _safe_str(x: Any) -> str:
 
 
 def _dedup_phrases(items: List[str]) -> List[str]:
+    """Deduplicate phrase strings while preserving their first-seen order."""
     out: List[str] = []
     seen = set()
     for it in items or []:
@@ -173,10 +179,12 @@ def _normalize_grounding_candidates(candidates: List[str]) -> List[str]:
 
 
 def _chunk_list(items: List[str], chunk_size: int = 25) -> List[List[str]]:
+    """Split a list into fixed-size chunks for batched processing."""
     return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
 def _normalize_ocr_text(value: Any) -> str:
+    """Normalize OCR output text into a compact single-line string."""
     text = _safe_str(value)
     # Strip model special tokens (</s>, <s>, <pad>, etc.)
     text = re.sub(r"</\s*s\s*>|<s>|<pad>", "", text, flags=re.IGNORECASE)
@@ -188,6 +196,7 @@ def _normalize_ocr_text(value: Any) -> str:
 
 
 def _median(values: List[float], default: float = 0.0) -> float:
+    """Return the median of numeric values, or a default for empty input."""
     clean = sorted(float(v) for v in values if v is not None)
     if not clean:
         return float(default)
@@ -198,6 +207,7 @@ def _median(values: List[float], default: float = 0.0) -> float:
 
 
 def _flatten_numbers(value: Any) -> List[float]:
+    """Recursively collect numeric values from nested payload structures."""
     if isinstance(value, dict):
         out: List[float] = []
         for nested in value.values():
@@ -215,6 +225,7 @@ def _flatten_numbers(value: Any) -> List[float]:
 
 
 def _coerce_bbox(value: Any) -> Optional[Tuple[float, float, float, float]]:
+    """Coerce a nested bbox-like value into a four-number bounding box when possible."""
     if value is None:
         return None
 
@@ -249,6 +260,7 @@ def _coerce_bbox(value: Any) -> Optional[Tuple[float, float, float, float]]:
 
 
 def _union_bbox(boxes: List[Tuple[float, float, float, float]]) -> Tuple[float, float, float, float]:
+    """Return the smallest bounding box that covers all provided boxes."""
     x1 = min(box[0] for box in boxes)
     y1 = min(box[1] for box in boxes)
     x2 = max(box[2] for box in boxes)
@@ -257,6 +269,7 @@ def _union_bbox(boxes: List[Tuple[float, float, float, float]]) -> Tuple[float, 
 
 
 def _join_ocr_tokens(tokens: List[OCRToken]) -> str:
+    """Join OCR tokens into readable text with spacing based on token order."""
     if not tokens:
         return ""
 
@@ -283,6 +296,7 @@ def _join_ocr_tokens(tokens: List[OCRToken]) -> str:
 
 
 def _build_ocr_layout(tokens: List[OCRToken], source: str) -> Dict[str, Any]:
+    """Build structured OCR layout metadata from recognized tokens."""
     clean_tokens = [
         OCRToken(text=_normalize_ocr_text(token.text), bbox=token.bbox)
         for token in tokens
@@ -452,6 +466,7 @@ def _caption_mentions_scene(text: str) -> bool:
 
 
 def _strip_caption_context(text: str) -> str:
+    """Remove scene and person context from a raw caption."""
     cleaned = str(text or "").strip()
     if not cleaned:
         return ""
@@ -558,6 +573,7 @@ def _is_generic_caption(text: str) -> bool:
 
 
 def _normalize_ocr_quote(ocr_text: str, max_words: int = 10, max_chars: int = 80) -> str:
+    """Trim OCR text to a short quote suitable for generated descriptions."""
     cleaned = " ".join(str(ocr_text or "").split()).strip()
     if not cleaned:
         return ""
@@ -689,6 +705,7 @@ class FlorenceService:
         torch_dtype: str = "auto",
         max_new_tokens: int = 512,
     ) -> None:
+        """Initialize Florence model configuration, worker state, and runtime options."""
         self.model_path = model_path
         
         import torch
@@ -722,10 +739,12 @@ class FlorenceService:
         atexit.register(self._shutdown_lite_worker)
 
     def _shutdown_lite_worker(self) -> None:
+        """Stop the lightweight Florence worker during service shutdown."""
         with self._lite_worker_lock:
             self._stop_lite_worker_locked()
 
     def _start_lite_worker_locked(self) -> None:
+        """Start the lightweight Florence worker while the worker lock is held."""
         proc = self._lite_worker_proc
         if proc is not None and proc.is_alive():
             return
@@ -751,6 +770,7 @@ class FlorenceService:
         self._lite_worker_proc = proc
 
     def _stop_lite_worker_locked(self) -> None:
+        """Stop and clear the lightweight Florence worker while the worker lock is held."""
         proc = self._lite_worker_proc
         req_q = self._lite_req_q
         resp_q = self._lite_resp_q
@@ -793,6 +813,7 @@ class FlorenceService:
         self._lite_resp_q = None
 
     def _next_lite_req_id_locked(self) -> int:
+        """Return the next lightweight-worker request id while the worker lock is held."""
         self._lite_req_counter += 1
         return int(self._lite_req_counter)
 
@@ -800,6 +821,7 @@ class FlorenceService:
     # Model loading / core runner
     # ----------------------------
     def _cache_key(self) -> Tuple[str, str, str, bool]:
+        """Build the cache key that identifies the loaded model configuration."""
         return (
             os.path.abspath(self.model_path),
             str(self.device),
@@ -856,6 +878,7 @@ class FlorenceService:
             original_check_imports = dynamic_module_utils.check_imports
 
             def custom_check_imports(filename):
+                """Filter optional imports during dynamic model loading."""
                 try:
                     return original_check_imports(filename)
                 except ImportError as e:
@@ -1091,6 +1114,7 @@ class FlorenceService:
 
     def caption(self, image: Image.Image, detailed: bool = True, profile: Optional[str] = None) -> str:
         # Try multiple levels of detail if requested
+        """Generate a caption for an image using the configured vision model profile."""
         tasks = ["<MORE_DETAILED_CAPTION>", "<DETAILED_CAPTION>", "<CAPTION>"] if detailed else ["<CAPTION>"]
         
         for task in tasks:
@@ -1140,9 +1164,11 @@ class FlorenceService:
             return ""
 
     def _extract_ocr_region_tokens(self, payload: Any) -> List[OCRToken]:
+        """Extract OCR token text and boxes from structured OCR payloads."""
         tokens: List[OCRToken] = []
 
         def _append_token(text_value: Any, bbox_value: Any) -> None:
+            """Append one OCR token to the current token list when text and bbox are valid."""
             text = _normalize_ocr_text(text_value)
             bbox = _coerce_bbox(bbox_value)
             if not text or bbox is None:
@@ -1150,6 +1176,7 @@ class FlorenceService:
             tokens.append(OCRToken(text=text, bbox=bbox))
 
         def _walk(value: Any) -> None:
+            """Recursively walk OCR payload structures looking for token candidates."""
             if isinstance(value, dict):
                 token_items = value.get("tokens")
                 if isinstance(token_items, list):
@@ -1218,6 +1245,7 @@ class FlorenceService:
         return deduped
 
     def _parse_plain_ocr_output(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize plain OCR model output into the structured OCR response format."""
         plain_lines: List[str] = []
 
         for key in ("text", "ocr", "<OCR>"):
@@ -1304,10 +1332,12 @@ class FlorenceService:
 
     @staticmethod
     def _resize_for_lite(image: Image.Image, max_side: int = 512) -> Image.Image:
+        """Resize an image to the lightweight model input size."""
         return FlorenceService._resize_with_max_side(image, max_side=max_side)
 
     @staticmethod
     def _resize_with_max_side(image: Image.Image, max_side: int) -> Image.Image:
+        """Resize an image so its longest side does not exceed the requested limit."""
         if not isinstance(image, Image.Image):
             return image
         w, h = image.size
@@ -1324,6 +1354,7 @@ class FlorenceService:
 
     @staticmethod
     def _run_with_timeout(fn, timeout_ms: int, *args, **kwargs):
+        """Run a callable in a worker thread and return or raise on timeout."""
         timeout_sec = max(1, int(timeout_ms)) / 1000.0
         last_exc = None
         for attempt in range(2):  # 1 initial + 1 retry
@@ -1395,6 +1426,7 @@ class FlorenceService:
 
     @staticmethod
     def _encode_lite_image(image: Image.Image, jpeg_quality: int) -> bytes:
+        """Encode an image as JPEG bytes for lightweight worker transport."""
         safe_quality = max(35, min(95, int(jpeg_quality)))
         buf = io.BytesIO()
         image.convert("RGB").save(buf, format="JPEG", quality=safe_quality, optimize=True)
@@ -1407,6 +1439,7 @@ class FlorenceService:
         timeout_ms: int,
         jpeg_quality: int,
     ) -> Dict[str, Any]:
+        """Send a lightweight-analysis request to the worker and wait up to the timeout."""
         if not hasattr(self, "_lite_worker_lock"):
             return self._run_with_timeout(
                 self._analyze_crop_lite_core,
@@ -1459,10 +1492,12 @@ class FlorenceService:
 
     @staticmethod
     def _is_lite_nonempty(caption_text: str, ocr_text: str) -> bool:
+        """Return whether lightweight analysis produced useful caption or OCR text."""
         return bool(str(caption_text or "").strip()) or bool(str(ocr_text or "").strip())
 
     @staticmethod
     def _lite_reason(caption_text: str, ocr_text: str) -> str:
+        """Explain whether lightweight analysis produced usable text evidence."""
         has_caption = bool(str(caption_text or "").strip())
         has_ocr = bool(str(ocr_text or "").strip())
         if has_caption and has_ocr:
@@ -1474,6 +1509,7 @@ class FlorenceService:
         return "ok_empty_ocr"
 
     def _analyze_crop_lite_core(self, crop: Image.Image, profile_key: str) -> Dict[str, Any]:
+        """Run the core lightweight crop analysis path and return normalized evidence."""
         lite_prompt = (
             "Return only what you can see about the main object. "
             "Use one short factual sentence. If unsure, return empty."
@@ -1559,6 +1595,7 @@ class FlorenceService:
 
     @staticmethod
     def _ocr_first_reason(caption_text: Any, ocr_text: Any) -> str:
+        """Build a reason string for OCR-first analysis outcome logging."""
         has_caption = bool(str(caption_text or "").strip())
         has_ocr = bool(str(ocr_text or "").strip())
         if has_caption and has_ocr:
@@ -1595,6 +1632,7 @@ class FlorenceService:
         detail_image = self._resize_with_max_side(image_or_crop, max_side=caption_max_side)
 
         def _img_wh(img: Any) -> Optional[Tuple[int, int]]:
+            """Return image width and height when available."""
             if isinstance(img, Image.Image):
                 return (int(img.width), int(img.height))
             return None
@@ -1646,6 +1684,7 @@ class FlorenceService:
         }
 
         def _record_attempt(source: str, status: str, reason: str, elapsed_ms: float, **extra: Any) -> None:
+            """Record one OCR-first attempt with timing and status metadata."""
             florence_meta = raw.get("florence", {})
             if not isinstance(florence_meta, dict):
                 florence_meta = {}
@@ -1665,6 +1704,7 @@ class FlorenceService:
             raw["florence"] = florence_meta
 
         def _try_timeout_recovery(stage_name: str) -> bool:
+            """Attempt timeout recovery for an OCR-first stage and report whether it succeeded."""
             nonlocal ocr_text, ocr_text_display, ocr_lines, ocr_layout_source
             florence_meta = raw.get("florence", {})
             if not isinstance(florence_meta, dict):
@@ -1731,6 +1771,7 @@ class FlorenceService:
             return False
 
         def _safe_payload() -> Dict[str, Any]:
+            """Build a safe fallback payload from OCR-first intermediate state."""
             timings["total_ms"] = round((time.perf_counter() - start) * 1000.0, 2)
             meta = raw.get("ocr_first", {})
             if isinstance(meta, dict):
@@ -1945,6 +1986,7 @@ class FlorenceService:
                 raw_grounding_labels: List[str] = []
 
                 def _run_grounding_candidates(candidates: List[str]) -> List[str]:
+                    """Ground candidate phrases and return the phrases with visual support."""
                     normalized = _normalize_grounding_candidates(candidates)
                     if not normalized:
                         return []
@@ -2288,9 +2330,11 @@ class FlorenceService:
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         def _ocr_task():
+            """Run OCR extraction for the current crop in a parallel task."""
             return self.ocr_structured(crop, profile=profile_key)
 
         def _color_vqa_task():
+            """Run color VQA for the current crop in a parallel task."""
             color_q = (
                 "What is the primary color of the OBJECT (not the background)? "
                 "Answer with a short phrase including shade/tone if visible (e.g., 'dark gray', 'navy blue', 'matte black'). "
@@ -2302,6 +2346,7 @@ class FlorenceService:
             return val
 
         def _key_count_task():
+            """Run key-count VQA for the current crop in a parallel task."""
             if canonical_label != "Key":
                 return None
             kc_q = "How many separate keys are visible in this image? Answer with a single integer."
@@ -2454,6 +2499,7 @@ class FlorenceService:
             
             # Helper to run grounding on a list of candidates
             def run_grounding_for_list(candidates: List[str]) -> List[str]:
+                """Ground a list of candidate phrases against the current crop."""
                 normalized = _normalize_grounding_candidates(candidates)
                 if not normalized:
                     return []

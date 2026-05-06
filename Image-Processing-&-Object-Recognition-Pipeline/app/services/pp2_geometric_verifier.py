@@ -10,6 +10,10 @@ import numpy as np
 from PIL import Image
 from typing import List, Dict, Union
 
+# ORB/RANSAC is intentionally a supporting signal: many lost-and-found objects
+# have weak texture, so geometric failure should not automatically override all
+# embedding and semantic evidence.
+
 class GeometricVerifier:
     """Runs ORB feature matching and RANSAC homography checks."""
 
@@ -19,6 +23,7 @@ class GeometricVerifier:
     MIN_INLIER_RATIO = 0.15
 
     def _ensure_numpy(self, img: Union[np.ndarray, Image.Image]) -> np.ndarray:
+        """Convert PIL images to NumPy arrays while leaving arrays unchanged."""
         if isinstance(img, Image.Image):
             return np.array(img)
         return img

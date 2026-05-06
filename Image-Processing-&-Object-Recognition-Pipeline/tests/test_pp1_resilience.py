@@ -119,7 +119,7 @@ class TestUnifiedPipelineGeminiFallback(unittest.TestCase):
         self.assertEqual(row["label"], "Wallet")
         self.assertEqual(row["final_description"], row["detailed_description"])
         self.assertIn("wallet", row["final_description"].lower())
-        self.assertIn("the text \"visa\" is visible on the surface", row["final_description"].lower())
+        self.assertIn("the text \"visa\" is visible", row["final_description"].lower())
         self.assertNotIn("notable details:", row["final_description"].lower())
         self.assertNotIn("visible details include", row["final_description"].lower())
         self.assertNotIn("visible text reads", row["final_description"].lower())
@@ -169,6 +169,59 @@ class TestUnifiedPipelineGeminiFallback(unittest.TestCase):
         self.assertEqual(row["status"], "accepted")
         self.assertEqual(row["message"], "Extracted successfully")
         self.assertNotIn("gemini_error", row["raw"])
+
+    def test_success_description_is_item_only_and_punctuated(self):
+        pipeline = _build_test_pipeline(
+            {
+                "status": "accepted",
+                "message": "Extracted successfully",
+                "label": "Helmet",
+                "color": "black",
+                "category_details": {
+                    "features": ["clear visor", "red and white logo"],
+                    "defects": ["visor scratch"],
+                    "attachments": ["chin strap"],
+                },
+                "key_count": None,
+                "final_description": (
+                    "A black helmet The helmet has a red and white logo on it. "
+                    "A hand is holding it over a tiled floor."
+                ),
+                "detailed_description": (
+                    "a helmet on their leg. The helmet is black and has a red logo on it. "
+                    "It includes visor. It shows visor scratch."
+                ),
+                "tags": ["helmet"],
+            }
+        )
+        pipeline.yolo.detect_objects.return_value = [
+            SimpleNamespace(label="Helmet", confidence=0.95, bbox=(2, 2, 30, 30))
+        ]
+        pipeline.florence.analyze_crop.return_value = {
+            "caption": "A black helmet with a clear visor.",
+            "ocr_text": "832",
+            "grounded_features": ["clear visor", "red and white logo"],
+            "grounded_defects": ["visor scratch"],
+            "grounded_attachments": ["chin strap"],
+            "color_vqa": "black",
+            "raw": {},
+        }
+        path = _write_temp_image()
+        try:
+            out = pipeline.process_pp1(path)
+        finally:
+            os.remove(path)
+
+        desc = out[0]["final_description"]
+        desc_lower = desc.lower()
+        self.assertIn("black helmet", desc_lower)
+        self.assertIn("red and white logo", desc_lower)
+        self.assertIn("clear visor", desc_lower)
+        self.assertIn("visor scratch", desc_lower)
+        self.assertNotIn(" on their leg", desc_lower)
+        self.assertNotIn("hand", desc_lower)
+        self.assertNotIn("floor", desc_lower)
+        self.assertNotIn("helmet the helmet", desc_lower)
 
     def test_pp1_timing_log_includes_stage_breakdown_and_reasoner_label(self):
         pipeline = _build_test_pipeline(

@@ -178,7 +178,7 @@ The service uses environment-backed settings from `app/config/settings.py` and `
 - `FAISS_MAPPING_PATH`: default `./data/faiss_mapping.json`
 - `GOOGLE_API_KEY` or `GEMINI_API_KEY`: optional Gemini access
 - `PP2_ENABLE_REASONER`: default `False`
-- `PP2_REASONER_MODEL`: default `models/gemini-3.1-flash-lite-preview`
+- `PP2_REASONER_MODEL`: default `models/gemini-2.5-flash`
 - `PP2_REASONER_FALLBACK_MODEL`: default `gemini-2.5-flash`
 - `PP2_REASONER_THINKING_BUDGET`: default `256`
 - `PP2_REASONER_THINKING_LEVEL`: default `medium`

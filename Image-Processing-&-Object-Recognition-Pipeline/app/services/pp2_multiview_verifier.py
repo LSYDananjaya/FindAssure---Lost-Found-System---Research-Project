@@ -19,6 +19,10 @@ from app.domain.color_utils import normalize_color as _shared_normalize_color, b
 
 logger = logging.getLogger(__name__)
 
+# Verification combines numeric similarity with semantic rescue rules. The
+# category groups below tune thresholds for objects that are visually hard from
+# different angles versus objects that should remain stricter.
+
 
 class MultiViewVerifier:
     """Applies PP2 pair selection and verification rules."""
@@ -101,10 +105,12 @@ class MultiViewVerifier:
     }
 
     def __init__(self, geometric_service: GeometricVerifier):
+        """Initialize the verifier with its geometric verification service."""
         self.geometric_service = geometric_service
 
     @staticmethod
     def _clamp01(value: float) -> float:
+        """Clamp a numeric value into the inclusive 0-to-1 range."""
         return max(0.0, min(1.0, float(value)))
 
     def compute_cosine_matrix(self, vectors: List[np.ndarray]) -> List[List[float]]:
@@ -145,10 +151,12 @@ class MultiViewVerifier:
 
     @staticmethod
     def _normalize_color(s: str) -> str:
+        """Normalize a raw color string using shared color utilities."""
         return _shared_normalize_color(s)
 
     @staticmethod
     def _bucket_color(normalized: str) -> str:
+        """Map a normalized color into a shared comparison bucket."""
         return _shared_bucket_color(normalized)
 
     def semantic_consistency_checks(self, per_view: List[PP2PerViewResult]) -> List[str]:
@@ -175,6 +183,7 @@ class MultiViewVerifier:
 
     @classmethod
     def _resolve_mode_thresholds(cls, decision_view_count: int) -> str:
+        """Resolve verifier threshold mode from the number of decision views."""
         if decision_view_count == cls.TWO_VIEW_DECISION_VIEW_COUNT:
             return cls.MODE_TWO_VIEW
         if decision_view_count == cls.THREE_VIEW_DECISION_VIEW_COUNT:
@@ -183,6 +192,7 @@ class MultiViewVerifier:
 
     @classmethod
     def _normalize_group_label_key(cls, category: Optional[str]) -> Optional[str]:
+        """Normalize a category label for threshold group lookup."""
         raw = str(category or "").strip()
         if not raw:
             return None
@@ -192,6 +202,7 @@ class MultiViewVerifier:
 
     @classmethod
     def _resolve_category_group(cls, category: Optional[str]) -> Optional[str]:
+        """Resolve the verifier threshold group for a category."""
         canonical = cls._normalize_group_label_key(category)
         if not canonical:
             return None
@@ -221,6 +232,7 @@ class MultiViewVerifier:
         group: str,
         base_override: Optional[float],
     ) -> Optional[float]:
+        """Resolve a group threshold from direct settings, base overrides, or defaults."""
         if mode not in cls.MODE_GROUP_DEFAULTS:
             return None
         if group not in cls.MODE_GROUP_DEFAULTS[mode]:
@@ -240,6 +252,7 @@ class MultiViewVerifier:
 
     @classmethod
     def get_thresholds(cls, mode: str, canonical_label: Optional[str]) -> Tuple[float, float, float, str]:
+        """Return cosine and FAISS thresholds plus margin metadata for a mode and category."""
         group = cls._resolve_category_group(canonical_label)
         if mode not in {cls.MODE_TWO_VIEW, cls.MODE_THREE_VIEW} or group is None:
             legacy = cls._clamp01(float(getattr(settings, "PP2_SIM_THRESHOLD", cls.LEGACY_BASE_THRESHOLD)))
@@ -273,6 +286,7 @@ class MultiViewVerifier:
         i: int,
         j: int,
     ) -> bool:
+        """Return whether either view in a pair has OCR text."""
         if i >= len(per_view_results) or j >= len(per_view_results):
             return False
         ocr_i = str(per_view_results[i].extraction.ocr_text or "").strip()
@@ -298,6 +312,7 @@ class MultiViewVerifier:
         j: int,
         consensus_category: Optional[str],
     ) -> bool:
+        """Return whether both views in a pair match the consensus category."""
         if i >= len(per_view_results) or j >= len(per_view_results):
             return False
         consensus = canonicalize_label(str(consensus_category or "")) or str(consensus_category or "").strip()
@@ -340,6 +355,7 @@ class MultiViewVerifier:
 
     @staticmethod
     def _compute_ocr_overlap(tokens_i: Set[str], tokens_j: Set[str]) -> Dict[str, Any]:
+        """Compute shared OCR tokens and whether overlap is strong."""
         intersection = sorted(set(tokens_i).intersection(set(tokens_j)))
         strong_overlap = any(len(tok) >= 5 for tok in intersection)
         return {
@@ -350,6 +366,7 @@ class MultiViewVerifier:
 
     @staticmethod
     def _extract_brand(view: PP2PerViewResult) -> str:
+        """Extract a normalized brand value from a per-view result."""
         grounded = view.extraction.grounded_features if isinstance(view.extraction.grounded_features, dict) else {}
         raw_brand = grounded.get("brand")
         if raw_brand is None:
@@ -368,6 +385,7 @@ class MultiViewVerifier:
         i: int,
         j: int,
     ) -> Dict[str, Any]:
+        """Evaluate brand and OCR consistency for a pair of views."""
         if i >= len(per_view_results) or j >= len(per_view_results):
             return {
                 "brand_match": False,
@@ -420,6 +438,7 @@ class MultiViewVerifier:
         faiss_th: float,
         group: Optional[str],
     ) -> bool:
+        """Apply the verifier strong-pair rule for angle-hard and standard groups."""
         if group == cls.GROUP_ANGLE_HARD:
             return bool(cos_score >= cos_th or faiss_score >= faiss_th)
         return bool(cos_score >= cos_th and faiss_score >= faiss_th)
@@ -434,6 +453,7 @@ class MultiViewVerifier:
         labels_match_consensus: bool,
         group: Optional[str],
     ) -> bool:
+        """Return whether OCR evidence can rescue a near-threshold pair."""
         return bool(
             group in (cls.GROUP_ANGLE_HARD, cls.GROUP_SMALL_AMBIGUOUS)
             and cos_score >= (cos_th - margin)
@@ -460,6 +480,7 @@ class MultiViewVerifier:
 
     @classmethod
     def _smart_phone_front_back_floor(cls) -> float:
+        """Return the configured smartphone front/back rescue score floor."""
         return float(
             getattr(
                 settings,
@@ -470,6 +491,7 @@ class MultiViewVerifier:
 
     @staticmethod
     def _iter_grounded_text(value: Any) -> List[str]:
+        """Flatten grounded feature values into text fragments."""
         out: List[str] = []
         if isinstance(value, dict):
             for nested in value.values():
@@ -485,6 +507,7 @@ class MultiViewVerifier:
 
     @classmethod
     def _view_signal_text(cls, view: PP2PerViewResult) -> str:
+        """Build normalized signal text from a PP2 view."""
         fragments: List[str] = []
         caption = str(view.extraction.caption or "").strip()
         ocr = str(view.extraction.ocr_text or "").strip()
@@ -500,6 +523,7 @@ class MultiViewVerifier:
 
     @classmethod
     def _extract_color_bucket_for_view(cls, view: PP2PerViewResult) -> str:
+        """Extract the color comparison bucket for one PP2 view."""
         grounded = view.extraction.grounded_features if isinstance(view.extraction.grounded_features, dict) else {}
         raw_color = grounded.get("color")
         if not raw_color:
@@ -516,6 +540,7 @@ class MultiViewVerifier:
         i: int,
         j: int,
     ) -> bool:
+        """Return whether two views contain conflicting brand values."""
         if i >= len(per_view_results) or j >= len(per_view_results):
             return False
         brand_i = cls._extract_brand(per_view_results[i])
@@ -529,6 +554,7 @@ class MultiViewVerifier:
         i: int,
         j: int,
     ) -> bool:
+        """Return whether two views contain conflicting color buckets."""
         if i >= len(per_view_results) or j >= len(per_view_results):
             return False
         color_i = cls._extract_color_bucket_for_view(per_view_results[i])
@@ -540,6 +566,7 @@ class MultiViewVerifier:
         cls,
         view: PP2PerViewResult,
     ) -> Dict[str, Any]:
+        """Classify smartphone evidence as front-like or back-like for rescue logic."""
         signal_text = cls._view_signal_text(view)
         ocr_text = str(view.extraction.ocr_text or "").strip()
         front_cues = sorted(
@@ -569,6 +596,7 @@ class MultiViewVerifier:
         labels_match_consensus: bool,
         canonical_category: Optional[str],
     ) -> Dict[str, Any]:
+        """Evaluate whether a smartphone front/back pair qualifies for rescue or retry."""
         floor = cls._smart_phone_front_back_floor()
         category = canonicalize_label(canonical_category or "")
         is_smart_phone = category == "Smart Phone"
@@ -612,6 +640,7 @@ class MultiViewVerifier:
 
     @staticmethod
     def _cosine_pair(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
+        """Compute cosine similarity between two vectors."""
         a = np.asarray(vec_a, dtype=np.float32).reshape(-1)
         b = np.asarray(vec_b, dtype=np.float32).reshape(-1)
         na = np.linalg.norm(a) + 1e-12
@@ -620,6 +649,7 @@ class MultiViewVerifier:
 
     @staticmethod
     def _to_np(vec: Any) -> np.ndarray:
+        """Coerce an embedding-like value into a flat NumPy vector."""
         return np.asarray(vec, dtype=np.float32).reshape(-1)
 
     def _prepare_embedding_variants(
@@ -627,6 +657,7 @@ class MultiViewVerifier:
         vectors: List[np.ndarray],
         embedding_variants_by_index: Optional[Dict[int, Dict[str, np.ndarray]]],
     ) -> Dict[int, Dict[str, np.ndarray]]:
+        """Prepare full and cropped embedding variants for pair comparison."""
         variants: Dict[int, Dict[str, np.ndarray]] = {}
         for idx, vec in enumerate(vectors):
             if isinstance(vec, np.ndarray) and vec.ndim == 1:
@@ -663,6 +694,7 @@ class MultiViewVerifier:
         variants: Dict[int, Dict[str, np.ndarray]],
         faiss_service: Any,
     ) -> Dict[str, Any]:
+        """Compute the best similarity path and scores for a pair of views."""
         combo_order = [("full", "full"), ("center", "center"), ("full", "center"), ("center", "full")]
         best: Optional[Dict[str, Any]] = None
         best_rank = len(combo_order) + 1
@@ -793,6 +825,7 @@ class MultiViewVerifier:
         margin: float,
         group: Optional[str] = None,
     ) -> str:
+        """Classify a pair as strong, near-miss, or weak against thresholds."""
         if MultiViewVerifier._is_angle_hard_strong(
             cos_score=cos_score,
             faiss_score=faiss_score,
@@ -810,6 +843,7 @@ class MultiViewVerifier:
         per_view_results: List[PP2PerViewResult],
         decision_indices: List[int],
     ) -> Optional[str]:
+        """Infer the majority canonical category from decision views."""
         labels: List[str] = []
         for idx in decision_indices:
             if idx >= len(per_view_results):
@@ -886,6 +920,7 @@ class MultiViewVerifier:
         )
 
         def _pair_decision_context(pair_key: str, info: Dict[str, Any]) -> str:
+            """Build a concise decision context string for a verification pair."""
             return (
                 f"pair={pair_key}, mode={mode_label}, group={group_for_log}, "
                 f"threshold_entry={threshold_entry}, "

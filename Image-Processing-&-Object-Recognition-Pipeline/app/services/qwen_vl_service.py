@@ -40,12 +40,16 @@ from PIL import Image
 from app.domain.category_specs import canonicalize_label, CATEGORY_SPECS
 from app.config.model_paths import BASE_MODELS_DIR
 
+# QwenVLService mirrors the FlorenceService-facing API so the orchestrators can
+# swap vision-language providers without changing PP1/PP2 pipeline logic.
+
 
 # ----------------------------
 # Small helpers (caption safety)
 # ----------------------------
 
 def _safe_str(x: Any) -> str:
+    """Convert a value to a stripped string without propagating conversion failures."""
     if x is None:
         return ""
     if isinstance(x, str):
@@ -57,6 +61,7 @@ def _safe_str(x: Any) -> str:
 
 
 def _dedup_phrases(items: List[str]) -> List[str]:
+    """Deduplicate phrase strings while preserving their first-seen order."""
     out: List[str] = []
     seen = set()
     for it in items or []:
@@ -72,6 +77,7 @@ def _dedup_phrases(items: List[str]) -> List[str]:
 
 
 def _caption_mentions_person(text: str) -> bool:
+    """Return whether a caption contains person-focused terms."""
     if not text:
         return False
     keywords = {
@@ -82,6 +88,7 @@ def _caption_mentions_person(text: str) -> bool:
 
 
 def _caption_mentions_demographics(text: str) -> bool:
+    """Return whether a caption contains demographic descriptors."""
     if not text:
         return False
     t = text.lower()
@@ -195,6 +202,7 @@ class QwenVLService:
         self._process_vision_info = None  # optional helper from qwen_vl_utils
 
     def load_model(self) -> None:
+        """Load the configured vision-language model and processor."""
         if self._model is not None and self._processor is not None:
             return
 
@@ -343,6 +351,7 @@ class QwenVLService:
     # ----------------------------
 
     def vqa(self, image: Image.Image, question: str) -> str:
+        """Answer a visual question about an image."""
         messages = [
             {
                 "role": "user",
@@ -355,6 +364,7 @@ class QwenVLService:
         return self._generate(messages)
 
     def caption(self, image: Image.Image, detailed: bool = True) -> str:
+        """Generate a caption for an image using the configured vision model profile."""
         prompt = (
             "Describe ONLY the main object (ignore person/hand/background) in 2–4 sentences. "
             "Include: object type, material (if visible), color/shade, shape, logos/text (if visible), "
@@ -367,6 +377,7 @@ class QwenVLService:
         return self.vqa(image, prompt)
 
     def ocr(self, image: Image.Image) -> str:
+        """Extract OCR text from an image."""
         prompt = (
             "Read all text visible ON the main object. "
             "Return ONLY the text, preserving spelling/case as best as possible. "
@@ -384,6 +395,7 @@ class QwenVLService:
     # ----------------------------
 
     def _color_vqa(self, image: Image.Image) -> Optional[str]:
+        """Ask the model for the dominant object color."""
         q = (
             "What is the primary color of the OBJECT (not background)? "
             "Answer with a short phrase including shade/tone if visible (e.g., 'dark gray', 'navy blue', 'matte black'). "
@@ -396,6 +408,7 @@ class QwenVLService:
         return " ".join(ans.split())
 
     def _key_count_vqa(self, image: Image.Image) -> int:
+        """Ask the model to count visible keys in the image."""
         q = "How many separate keys are visible in this image? Answer with a single integer."
         ans = self.vqa(image, q)
         m = re.search(r"\b(\d+)\b", ans)

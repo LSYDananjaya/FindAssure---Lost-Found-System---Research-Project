@@ -17,6 +17,9 @@ from typing import List, Dict, Any
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# FAISS ids are internal integer row ids; item-specific metadata is stored in
+# the JSON mapping so search results can be joined back to application records.
+
 class FaissService:
     """Thread-safe wrapper around a FAISS index plus metadata mapping."""
 

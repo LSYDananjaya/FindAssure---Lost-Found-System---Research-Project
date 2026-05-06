@@ -17,6 +17,10 @@ from ultralytics import YOLO
 from app.domain.category_specs import canonicalize_label
 from app.services.gpu_semaphore import gpu_inference_guard
 
+# YOLO supplies fast object proposals. Later stages can override or enrich its
+# label, but keeping this service focused on detection makes fallback decisions
+# easier to audit.
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -36,6 +40,7 @@ class YoloService:
     """Loads local YOLO weights and exposes thread-safe detection."""
 
     def __init__(self):
+        """Initialize YOLO model state before lazy loading."""
         self.model = None
         self._predict_lock = threading.Lock()
         self._warmup_lock = threading.Lock()

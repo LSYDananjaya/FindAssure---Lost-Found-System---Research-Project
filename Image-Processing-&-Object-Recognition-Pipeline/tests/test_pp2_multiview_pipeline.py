@@ -34,6 +34,7 @@ from app.services.gemini_reasoner import (
     GeminiTransientError,
     PHASE1_PP1_RESPONSE_SCHEMA,
     PHASE2_PP2_RESPONSE_SCHEMA,
+    PHASE2_PP2_SYSTEM_INSTRUCTION,
 )
 from app.services.pp2_fusion_service import MultiViewFusionService
 from app.services.unified_pipeline import UnifiedPipeline
@@ -248,13 +249,13 @@ class TestMultiViewPipelineReasonerEnablement(unittest.TestCase):
         self.assertTrue(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=True))
         self.assertFalse(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=False))
 
-    def test_per_view_and_phase2_mode_preserves_existing_phase2_toggle(self):
+    def test_per_view_and_phase2_mode_runs_phase2_when_verification_passes(self):
         settings.PP2_ENABLE_REASONER = True
         settings.PP2_REASONER_MODE = "per_view_and_phase2"
         settings.PP2_REASONER_ALWAYS_ENRICH = False
 
         self.assertTrue(self.pipeline._should_run_pp2_per_view_reasoner())
-        self.assertFalse(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=True))
+        self.assertTrue(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=True))
 
         settings.PP2_REASONER_ALWAYS_ENRICH = True
         self.assertTrue(self.pipeline._should_run_pp2_phase2_reasoner(verification_passed=True))
@@ -336,6 +337,39 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
         self.assertEqual(result["status"], "accepted")
         self.assertIn("elapsed_ms", result)
         self.assertGreaterEqual(result["elapsed_ms"], 0.0)
+
+    def test_pp2_gemini_evidence_keeps_feature_defect_attachment_lists_separate(self):
+        view = PP2PerViewResult(
+            view_index=0,
+            filename="view0.jpg",
+            detection=PP2PerViewDetection(
+                bbox=(0.0, 0.0, 10.0, 10.0),
+                cls_name="Helmet",
+                confidence=0.95,
+            ),
+            extraction=PP2PerViewExtraction(
+                caption="A black helmet.",
+                detailed_description="A black helmet with a clear visor.",
+                ocr_text="832",
+                grounded_features={
+                    "color": "black",
+                    "features": ["clear visor", "red and white logo"],
+                    "defects": ["visor scratch"],
+                    "attachments": ["chin strap"],
+                },
+                extraction_confidence=1.0,
+                raw={"color_vqa": "black"},
+            ),
+            embedding=PP2PerViewEmbedding(dim=16, vector_preview=[0.1] * 8, vector_id="vec0"),
+            quality_score=0.99,
+        )
+
+        evidence = self.pipeline._build_pp2_gemini_evidence(view, "Helmet")
+        crop_analysis = evidence["crop_analysis"]
+
+        self.assertEqual(crop_analysis["grounded_features"], ["clear visor", "red and white logo"])
+        self.assertEqual(crop_analysis["grounded_defects"], ["visor scratch"])
+        self.assertEqual(crop_analysis["grounded_attachments"], ["chin strap"])
 
     def test_phase2_bundle_includes_all_views_and_marks_selected_subset(self):
         per_view = [
@@ -736,6 +770,39 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
         self.assertFalse(applied)
         self.assertEqual(fused.attributes["phase2_gemini"]["status"], "below_min_words")
 
+    def test_phase2_shorter_fact_rich_description_can_replace_generic_native_fusion(self):
+        fused = SimpleNamespace(
+            category="Helmet",
+            caption="A black helmet.",
+            detailed_description="A black helmet.",
+            detailed_description_source="best_view_evidence_composer",
+            description_word_count={"final_description": 4, "detailed_description": 3},
+            description_evidence_used={"summary": ["pp2"], "detailed": ["pp2"]},
+            description_filters_applied=["pp2"],
+            merged_ocr_tokens=["CS", "832", "CAMY", "SMART"],
+            attributes={"features": ["clear visor", "red and white logo"], "attachments": ["chin strap"]},
+            defects=["visor scratch"],
+            color="black",
+        )
+
+        applied = self.pipeline._apply_phase2_gemini_result_to_fused(
+            fused=fused,
+            phase2_result={
+                "status": "accepted",
+                "final_description": (
+                    'A black helmet with a clear visor, chin strap, and red and white logo. '
+                    'Visible text includes "832". The visor has visible scratch marks.'
+                ),
+                "color": "black",
+            },
+            timeout_s=4,
+        )
+
+        self.assertTrue(applied)
+        self.assertIn("832", fused.detailed_description)
+        self.assertIn("visor", fused.detailed_description.lower())
+        self.assertEqual(fused.attributes["phase2_gemini"]["status"], "accepted")
+
     def test_phase2_rejects_unsupported_claims(self):
         fused = SimpleNamespace(
             category="Wallet",
@@ -805,6 +872,41 @@ class TestPP2Phase2GeminiBundle(unittest.TestCase):
         self.assertEqual(fused.attributes["phase2_gemini"]["status"], "accepted")
         self.assertEqual(fused.description_word_count["final_description"], len(fused.caption.split()))
 
+    def test_phase2_apply_dedupes_near_duplicate_identity_sentences(self):
+        fused = SimpleNamespace(
+            category="Helmet",
+            caption="A black helmet.",
+            detailed_description="A black helmet.",
+            detailed_description_source="best_view_evidence_composer",
+            description_word_count={"final_description": 4, "detailed_description": 3},
+            description_evidence_used={"summary": ["pp2"], "detailed": ["pp2"]},
+            description_filters_applied=["pp2"],
+            merged_ocr_tokens=[],
+            attributes={"features": ["clear visor", "chin strap"], "attachments": [], "defects": []},
+            defects=["surface scratches"],
+            color="black",
+        )
+
+        applied = self.pipeline._apply_phase2_gemini_result_to_fused(
+            fused=fused,
+            phase2_result={
+                "status": "accepted",
+                "final_description": (
+                    "A black helmet with a clear visor. "
+                    "A black helmet with a chin strap. "
+                    "A black helmet with surface scratches."
+                ),
+                "color": "black",
+            },
+            timeout_s=4,
+        )
+
+        self.assertTrue(applied)
+        self.assertEqual(fused.detailed_description.lower().count("a black helmet"), 1)
+        self.assertIn("clear visor", fused.detailed_description.lower())
+        self.assertIn("chin strap", fused.detailed_description.lower())
+        self.assertIn("surface scratches", fused.detailed_description.lower())
+
 class TestMultiViewFusionAllViewDescriptions(unittest.TestCase):
     def setUp(self):
         self.fusion = MultiViewFusionService()
@@ -868,6 +970,67 @@ class TestMultiViewFusionAllViewDescriptions(unittest.TestCase):
         self.assertNotIn("123456", fused.detailed_description)
         self.assertEqual(fused.attributes["description_contributor_view_indices"], [0, 1])
 
+    def test_fuse_unifies_repeated_identity_sentences_from_multiple_views(self):
+        per_view = [
+            PP2PerViewResult(
+                view_index=0,
+                filename="front.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.96),
+                extraction=PP2PerViewExtraction(
+                    caption="wallet front",
+                    detailed_description="A brown wallet with a visible front logo.",
+                    ocr_text="BRANDX",
+                    grounded_features={"color": "brown", "features": ["front logo"]},
+                    extraction_confidence=1.0,
+                    raw={"smart_description": {"status": "success", "detailed_description": "A brown wallet with a visible front logo."}},
+                ),
+                embedding=PP2PerViewEmbedding(dim=4, vector_preview=[0.1, 0.2, 0.3, 0.4], vector_id="vec0"),
+                quality_score=0.99,
+            ),
+            PP2PerViewResult(
+                view_index=1,
+                filename="inside.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.95),
+                extraction=PP2PerViewExtraction(
+                    caption="wallet inside",
+                    detailed_description="A brown wallet with multiple card slots.",
+                    ocr_text="",
+                    grounded_features={"color": "brown", "features": ["card slots"]},
+                    extraction_confidence=1.0,
+                    raw={"smart_description": {"status": "success", "detailed_description": "A brown wallet with multiple card slots."}},
+                ),
+                embedding=PP2PerViewEmbedding(dim=4, vector_preview=[0.1, 0.2, 0.3, 0.4], vector_id="vec1"),
+                quality_score=0.97,
+            ),
+            PP2PerViewResult(
+                view_index=2,
+                filename="edge.jpg",
+                detection=PP2PerViewDetection(bbox=(0.0, 0.0, 10.0, 10.0), cls_name="Wallet", confidence=0.94),
+                extraction=PP2PerViewExtraction(
+                    caption="wallet edge",
+                    detailed_description="A brown wallet with edge wear.",
+                    ocr_text="",
+                    grounded_features={"color": "brown", "defects": ["edge wear"]},
+                    extraction_confidence=1.0,
+                    raw={"smart_description": {"status": "success", "detailed_description": "A brown wallet with edge wear."}},
+                ),
+                embedding=PP2PerViewEmbedding(dim=4, vector_preview=[0.1, 0.2, 0.3, 0.4], vector_id="vec2"),
+                quality_score=0.96,
+            ),
+        ]
+
+        fused = self.fusion.fuse(
+            per_view=per_view,
+            vectors=[np.ones(4, dtype=np.float32), np.ones(4, dtype=np.float32), np.ones(4, dtype=np.float32)],
+            item_id="wallet-duplicate",
+            used_view_indices=[0, 1, 2],
+        )
+
+        self.assertEqual(fused.detailed_description.lower().count("a brown wallet"), 1)
+        self.assertIn("front logo", fused.detailed_description.lower())
+        self.assertIn("card slots", fused.detailed_description.lower())
+        self.assertIn("edge wear", fused.detailed_description.lower())
+
     def test_fuse_falls_back_when_only_one_public_view_description_survives(self):
         per_view = [
             PP2PerViewResult(
@@ -915,6 +1078,10 @@ class TestMultiViewFusionAllViewDescriptions(unittest.TestCase):
 
 
 class TestGeminiReasonerPhase2ResponseNormalization(unittest.TestCase):
+    def test_phase2_prompt_requires_one_unified_description(self):
+        self.assertIn("single unified item description", PHASE2_PP2_SYSTEM_INSTRUCTION.lower())
+        self.assertIn("do not repeat", PHASE2_PP2_SYSTEM_INSTRUCTION.lower())
+
     def test_normalize_phase2_response_coerces_schema_fields(self):
         normalized = GeminiReasoner.normalize_phase2_response(
             {
@@ -1130,24 +1297,29 @@ class TestGeminiReasonerPhase2ResponseNormalization(unittest.TestCase):
         self.assertEqual(meta["selected_model"], "gemini-2.5-flash")
         self.assertEqual(meta["failover_reason"], "quota_limit")
 
-    def test_non_quota_transient_does_not_fail_over(self):
+    def test_unavailable_transient_fails_over_to_fallback_model(self):
         reasoner = GeminiReasoner(model_name="models/gemini-3.1-flash-lite-preview")
         calls = []
 
         def fake_generate_text_once(prompt, images=None, config=None, model_name=None, image_first=False):
             calls.append(model_name)
-            raise GeminiTransientError("temporary", status_code=503, provider_status="UNAVAILABLE")
+            if model_name == "models/gemini-3.1-flash-lite-preview":
+                raise GeminiTransientError("temporary", status_code=503, provider_status="UNAVAILABLE")
+            return '{"status":"accepted"}'
 
         reasoner._generate_text_once = fake_generate_text_once
 
-        with self.assertRaises(GeminiTransientError):
-            reasoner._generate_text(
-                "prompt",
-                model_name="models/gemini-3.1-flash-lite-preview",
-                fallback_model_name="gemini-2.5-flash",
-            )
+        text = reasoner._generate_text(
+            "prompt",
+            model_name="models/gemini-3.1-flash-lite-preview",
+            fallback_model_name="gemini-2.5-flash",
+        )
+        meta = reasoner.consume_last_request_meta()
 
-        self.assertEqual(calls, ["models/gemini-3.1-flash-lite-preview", "models/gemini-3.1-flash-lite-preview"])
+        self.assertEqual(text, '{"status":"accepted"}')
+        self.assertEqual(calls, ["models/gemini-3.1-flash-lite-preview", "gemini-2.5-flash"])
+        self.assertEqual(meta["selected_model"], "gemini-2.5-flash")
+        self.assertEqual(meta["failover_reason"], "transient_unavailable")
 
     def test_quota_error_with_unavailable_fallback_preserves_attempt_metadata(self):
         reasoner = GeminiReasoner(model_name="models/gemini-3.1-flash-lite-preview")

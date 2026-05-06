@@ -54,6 +54,10 @@ from app.domain.label_keywords import CATEGORY_KEYWORDS, NEGATIVE_KEYWORDS, NEGA
 
 logger = logging.getLogger(__name__)
 
+# PP2 orchestration is split into small helper methods because each stage has
+# independent timeout, fallback, and logging behavior. Keep comments focused on
+# stage boundaries so future changes do not accidentally bypass safeguards.
+
 
 class MultiViewPipeline:
     """Coordinates PP2 detection, verification, enrichment, fusion, and storage."""
@@ -98,6 +102,7 @@ class MultiViewPipeline:
         faiss: FaissService,
         gemini: Optional[ReasonerProtocol] = None,
     ):
+        """Initialize PP2 pipeline dependencies and runtime configuration."""
         self.yolo = yolo
         self.florence = florence
         self.dino = dino
@@ -110,8 +115,18 @@ class MultiViewPipeline:
         configured = float(getattr(settings, "FLORENCE_LITE_SUCCESS_CONFIDENCE", self.LITE_EXTRACTION_CONFIDENCE))
         self.lite_success_confidence = max(self.LITE_EXTRACTION_CONFIDENCE, configured)
         self._pp2_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pp2_phase2")
+        logger.info(
+            "PP2_REASONER_CONFIG enabled=%s mode=%s model=%s fallback_model=%s phase2_enrich=%s include_images=%s",
+            bool(getattr(settings, "PP2_ENABLE_REASONER", False)),
+            self._get_pp2_reasoner_mode(),
+            str(getattr(settings, "PP2_REASONER_MODEL", "") or ""),
+            str(getattr(settings, "PP2_REASONER_FALLBACK_MODEL", "") or ""),
+            bool(self._should_run_pp2_phase2_reasoner(verification_passed=True)),
+            bool(getattr(settings, "PP2_REASONER_INCLUDE_IMAGES", True)),
+        )
 
     def _get_gemini(self) -> Optional[ReasonerProtocol]:
+        """Return the lazily initialized PP2 reasoner when it is enabled."""
         if not bool(getattr(settings, "PP2_ENABLE_REASONER", False)):
             return None
         if self._gemini is not None:
@@ -122,37 +137,43 @@ class MultiViewPipeline:
         return self._gemini
 
     def _get_pp2_reasoner_mode(self) -> str:
+        """Resolve the configured PP2 reasoner mode with a safe default."""
         raw_mode = str(getattr(settings, "PP2_REASONER_MODE", "per_view_and_phase2") or "per_view_and_phase2").strip().lower()
         if raw_mode not in self.PP2_REASONER_MODES:
             return "per_view_and_phase2"
         return raw_mode
 
     def _pp2_reasoner_enabled(self) -> bool:
+        """Return whether PP2 reasoner execution is enabled."""
         if not bool(getattr(settings, "PP2_ENABLE_REASONER", False)):
             return False
         return self._get_pp2_reasoner_mode() != "disabled"
 
     def _should_run_pp2_per_view_reasoner(self) -> bool:
+        """Return whether per-view PP2 reasoning should run."""
         return self._pp2_reasoner_enabled() and self._get_pp2_reasoner_mode() == "per_view_and_phase2"
 
     def _should_run_pp2_phase2_reasoner(self, *, verification_passed: bool) -> bool:
+        """Return whether phase-2 PP2 reasoning should run for the current verification state."""
         if not self._pp2_reasoner_enabled() or not verification_passed:
             return False
         reasoner_mode = self._get_pp2_reasoner_mode()
         if reasoner_mode == "phase2_only":
             return True
         if reasoner_mode == "per_view_and_phase2":
-            return bool(getattr(settings, "PP2_REASONER_ALWAYS_ENRICH", True))
+            return True
         return False
 
     @staticmethod
     def _as_float(value: Any) -> float:
+        """Coerce a value to float for metrics, returning zero on invalid input."""
         try:
             return float(value)
         except (TypeError, ValueError):
             return 0.0
 
     def _resolve_reasoner_label(self, *payloads: Any, enabled: bool = True) -> str:
+        """Resolve the reasoner label used in timing and metadata output."""
         if not enabled:
             return "disabled"
 
@@ -190,6 +211,7 @@ class MultiViewPipeline:
         reasoner_view_outputs: Optional[Dict[int, Dict[str, Any]]] = None,
         phase2_result: Optional[Dict[str, Any]] = None,
     ) -> None:
+        """Log the PP2 timing breakdown for detection, verification, reasoning, and storage."""
         reasoner_view_outputs = reasoner_view_outputs if isinstance(reasoner_view_outputs, dict) else {}
         phase2_result = phase2_result if isinstance(phase2_result, dict) else {}
         view_elapsed = [
@@ -232,6 +254,7 @@ class MultiViewPipeline:
 
     @staticmethod
     def _verification_has_near_miss(verification: PP2VerificationResult) -> bool:
+        """Return whether verification output contains a near-miss signal."""
         geometric_scores = verification.geometric_scores if isinstance(verification.geometric_scores, dict) else {}
         for info in geometric_scores.values():
             if not isinstance(info, dict):
@@ -247,12 +270,14 @@ class MultiViewPipeline:
 
     @staticmethod
     def _view_has_sparse_florence_text(view: PP2PerViewResult) -> bool:
+        """Return whether a view has too little Florence text evidence."""
         caption = str(getattr(view.extraction, "caption", "") or "").strip()
         ocr_text = str(getattr(view.extraction, "ocr_text", "") or "").strip()
         return (not caption) or (not ocr_text)
 
     @classmethod
     def _is_weak_text_evidence(cls, caption_text: Any, ocr_text: Any) -> bool:
+        """Return whether extraction text is weak enough to require enrichment."""
         caption = str(caption_text or "").strip()
         ocr = str(ocr_text or "").strip()
 
@@ -275,6 +300,7 @@ class MultiViewPipeline:
         per_view_results: List[PP2PerViewResult],
         used_indices: List[int],
     ) -> bool:
+        """Return whether a passed view needs additional caption refinement."""
         if not used_indices:
             return False
 
@@ -298,6 +324,7 @@ class MultiViewPipeline:
         per_view_results: List[PP2PerViewResult],
         verification: PP2VerificationResult,
     ) -> Optional[int]:
+        """Choose the strongest view for PP2 Gemini phase-2 reasoning."""
         n = len(per_view_results)
         if n <= 0:
             return None
@@ -331,7 +358,9 @@ class MultiViewPipeline:
         view: PP2PerViewResult,
         canonical_label: Optional[str],
     ) -> Dict[str, Any]:
+        """Build the evidence payload sent to the PP2 Gemini reasoner."""
         raw_payload = view.extraction.raw if isinstance(view.extraction.raw, dict) else {}
+        grounded = view.extraction.grounded_features if isinstance(view.extraction.grounded_features, dict) else {}
         return {
             "detection": {
                 "label": str(view.detection.cls_name),
@@ -344,13 +373,16 @@ class MultiViewPipeline:
             "crop_analysis": {
                 "caption": str(view.extraction.caption or ""),
                 "ocr_text": str(view.extraction.ocr_text or ""),
-                "grounded_features": view.extraction.grounded_features if isinstance(view.extraction.grounded_features, dict) else {},
+                "grounded_features": MultiViewPipeline._normalize_string_list(grounded.get("features")),
+                "grounded_defects": MultiViewPipeline._normalize_string_list(grounded.get("defects")),
+                "grounded_attachments": MultiViewPipeline._normalize_string_list(grounded.get("attachments")),
                 "raw": raw_payload,
             },
         }
 
     @staticmethod
     def _decision_pair_key(used_views: List[int]) -> Optional[str]:
+        """Format a pair of view indices as the canonical decision-pair key."""
         cleaned = [int(idx) for idx in used_views if isinstance(idx, int)]
         if len(cleaned) != 2:
             return None
@@ -365,6 +397,7 @@ class MultiViewPipeline:
         decision_indices: List[int],
         dropped_views: List[Dict[str, Any]],
     ) -> PP2VerificationResult:
+        """Normalize verifier output fields after view selection and retries."""
         verification_payload = verification.model_dump()
         verification_payload["used_views"] = used_views if len(used_views) == 2 else []
         verification_payload["dropped_views"] = dropped_views
@@ -381,6 +414,7 @@ class MultiViewPipeline:
 
     @staticmethod
     def _multiview_verification_disabled() -> bool:
+        """Return whether PP2 multiview verification is disabled by settings."""
         return bool(getattr(settings, "PP2_DISABLE_MULTIVIEW_VERIFICATION", False))
 
     def _bypass_verification_result(
@@ -391,6 +425,7 @@ class MultiViewPipeline:
         decision_indices: List[int],
         dropped_views: List[Dict[str, Any]],
     ) -> PP2VerificationResult:
+        """Build a passing verification result for disabled-verification mode."""
         verification_payload = verification.model_dump()
         verification_payload["passed"] = True
         verification_payload["failure_reasons"] = []
@@ -413,6 +448,7 @@ class MultiViewPipeline:
         verification: PP2VerificationResult,
         used_views: List[int],
     ) -> Dict[str, Any]:
+        """Extract metadata for the pair used in a verification decision."""
         pair_key = self._decision_pair_key(used_views)
         if not pair_key:
             return {}
@@ -427,6 +463,7 @@ class MultiViewPipeline:
         consensus_label: Optional[str],
         used_views: List[int],
     ) -> bool:
+        """Return whether smartphone front/back rescue should trigger a retry."""
         if verification.passed:
             return False
         if canonicalize_label(consensus_label or "") != "Smart Phone":
@@ -445,6 +482,7 @@ class MultiViewPipeline:
         pass_caption_refinement: bool,
         total_views: int,
     ) -> Tuple[set[int], str, bool]:
+        """Choose the view indices that need detailed enrichment."""
         used_targets = [int(idx) for idx in verification_used_views if isinstance(idx, int)]
         if len(used_targets) < 2 and len(fallback_used_views) == 2:
             used_targets = [int(fallback_used_views[0]), int(fallback_used_views[1])]
@@ -471,6 +509,7 @@ class MultiViewPipeline:
         detail_targets: set[int],
         mark_non_targets_skipped: bool,
     ) -> float:
+        """Run detailed Florence enrichment for selected target views."""
         if not detail_targets:
             return 0.0
 
@@ -526,6 +565,7 @@ class MultiViewPipeline:
         item_id: str,
         canonical_hint_by_index: Dict[int, Optional[str]],
     ) -> Tuple[PP2VerificationResult, float, float, bool]:
+        """Retry smartphone front/back verification after targeted detail enrichment when eligible."""
         retry_views = [int(idx) for idx in (verification.used_views or []) if isinstance(idx, int)]
         if len(retry_views) < 2 and len(used_views) == 2:
             retry_views = [int(used_views[0]), int(used_views[1])]
@@ -590,6 +630,7 @@ class MultiViewPipeline:
         request_id: str,
         item_id: str,
     ) -> Dict[int, Dict[str, Any]]:
+        """Run per-view Gemini reasoning tasks concurrently and collect outputs."""
         outputs: Dict[int, Dict[str, Any]] = {}
         if not indices:
             return outputs
@@ -615,6 +656,7 @@ class MultiViewPipeline:
         )
 
         def _gemini_task(view_idx: int) -> Dict[str, Any]:
+            """Run Gemini reasoning for a single PP2 view task."""
             start = time.perf_counter()
             view = per_view_results[view_idx]
             evidence = self._build_pp2_gemini_evidence(
@@ -696,6 +738,7 @@ class MultiViewPipeline:
         per_view_results: List[PP2PerViewResult],
         gemini_evidence_by_index: Dict[int, Dict[str, Any]],
     ) -> None:
+        """Merge per-view Gemini enrichment into extraction results."""
         for idx, gemini_meta in gemini_evidence_by_index.items():
             if idx < 0 or idx >= len(per_view_results):
                 continue
@@ -756,6 +799,7 @@ class MultiViewPipeline:
         canonical_label_by_index: Dict[int, str],
         selected_index_set: set[int],
     ) -> Dict[str, Any]:
+        """Build one view payload for PP2 phase-2 bundled reasoning."""
         canonical = canonical_label_by_index.get(view.view_index, str(view.detection.cls_name))
         raw = view.extraction.raw if isinstance(view.extraction.raw, dict) else {}
         grounded = view.extraction.grounded_features if isinstance(view.extraction.grounded_features, dict) else {}
@@ -915,6 +959,7 @@ class MultiViewPipeline:
         timeout_s: Optional[float] = None,
         message: Optional[str] = None,
     ) -> None:
+        """Attach phase-2 Gemini metadata to the fused profile."""
         attributes = getattr(fused, "attributes", {}) if isinstance(getattr(fused, "attributes", {}), dict) else {}
         attributes = dict(attributes)
         meta: Dict[str, Any] = {
@@ -937,6 +982,7 @@ class MultiViewPipeline:
         phase2_result: Any,
         timeout_s: Optional[float] = None,
     ) -> bool:
+        """Merge PP2 phase-2 Gemini results into the fused profile."""
         if not isinstance(phase2_result, dict):
             self._set_phase2_gemini_meta(
                 fused,
@@ -977,21 +1023,35 @@ class MultiViewPipeline:
                 timeout_s=timeout_s,
             )
             return False
-        min_words = max(1, int(getattr(settings, "PP2_REASONER_MIN_WORDS", 24)))
-        if len(phase2_description.split()) < min_words:
-            self._set_phase2_gemini_meta(
-                fused,
-                status="below_min_words",
-                applied=False,
-                timeout_s=timeout_s,
-            )
-            return False
-
         fused_attributes = getattr(fused, "attributes", {}) if isinstance(getattr(fused, "attributes", {}), dict) else {}
         fused_features = self._normalize_string_list(fused_attributes.get("features"))
         fused_defects = self._normalize_string_list(getattr(fused, "defects", []))
         fused_attachments = self._normalize_string_list(fused_attributes.get("attachments"))
-        fused_ocr_text = " ".join(getattr(fused, "merged_ocr_tokens", [])[:2])
+        fused_ocr_text = " ".join(self._normalize_string_list(getattr(fused, "merged_ocr_tokens", [])))
+        min_words = max(1, int(getattr(settings, "PP2_REASONER_MIN_WORDS", 24)))
+        if len(phase2_description.split()) < min_words:
+            current_score, _current_words = self._description_fact_coverage(
+                getattr(fused, "detailed_description", None),
+                features=fused_features,
+                defects=fused_defects,
+                attachments=fused_attachments,
+                ocr_text=fused_ocr_text,
+            )
+            candidate_score, _candidate_words = self._description_fact_coverage(
+                phase2_description,
+                features=fused_features,
+                defects=fused_defects,
+                attachments=fused_attachments,
+                ocr_text=fused_ocr_text,
+            )
+            if candidate_score <= current_score:
+                self._set_phase2_gemini_meta(
+                    fused,
+                    status="below_min_words",
+                    applied=False,
+                    timeout_s=timeout_s,
+                )
+                return False
         sanitized = self._sanitize_phase2_description_against_evidence(
             phase2_description,
             category=str(getattr(fused, "category", "") or ""),
@@ -1085,6 +1145,7 @@ class MultiViewPipeline:
 
     @classmethod
     def _build_phase2_category_details(cls, grounded: Any) -> Dict[str, List[str]]:
+        """Build category-specific detail fields from PP2 phase-2 output."""
         source = grounded if isinstance(grounded, dict) else {}
         return {
             "features": cls._normalize_string_list(source.get("features")),
@@ -1102,6 +1163,7 @@ class MultiViewPipeline:
         attachments: List[str],
         ocr_text: str,
     ) -> tuple[int, int]:
+        """Measure how many supported facts appear in a candidate description."""
         text = str(description or "").strip().lower()
         if not text:
             return (0, 0)
@@ -1122,6 +1184,7 @@ class MultiViewPipeline:
 
     @staticmethod
     def _description_sentence_count(description: Any) -> int:
+        """Count sentence-like units in a candidate phase-2 description."""
         text = str(description or "").strip()
         if not text:
             return 0
@@ -1140,6 +1203,7 @@ class MultiViewPipeline:
         ocr_text: str,
         fusion: Any,
     ) -> Dict[str, Any]:
+        """Remove unsupported or unsafe details from a phase-2 description."""
         raw = str(description or "").strip()
         if not raw:
             return {"description": "", "rejected_sentences": 0}
@@ -1175,7 +1239,8 @@ class MultiViewPipeline:
                 identity_sentence = True
             if callable(contains_scene):
                 contamination = contains_scene(cleaned)
-                if isinstance(contamination, bool) and contamination:
+                supported_sentence = any(phrase in lowered for phrase in allowed_phrases)
+                if isinstance(contamination, bool) and contamination and not supported_sentence:
                     rejected += 1
                     continue
             quoted_values = re.findall(r'"([^"]+)"', cleaned)
@@ -1189,7 +1254,22 @@ class MultiViewPipeline:
                 continue
             kept.append(cleaned.rstrip(". ") + ".")
 
-        filtered = " ".join(dict.fromkeys(kept)).strip()
+        deduper = getattr(fusion, "_dedupe_description_sentences", None)
+        if callable(deduper):
+            deduped_candidate = deduper([sentence.rstrip(". ") for sentence in kept], category)
+            if isinstance(deduped_candidate, list):
+                filtered_sentences = deduped_candidate
+            else:
+                filtered_sentences = MultiViewFusionService._dedupe_description_sentences(
+                    [sentence.rstrip(". ") for sentence in kept],
+                    category,
+                )
+        else:
+            filtered_sentences = MultiViewFusionService._dedupe_description_sentences(
+                [sentence.rstrip(". ") for sentence in kept],
+                category,
+            )
+        filtered = " ".join(f"{sentence}." for sentence in filtered_sentences if str(sentence or "").strip()).strip()
         if callable(is_generic) and filtered:
             generic = is_generic(filtered, category)
             if isinstance(generic, bool) and generic:
@@ -1207,6 +1287,7 @@ class MultiViewPipeline:
         attachments: List[str],
         ocr_text: str,
     ) -> bool:
+        """Decide whether phase-2 generated description should replace the current one."""
         candidate = str(candidate_description or "").strip()
         if not candidate:
             return False
@@ -1364,6 +1445,7 @@ class MultiViewPipeline:
 
     @staticmethod
     def _center_crop(image: Image.Image, ratio: float = 0.70) -> Image.Image:
+        """Return a centered crop using the configured ratio."""
         if not isinstance(image, Image.Image):
             return image
         w, h = image.size
@@ -1384,6 +1466,7 @@ class MultiViewPipeline:
 
     @staticmethod
     def _stage1_reason(caption_text: Any, ocr_text: Any) -> str:
+        """Classify why stage-1 extraction is usable, empty, or failed."""
         has_caption = bool(str(caption_text or "").strip())
         has_ocr = bool(str(ocr_text or "").strip())
         if has_caption and has_ocr:
@@ -1395,12 +1478,14 @@ class MultiViewPipeline:
         return "ok_empty_ocr"
 
     def _is_stage1_nonempty(self, extraction_data: Dict[str, Any]) -> bool:
+        """Return whether stage-1 extraction contains useful evidence."""
         caption_text = str(extraction_data.get("caption", "")).strip()
         ocr_text = str(extraction_data.get("ocr_text", "")).strip()
         return bool(caption_text) or bool(ocr_text)
 
     @staticmethod
     def _is_florence_failed(extraction_data: Dict[str, Any]) -> bool:
+        """Return whether Florence extraction failed or returned an error status."""
         if not isinstance(extraction_data, dict):
             return False
         raw = extraction_data.get("raw", {})
@@ -1417,6 +1502,7 @@ class MultiViewPipeline:
         image_size: Tuple[int, int],
         threshold_ratio: float,
     ) -> bool:
+        """Return whether a detection box is too small for reliable crop analysis."""
         if not bbox or len(bbox) != 4:
             return True
         width, height = image_size
@@ -1442,6 +1528,7 @@ class MultiViewPipeline:
         item_id: str,
         view_index: int,
     ) -> Dict[str, Any]:
+        """Run one OCR-first Florence extraction attempt for a view."""
         ocr_first_start = time.perf_counter()
         try:
             stage1_raw = self.florence.analyze_ocr_first(
@@ -1529,10 +1616,12 @@ class MultiViewPipeline:
 
     @staticmethod
     def _label_conf_pairs(detections: List[Any]) -> List[Tuple[str, float]]:
+        """Convert detections into label-confidence pairs for logging and hints."""
         return [(str(det.label), float(det.confidence)) for det in detections]
 
     @staticmethod
     def _normalize_hint_text(text: Any) -> str:
+        """Normalize hint text for keyword matching."""
         if text is None:
             return ""
         if isinstance(text, str):
@@ -1545,6 +1634,7 @@ class MultiViewPipeline:
 
     @staticmethod
     def _collect_text_fragments(value: Any) -> List[str]:
+        """Collect searchable text fragments from nested evidence values."""
         fragments: List[str] = []
         if value is None:
             return fragments
@@ -1568,10 +1658,12 @@ class MultiViewPipeline:
         return fragments
 
     def _extract_feature_tokens(self, grounded_features: Dict[str, Any]) -> str:
+        """Flatten grounded feature values into searchable hint text."""
         fragments = self._collect_text_fragments(grounded_features if isinstance(grounded_features, dict) else {})
         return self._normalize_hint_text(" ".join(fragments))
 
     def _normalize_label(self, text: Any) -> Optional[str]:
+        """Canonicalize and normalize a detection or hint label."""
         normalized = self._normalize_hint_text(text)
         if not normalized:
             return None
@@ -1597,6 +1689,7 @@ class MultiViewPipeline:
 
     @staticmethod
     def _text_has_keyword(text: str, keyword: str) -> bool:
+        """Return whether normalized text contains the given keyword as a whole token or phrase."""
         if not text or not keyword:
             return False
         kw = str(keyword).strip().lower()
@@ -1611,6 +1704,7 @@ class MultiViewPipeline:
         ocr_text: str,
         grounded_features: Dict[str, Any],
     ) -> Tuple[Optional[str], Dict[str, bool]]:
+        """Infer a canonical category hint from text and detection signals."""
         caption_text = self._normalize_hint_text(caption)
         ocr_text_norm = self._normalize_hint_text(ocr_text)
         feature_text = self._extract_feature_tokens(grounded_features)
@@ -1673,6 +1767,7 @@ class MultiViewPipeline:
         ocr_text: str,
         grounded_features: Dict[str, Any],
     ) -> Optional[str]:
+        """Infer the canonical category hint for a PP2 view."""
         hint, _ = self._infer_canonical_hint_with_signals(caption, ocr_text, grounded_features)
         return hint
 
@@ -1748,6 +1843,7 @@ class MultiViewPipeline:
         canonical_hints: List[Optional[str]],
         hint_signals_list: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[Optional[str], str, Dict[str, int]]:
+        """Choose a consensus label using detections, hints, and confidence signals."""
         hint_votes = Counter([hint for hint in canonical_hints if hint])
         if hint_votes:
             top_vote_count = max(hint_votes.values())
@@ -1855,6 +1951,7 @@ class MultiViewPipeline:
         image_size: Tuple[int, int],
         pad_ratio: float,
     ) -> Optional[Tuple[int, int, int, int]]:
+        """Expand a bounding box by configured padding while staying inside image bounds."""
         if not bbox or len(bbox) != 4:
             return None
         width, height = image_size
@@ -1879,6 +1976,7 @@ class MultiViewPipeline:
         return (int(px1), int(py1), int(px2), int(py2))
 
     def _mark_extraction_skipped(self, raw: Any, skipped_steps: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Mark an extraction payload as skipped and preserve skipped-step metadata."""
         out: Dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
         out["skipped"] = True
         out["reason"] = "early_exit"
@@ -1899,6 +1997,7 @@ class MultiViewPipeline:
         embedding_dim: int,
         reason: str = "early_exit",
     ) -> Dict[str, Any]:
+        """Build a PP2 per-view result for a skipped or unusable view."""
         if reason == "early_exit":
             raw = self._mark_extraction_skipped({}, ["load", "detect", "florence", "embedding"])
         else:
@@ -1939,6 +2038,7 @@ class MultiViewPipeline:
         item_id: str,
         early_exit_event: threading.Event,
     ) -> Dict[str, Any]:
+        """Run stage-1 detection, crop, extraction, and embedding for one PP2 view."""
         view_start = time.perf_counter()
         filename = file.filename or f"view_{view_index}.jpg"
         pil_img = self._load_image(file)
@@ -2328,6 +2428,7 @@ class MultiViewPipeline:
         item_id: str,
         decision_label: Optional[str],
     ) -> Tuple[bool, Optional[PP2VerificationResult]]:
+        """Run provisional pair verification before final PP2 fusion."""
         if self._multiview_verification_disabled():
             return False, None
 

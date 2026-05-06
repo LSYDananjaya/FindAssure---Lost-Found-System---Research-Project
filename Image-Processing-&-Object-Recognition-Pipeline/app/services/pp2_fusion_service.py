@@ -15,6 +15,10 @@ from app.config.settings import settings
 from app.schemas.pp2_schemas import PP2PerViewResult, PP2FusedProfile
 from app.domain.color_utils import normalize_color, extract_color_from_text
 
+# Fusion is the final public-facing text boundary for PP2. It merges per-view
+# evidence but also removes scene/person/sensitive details before storing or
+# returning descriptions.
+
 class MultiViewFusionService:
     """Builds the final fused item profile from verified PP2 evidence."""
 
@@ -41,19 +45,23 @@ class MultiViewFusionService:
 
     @classmethod
     def _looks_like_url_or_domain(cls, raw_token: str) -> bool:
+        """Return whether a token looks like a URL or domain rather than object text."""
         token = str(raw_token or "").upper()
         return bool(cls._URL_OR_DOMAIN_RE.search(token))
 
     @staticmethod
     def _strip_token_edges(token: str) -> str:
+        """Remove punctuation from the edges of an OCR token."""
         return str(token or "").upper().strip(string.punctuation + " ")
 
     @classmethod
     def _split_raw_chunk(cls, raw_chunk: str) -> List[str]:
+        """Split a raw OCR chunk into candidate text tokens."""
         return [part for part in cls._SPLIT_RE.split(str(raw_chunk or "")) if part]
 
     @staticmethod
     def _non_letter_ratio(token: str) -> float:
+        """Measure how much of a token is made of non-letter characters."""
         if not token:
             return 1.0
         non_letters = sum(1 for ch in token if not ("A" <= ch <= "Z"))
@@ -61,6 +69,7 @@ class MultiViewFusionService:
 
     @classmethod
     def _is_brand_like(cls, token: str) -> bool:
+        """Return whether a token looks like a plausible brand or identifier."""
         if not token:
             return False
         if token in cls._TECH_STOPWORDS:
@@ -70,6 +79,7 @@ class MultiViewFusionService:
         return 4 <= len(token) <= 20
 
     def _collect_view_ocr_tokens(self, text: str) -> tuple[Set[str], Set[str]]:
+        """Collect clean OCR tokens from a PP2 per-view result."""
         kept: Set[str] = set()
         rejected: Set[str] = set()
         raw_chunks = str(text or "").split()
@@ -107,6 +117,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _levenshtein_distance(a: str, b: str) -> int:
+        """Compute edit distance between two strings."""
         left = str(a or "")
         right = str(b or "")
         if left == right:
@@ -133,6 +144,7 @@ class MultiViewFusionService:
 
     @classmethod
     def _normalized_edit_similarity(cls, a: str, b: str) -> float:
+        """Convert edit distance into a normalized token similarity score."""
         left = str(a or "").upper()
         right = str(b or "").upper()
         max_len = max(len(left), len(right), 1)
@@ -141,6 +153,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _longest_common_suffix_len(a: str, b: str) -> int:
+        """Return the length of the common suffix shared by two strings."""
         left = str(a or "")
         right = str(b or "")
         max_n = min(len(left), len(right))
@@ -151,6 +164,7 @@ class MultiViewFusionService:
 
     @classmethod
     def _tokens_similar(cls, a: str, b: str, threshold: float) -> bool:
+        """Return whether two OCR tokens are similar enough to cluster together."""
         left = str(a or "").upper()
         right = str(b or "").upper()
         if not left or not right:
@@ -179,6 +193,7 @@ class MultiViewFusionService:
         tokens_per_view: List[List[str]],
         threshold: float = 0.82,
     ) -> List[List[str]]:
+        """Cluster OCR tokens with fuzzy matching to collapse recognition variants."""
         token_order: List[str] = []
         seen: Set[str] = set()
         for view_tokens in tokens_per_view or []:
@@ -229,6 +244,7 @@ class MultiViewFusionService:
         return [cluster for _, cluster in clusters]
 
     def _select_cluster_representative(self, cluster_tokens: List[str]) -> str:
+        """Choose the best display token for an OCR token cluster."""
         tokens = [str(tok or "").upper() for tok in cluster_tokens if str(tok or "").strip()]
         if not tokens:
             return ""
@@ -236,6 +252,7 @@ class MultiViewFusionService:
             return tokens[0]
 
         def _avg_similarity(token: str) -> float:
+            """Compute average normalized similarity between one token and a cluster."""
             others = [t for t in tokens if t != token]
             if not others:
                 return 1.0
@@ -285,6 +302,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _humanize_category(category: str) -> str:
+        """Convert a canonical category label into readable prose."""
         raw = str(category or "").strip()
         if not raw:
             return "item"
@@ -298,6 +316,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _to_clean_str_list(value: Any) -> List[str]:
+        """Normalize a value into a list of clean non-empty strings."""
         if isinstance(value, str):
             text = value.strip()
             return [text] if text else []
@@ -314,6 +333,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _dedupe_keep_order(values: List[str]) -> List[str]:
+        """Deduplicate values while preserving first-seen order."""
         seen: Set[str] = set()
         deduped: List[str] = []
         for raw in values:
@@ -329,6 +349,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _join_natural(values: List[str]) -> str:
+        """Join values into a compact natural-language phrase."""
         items = [str(v).strip() for v in values if str(v).strip()]
         if not items:
             return ""
@@ -340,6 +361,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _ensure_sentence(text: str) -> str:
+        """Ensure text ends with sentence punctuation."""
         cleaned = str(text or "").strip()
         if not cleaned:
             return ""
@@ -347,10 +369,12 @@ class MultiViewFusionService:
 
     @staticmethod
     def _sentence_count(text: str) -> int:
+        """Count sentence-like segments in text."""
         return len([part for part in re.split(r"(?<=[.!?])\s+", str(text or "").strip()) if part.strip()])
 
     @classmethod
     def _collect_novel_values(cls, values: List[str], text: str, limit: int) -> List[str]:
+        """Collect values that are not already present in the base text."""
         haystack = str(text or "").lower()
         novel: List[str] = []
         for value in cls._dedupe_keep_order(values):
@@ -363,6 +387,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _pick_most_common(values: List[str]) -> Optional[str]:
+        """Pick the most frequent non-empty value with deterministic tie handling."""
         cleaned = [str(v).strip() for v in values if str(v).strip()]
         if not cleaned:
             return None
@@ -372,6 +397,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _collect_card_tokens(text: str) -> List[str]:
+        """Collect OCR tokens that likely belong to cards or printed identifiers."""
         tokens = re.findall(r"[A-Za-z0-9][A-Za-z0-9-]*", str(text or ""))
         out: List[str] = []
         for token in tokens:
@@ -382,6 +408,7 @@ class MultiViewFusionService:
         return out
 
     def _merge_card_ocr_tokens(self, per_view: List[PP2PerViewResult], best_view_index: int) -> List[str]:
+        """Merge card OCR tokens across views into stable representative tokens."""
         token_to_views: Dict[str, Set[int]] = defaultdict(set)
         best_view_tokens: List[str] = []
         for res in per_view:
@@ -403,6 +430,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _extract_caption_snippet(caption: str) -> str:
+        """Extract a concise object-focused snippet from a caption."""
         text = MultiViewFusionService._sanitize_object_text(caption)
         if not text:
             return ""
@@ -427,10 +455,12 @@ class MultiViewFusionService:
 
     @staticmethod
     def _tokenize_words(text: str) -> List[str]:
+        """Tokenize text into lowercase words for contamination checks."""
         return re.findall(r"\b[a-z0-9]+\b", str(text or "").lower())
 
     @classmethod
     def _contains_scene_or_meta_contamination(cls, text: str) -> bool:
+        """Detect scene/person metadata that should not appear in item descriptions."""
         raw = str(text or "").strip()
         if not raw:
             return False
@@ -442,6 +472,7 @@ class MultiViewFusionService:
             "cabinet", "cupboard", "drawer", "shelf", "desk", "table", "wall",
             "floor", "keyboard", "laptop", "screen", "background", "window",
             "counter", "surface", "foreground", "backdrop", "carpet", "mat",
+            "hand", "hands", "person", "people", "leg", "legs", "arm", "arms",
         )
         scene_relations = (
             "behind", "in front of", "under", "beneath", "next to", "beside",
@@ -449,6 +480,8 @@ class MultiViewFusionService:
         )
         scene_noun_present = any(re.search(rf"\b{re.escape(noun)}\b", lower) for noun in scene_nouns)
         if scene_noun_present:
+            if any(word in lower for word in ("person", "people", "hand", "hands", "holding", "their leg", "his leg", "her leg")):
+                return True
             if any(relation in lower for relation in scene_relations):
                 return True
             if any(word in lower for word in ("person", "hand", "holding")):
@@ -457,6 +490,7 @@ class MultiViewFusionService:
 
     @classmethod
     def _is_generic_description(cls, text: str, category: str) -> bool:
+        """Return whether a description is too generic to be useful."""
         cleaned = cls._sanitize_object_text(text)
         if not cleaned:
             return True
@@ -490,6 +524,7 @@ class MultiViewFusionService:
 
     @classmethod
     def _finalize_composed_description(cls, text: str) -> str:
+        """Clean and finalize a composed fused-profile description."""
         raw = str(text or "").strip()
         if not raw:
             return ""
@@ -505,11 +540,142 @@ class MultiViewFusionService:
                 if len(fragment.split()) < 3:
                     continue
                 sentences.append(fragment)
-        deduped = cls._dedupe_keep_order(sentences)
+        deduped = cls._dedupe_description_sentences(sentences)
         return " ".join(f"{part}." for part in deduped).strip()
 
     @classmethod
+    def _sentence_signature(cls, sentence: str, category: str = "") -> Set[str]:
+        """Extract meaningful tokens for near-duplicate sentence comparison."""
+        category_terms = set(re.findall(r"[a-z0-9]+", cls._humanize_category(category).lower()))
+        generic_tokens = {
+            "a", "an", "the", "this", "that", "it", "item", "object",
+            "front", "back", "side", "rear", "top", "bottom",
+            "view", "visible", "with", "has", "have", "having", "includes",
+            "include", "shows", "show", "features", "feature", "also",
+        }
+        inferred_categories = {
+            "wallet", "helmet", "phone", "smart", "laptop", "backpack", "handbag",
+            "key", "keys", "earbuds", "case", "charger", "cable", "headphone",
+            "card", "id", "power", "bank",
+        }
+        tokens = set(re.findall(r"[a-z0-9]+", str(sentence or "").lower()))
+        return {
+            token
+            for token in tokens
+            if len(token) >= 3
+            and token not in generic_tokens
+            and token not in category_terms
+            and token not in inferred_categories
+        }
+
+    @classmethod
+    def _identity_prefix_detail(cls, sentence: str, category: str = "") -> str:
+        """Return the detail after a repeated identity phrase, if one is present."""
+        raw = str(sentence or "").strip().rstrip(". ")
+        if not raw:
+            return ""
+        category_pattern = re.escape(cls._humanize_category(category).lower()) if category else (
+            r"wallet|helmet|smart\s+phone|phone|laptop|backpack|handbag|key|keys|earbuds(?:\s+case)?|"
+            r"charger|cable|headphone|student\s+id(?:\s+card)?|nic(?:\s*/\s*national\s+id\s+card)?|power\s+bank"
+        )
+        match = re.match(
+            rf"(?i)^(?:a|an|the|this|these)\s+(?:(?:black|brown|blue|red|green|white|gray|grey|silver|gold)\s+)?"
+            rf"(?:\w+\s+)?(?:{category_pattern})\s+(?:with|featuring|has|includes|shows)\s+(.+)$",
+            raw,
+        )
+        if not match:
+            return ""
+        detail = match.group(1).strip(" ,.")
+        detail = re.sub(r"(?i)^(?:a|an|the)\s+", "", detail).strip()
+        return detail
+
+    @classmethod
+    def _sentences_are_near_duplicates(cls, left: str, right: str, category: str = "") -> bool:
+        """Return whether two sentences repeat the same identity/detail meaning."""
+        left_sig = cls._sentence_signature(left, category)
+        right_sig = cls._sentence_signature(right, category)
+        if not left_sig or not right_sig:
+            return False
+        overlap = len(left_sig & right_sig) / float(max(1, max(len(left_sig), len(right_sig))))
+        if overlap >= 0.80:
+            return True
+        left_detail = cls._identity_prefix_detail(left, category)
+        right_detail = cls._identity_prefix_detail(right, category)
+        return bool(left_detail and right_detail and left_sig == right_sig)
+
+    @classmethod
+    def _detail_sentence_from_repeated_identity(cls, sentence: str, category: str = "") -> str:
+        """Convert a repeated identity sentence into a compact detail sentence."""
+        detail = cls._identity_prefix_detail(sentence, category)
+        if not detail:
+            return ""
+        lowered = detail.lower()
+        if any(marker in lowered for marker in ("scratch", "wear", "scuff", "damage", "dent", "mark")):
+            return f"Visible wear includes {detail}"
+        return f"Notable details include {detail}"
+
+    @classmethod
+    def _dedupe_description_sentences(cls, sentences: List[str], category: str = "") -> List[str]:
+        """Deduplicate near-identical description sentences while preserving new facts."""
+        output: List[str] = []
+        seen_exact: Set[str] = set()
+        seen_signatures: List[Set[str]] = []
+        identity_seen = False
+        category_terms = set(re.findall(r"[a-z0-9]+", cls._humanize_category(category).lower()))
+
+        for raw in sentences:
+            sentence = str(raw or "").strip().rstrip(". ")
+            if not sentence:
+                continue
+            exact_key = sentence.lower()
+            if exact_key in seen_exact:
+                continue
+
+            signature = cls._sentence_signature(sentence, category)
+            detail_rewrite = ""
+            has_identity_prefix = bool(cls._identity_prefix_detail(sentence, category))
+            if has_identity_prefix and identity_seen:
+                detail_rewrite = cls._detail_sentence_from_repeated_identity(sentence, category)
+
+            candidate = detail_rewrite or sentence
+            candidate_key = candidate.lower()
+            candidate_signature = cls._sentence_signature(candidate, category)
+            if candidate_key in seen_exact:
+                continue
+            if candidate_signature and any(candidate_signature <= seen for seen in seen_signatures):
+                continue
+
+            if (
+                not detail_rewrite
+                and signature
+                and any(cls._sentences_are_near_duplicates(existing, sentence, category) for existing in output)
+            ):
+                detail_rewrite = cls._detail_sentence_from_repeated_identity(sentence, category)
+                if detail_rewrite:
+                    candidate = detail_rewrite
+                    candidate_key = candidate.lower()
+                    candidate_signature = cls._sentence_signature(candidate, category)
+                    if candidate_key in seen_exact or (
+                        candidate_signature and any(candidate_signature <= seen for seen in seen_signatures)
+                    ):
+                        continue
+                else:
+                    continue
+
+            output.append(candidate)
+            seen_exact.add(candidate_key)
+            if candidate_signature:
+                seen_signatures.append(candidate_signature)
+            if has_identity_prefix or (category_terms and category_terms & set(re.findall(r"[a-z0-9]+", sentence.lower()))):
+                identity_seen = True
+            elif not category and has_identity_prefix:
+                identity_seen = True
+
+        return output
+
+    @classmethod
     def _needs_detail_richness_boost(cls, text: str) -> bool:
+        """Return whether a description needs extra supported detail."""
         cleaned = str(text or "").strip()
         if not cleaned:
             return True
@@ -528,6 +694,7 @@ class MultiViewFusionService:
         defects: List[str],
         ocr_tokens: List[str],
     ) -> str:
+        """Build a richer public description from structured fused evidence."""
         category_text = self._humanize_category(category)
         identity_parts: List[str] = ["This"]
         if color:
@@ -575,6 +742,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _sanitize_object_text(text: str) -> str:
+        """Sanitize generated object text so it stays item-focused."""
         raw = str(text or "").strip()
         if not raw:
             return ""
@@ -645,6 +813,7 @@ class MultiViewFusionService:
 
     @classmethod
     def _is_hidden_wallet_detail(cls, value: str, category: str) -> bool:
+        """Return whether a wallet detail should be hidden from public output."""
         if str(category or "").strip().lower() != "wallet":
             return False
         text = str(value or "").strip()
@@ -654,6 +823,7 @@ class MultiViewFusionService:
 
     @classmethod
     def _filter_public_detail_values(cls, values: List[str], category: str) -> List[str]:
+        """Filter sensitive or hidden values from public detail lists."""
         return [
             value
             for value in cls._dedupe_keep_order(values)
@@ -662,6 +832,7 @@ class MultiViewFusionService:
 
     @classmethod
     def _sanitize_public_view_description(cls, text: str, category: str) -> str:
+        """Clean one view description before exposing it publicly."""
         cleaned = cls._sanitize_object_text(text)
         if not cleaned:
             return ""
@@ -691,6 +862,7 @@ class MultiViewFusionService:
         *,
         category: str,
     ) -> List[Dict[str, Any]]:
+        """Collect sanitized per-view descriptions for fused output."""
         ranked_views = sorted(
             scope_views,
             key=lambda view: (float(view.quality_score), float(view.detection.confidence)),
@@ -738,6 +910,7 @@ class MultiViewFusionService:
 
     @staticmethod
     def _pick_majority_value(values: List[str]) -> Optional[str]:
+        """Pick the majority value from per-view grounded features."""
         cleaned = [str(v).strip() for v in values if str(v).strip()]
         if not cleaned:
             return None
@@ -751,6 +924,7 @@ class MultiViewFusionService:
         return None
 
     def _select_detail_scope_best_view(self, scope_views: List[PP2PerViewResult]) -> Optional[PP2PerViewResult]:
+        """Select the best view for detail-rich fused profile fields."""
         if not scope_views:
             return None
         ranked = sorted(
@@ -768,6 +942,7 @@ class MultiViewFusionService:
         best_view: Optional[PP2PerViewResult],
         support_needed: int,
     ) -> tuple[List[str], List[str]]:
+        """Collect supported values for a grounded feature across views."""
         support_counts: Dict[str, int] = defaultdict(int)
         display_map: Dict[str, str] = {}
         best_view_values: List[str] = []
@@ -804,6 +979,7 @@ class MultiViewFusionService:
         excluded_values: List[str],
         exclude_view_index: Optional[int] = None,
     ) -> List[str]:
+        """Collect feature values that are meaningful only for specific viewing angles."""
         ranked_views = sorted(
             scope_views,
             key=lambda view: (float(view.quality_score), float(view.detection.confidence)),
@@ -831,6 +1007,7 @@ class MultiViewFusionService:
         scope_views: List[PP2PerViewResult],
         fallback_tokens: List[str],
     ) -> List[str]:
+        """Collect OCR-like tokens found in captions and OCR fields."""
         token_counts: Counter = Counter()
         for view in scope_views:
             kept_tokens, _ = self._collect_view_ocr_tokens(getattr(view.extraction, "ocr_text", "") or "")

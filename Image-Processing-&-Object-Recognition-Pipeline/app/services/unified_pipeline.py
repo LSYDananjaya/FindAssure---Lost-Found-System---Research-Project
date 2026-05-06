@@ -45,6 +45,10 @@ from app.domain.category_specs import canonicalize_label
 
 logger = logging.getLogger(__name__)
 
+# PP1 is the single-image path. It prioritizes a reliable primary detection,
+# evidence-locked description generation, and searchable embeddings over broad
+# multi-view reconciliation.
+
 class UnifiedPipeline:
     """Coordinates all models used by the PP1 single-photo path."""
 
@@ -61,16 +65,27 @@ class UnifiedPipeline:
         gemini: Optional[ReasonerProtocol] = None,
         dino: Optional[DINOEmbedder] = None,
     ):
+        """Initialize PP1 pipeline dependencies, reasoner state, and runtime settings."""
         # Initialize services. The service objects hide model-loading details
         # so this orchestrator can focus on the PP1 decision flow.
         # Models are loaded lazily or on first use in their respective services.
         self.yolo = yolo or YoloService()
         self.florence = florence or FlorenceService()
-        self.gemini = gemini or create_reasoner_from_settings()
+        self.pp1_reasoner_enabled = bool(getattr(settings, "PP1_ENABLE_REASONER", True))
+        self.gemini = gemini if gemini is not None else (
+            create_reasoner_from_settings() if self.pp1_reasoner_enabled else None
+        )
         self.dino = dino or DINOEmbedder()
         self.perf_profile = str(settings.PERF_PROFILE).lower()
         self.max_detections = max(1, int(settings.PP1_MAX_DETECTIONS))
         self.include_gemini_image = bool(settings.PP1_GEMINI_INCLUDE_IMAGE)
+        logger.info(
+            "PP1_REASONER_CONFIG enabled=%s include_image=%s model=%s fallback_model=%s",
+            bool(self.pp1_reasoner_enabled),
+            bool(self.include_gemini_image),
+            str(getattr(settings, "PP1_GEMINI_MODEL", "") or ""),
+            str(getattr(settings, "PP1_GEMINI_FALLBACK_MODEL", "") or ""),
+        )
 
         # Reasoner circuit breaker state
         self._gemini_fail_count: int = 0
@@ -128,12 +143,14 @@ class UnifiedPipeline:
 
     @staticmethod
     def _as_float(value: Any) -> float:
+        """Coerce a value to float for metrics, returning zero on invalid input."""
         try:
             return float(value)
         except (TypeError, ValueError):
             return 0.0
 
     def _resolve_reasoner_label(self, reasoning_meta: Optional[Dict[str, Any]] = None) -> str:
+        """Resolve the reasoner label used in timing and metadata output."""
         meta = reasoning_meta if isinstance(reasoning_meta, dict) else {}
         selected_model = str(meta.get("selected_model") or "").strip()
         if selected_model:
@@ -156,6 +173,7 @@ class UnifiedPipeline:
         detections: int,
         profile: str,
     ) -> None:
+        """Log the PP1 timing breakdown for detection, extraction, reasoning, and storage."""
         raw_payload = primary_result.get("raw", {}) if isinstance(primary_result, dict) else {}
         raw_payload = raw_payload if isinstance(raw_payload, dict) else {}
         timings = raw_payload.get("timings", {}) if isinstance(raw_payload.get("timings", {}), dict) else {}
@@ -183,6 +201,7 @@ class UnifiedPipeline:
 
     @staticmethod
     def _clean_ocr_snippet(ocr_text: Any) -> str:
+        """Clean OCR text for inclusion in generated descriptions."""
         return " ".join(str(ocr_text or "").split()[:10]).strip()
 
     @classmethod
@@ -195,6 +214,7 @@ class UnifiedPipeline:
         key_count: Optional[int],
         ocr_text: Any,
     ) -> List[str]:
+        """Collect description phrases that are supported by extracted evidence."""
         phrases: List[str] = []
         canonical = canonicalize_label(label or "") if label else None
         if canonical:
@@ -232,6 +252,7 @@ class UnifiedPipeline:
         key_count: Optional[int],
         ocr_text: Any,
     ) -> Dict[str, Any]:
+        """Validate and clean a description against available visual and OCR evidence."""
         raw = str(candidate or "").strip()
         if not raw:
             return {"description": "", "quality": {"status": "empty", "kept_sentences": 0, "rejected_sentences": 0}}
@@ -305,6 +326,7 @@ class UnifiedPipeline:
     ) -> Dict[str, Any]:
         """Compose the richest public-facing description from verified evidence."""
         def _clean_list(value: Any) -> List[str]:
+            """Normalize nested values into a list of clean strings."""
             if isinstance(value, (list, tuple, set)):
                 return [str(item).strip() for item in value if str(item).strip()]
             if value is None:
@@ -313,14 +335,34 @@ class UnifiedPipeline:
             return [text] if text else []
 
         def _clean_description_text(value: str) -> str:
+            """Clean generated description text before PP1 validation."""
             cleaned = str(value or "").strip()
             if not cleaned:
                 return ""
+            # Fix run-on sentences: "A black helmet The helmet" -> "A black helmet. The helmet"
+            cleaned = re.sub(
+                r"(?i)\b(a|an)\s+([a-z]+(?:\s+[a-z]+){0,3})\s+(the\s+\2\b)",
+                r"\1 \2. \3",
+                cleaned,
+            )
+            cleaned = re.sub(
+                r"(?i)\b((?:a|an)\s+[a-z]+(?:\s+[a-z]+){0,3})\s+(the\s+[a-z]+\b)",
+                r"\1. \2",
+                cleaned,
+            )
+            # Strip view-prefix phrasing
             cleaned = re.sub(
                 r"(?i)^(?:the\s+)?(?:inside|front|back|side|rear|top|bottom)\s+view\s+shows\s+",
                 "",
                 cleaned,
             ).strip()
+            # Strip body-part references (mid-sentence and trailing)
+            cleaned = re.sub(
+                r"(?i)\b(?:a\s+\w+(?:\s+\w+){0,2}\s+)?on\s+(?:their|his|her|a|the)\s+(?:leg|legs|arm|arms|hand|hands|lap|knee|thigh)\b[^.]*",
+                "",
+                cleaned,
+            ).strip(" ,.")
+            # Strip furniture/surface trailing context
             cleaned = re.sub(
                 r"(?i)\s+(?:on|against|near|beside)\s+(?:a\s+|the\s+)?(?:wooden\s+)?(?:table|desk|surface|floor)\b.*$",
                 "",
@@ -328,6 +370,8 @@ class UnifiedPipeline:
             ).strip(" ,.")
             cleaned = re.sub(r"(?i)\s+is\s+sitting\b.*$", "", cleaned).strip(" ,.")
             cleaned = re.sub(r"(?i)\s+is\s+lying\b.*$", "", cleaned).strip(" ,.")
+            cleaned = re.sub(r"(?i)\s+(?:is\s+)?(?:held|holding|being held)\b.*$", "", cleaned).strip(" ,.")
+            return cleaned
             return cleaned
 
         description_text = str(
@@ -359,25 +403,29 @@ class UnifiedPipeline:
             prefix_parts.insert(0, str(color).lower())
 
         sentences: List[str] = []
-        if prefix_parts and not any(part in description_lower[:80] for part in prefix_parts):
-            sentences.append(f"A {' '.join(prefix_parts)}.")
+        prefix_phrase = " ".join(prefix_parts).strip()
+        if prefix_phrase and prefix_phrase.lower() not in description_lower[:120]:
+            sentences.append(f"A {prefix_phrase}.")
         if description_text:
             sentences.append(description_text.rstrip(". ") + ".")
 
         unseen_features = [item for item in features if item.lower() not in description_lower]
         if unseen_features:
-            sentences.append("It has " + ", ".join(unseen_features[:4]) + ".")
+            joined = MultiViewFusionService._join_natural(unseen_features[:4])
+            sentences.append(f"Notable details include {joined}.")
 
         unseen_attachments = [item for item in attachments if item.lower() not in description_lower]
         if unseen_attachments:
-            sentences.append("It includes " + ", ".join(unseen_attachments[:2]) + ".")
+            joined = MultiViewFusionService._join_natural(unseen_attachments[:2])
+            sentences.append(f"It also comes with {joined}.")
 
         unseen_defects = [item for item in defects if item.lower() not in description_lower]
         if unseen_defects:
-            sentences.append("It shows " + ", ".join(unseen_defects[:2]) + ".")
+            joined = MultiViewFusionService._join_natural(unseen_defects[:2])
+            sentences.append(f"Visible wear includes {joined}.")
 
         if ocr_snippet and ocr_snippet.lower() not in description_lower:
-            sentences.append(f'The text "{ocr_snippet}" is visible on the surface.')
+            sentences.append(f'The text "{ocr_snippet}" is visible.')
 
         if not sentences:
             sentences.append("Item visible in the image.")
@@ -422,6 +470,7 @@ class UnifiedPipeline:
 
     @staticmethod
     def _normalize_text_for_rerank(text: Any) -> str:
+        """Normalize text for PP1 label reranking."""
         if text is None:
             return ""
         if isinstance(text, str):
@@ -431,6 +480,7 @@ class UnifiedPipeline:
         return str(text).lower()
 
     def _collect_rerank_texts(self, analysis: Dict[str, Any]) -> Dict[str, str]:
+        """Collect caption, OCR, and feature text used for PP1 reranking."""
         raw = analysis.get("raw", {})
         grounding_raw = raw.get("grounding_raw", {}) if isinstance(raw, dict) else {}
         grounding_labels = grounding_raw.get("labels", []) if isinstance(grounding_raw, dict) else []
@@ -445,6 +495,7 @@ class UnifiedPipeline:
 
     @staticmethod
     def _text_has_keyword(text: str, keyword: str) -> bool:
+        """Return whether normalized text contains the given keyword as a whole token or phrase."""
         if not text:
             return False
         phrase = str(keyword or "").strip().lower()
@@ -467,6 +518,7 @@ class UnifiedPipeline:
         return False
 
     def _score_label_keywords(self, label: str, texts: Dict[str, str], caption_is_generic: bool = False) -> Dict[str, Any]:
+        """Score keyword evidence for a candidate label."""
         keywords = self.LABEL_RERANK_KEYWORDS.get(str(label), [])
         matched_keywords: Dict[str, List[str]] = {"caption": [], "ocr": [], "grounding": []}
         total = 0
@@ -494,6 +546,7 @@ class UnifiedPipeline:
         return {"score": total, "matched_keywords": matched_keywords}
 
     def _rerank_label(self, top1_label: str, candidates: List[Any], analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Rerank the top detected label using extracted text evidence."""
         candidate_labels: List[str] = []
         best_conf_by_label: Dict[str, float] = {}
         for det in candidates:
@@ -584,6 +637,7 @@ class UnifiedPipeline:
         }
 
     def _derive_florence_strong_label(self, analysis: Dict[str, Any]) -> Optional[str]:
+        """Derive a strong label from Florence evidence when available."""
         texts = self._collect_rerank_texts(analysis)
         caption_is_generic = bool((analysis.get("raw") or {}).get("caption_is_generic", False))
         scored: List[Dict[str, Any]] = []
@@ -616,6 +670,7 @@ class UnifiedPipeline:
         return str(scored[0]["label"])
 
     def _labels_incompatible(self, yolo_label: str, florence_label: str) -> bool:
+        """Return whether YOLO and Florence labels are incompatible."""
         yolo = str(yolo_label or "")
         florence = str(florence_label or "")
         return (
@@ -626,6 +681,7 @@ class UnifiedPipeline:
 
     @staticmethod
     def _unique_labels(labels: List[str]) -> List[str]:
+        """Return labels in first-seen order without duplicates."""
         seen = set()
         out: List[str] = []
         for label in labels:
@@ -854,6 +910,8 @@ class UnifiedPipeline:
             self._gemini_fail_count = 0
         if not hasattr(self, "_gemini_open_until"):
             self._gemini_open_until = 0.0
+        if not hasattr(self, "pp1_reasoner_enabled"):
+            self.pp1_reasoner_enabled = bool(getattr(settings, "PP1_ENABLE_REASONER", True))
         if not hasattr(self, "_pp1_thread_pool"):
             self._pp1_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="pp1_dino")
 
@@ -1169,9 +1227,28 @@ class UnifiedPipeline:
             gemini_start = time.perf_counter()
             gemini_error_meta = None
 
+            if not self.pp1_reasoner_enabled:
+                fallback_color = analysis.get("color_vqa") or None
+                if fallback_color:
+                    fallback_color = normalize_color(fallback_color) or fallback_color
+                gemini_result = {
+                    "status": "accepted_degraded",
+                    "message": "Reasoning disabled — accepted with Florence-only data.",
+                    "label": final_label,
+                    "color": fallback_color,
+                    "category_details": {"features": [], "defects": [], "attachments": []},
+                    "key_count": None,
+                    "final_description": None,
+                    "tags": [],
+                    "degradation_reason": "reasoner_disabled",
+                }
+                gemini_warnings.append(
+                    "Reasoning disabled — accepted with Florence-only data."
+                )
+
             # Circuit breaker: skip reasoning if too many consecutive failures
             _cb_open = time.time() < self._gemini_open_until
-            if _cb_open:
+            if self.pp1_reasoner_enabled and _cb_open:
                 logger.warning(
                     "PP1_REASONER_CIRCUIT_BREAKER_OPEN: skipping reasoning for %d more seconds",
                     int(self._gemini_open_until - time.time()),
@@ -1194,8 +1271,9 @@ class UnifiedPipeline:
                     "Reasoning circuit breaker open — accepted with Florence-only data."
                 )
 
-            if not _cb_open:
+            if self.pp1_reasoner_enabled and not _cb_open:
               try:
+                assert self.gemini is not None
                 gemini_result = self.gemini.run_phase1(
                     evidence,
                     crop_image=crop if include_gemini_image else None,

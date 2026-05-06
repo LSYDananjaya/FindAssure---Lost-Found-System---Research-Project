@@ -16,21 +16,28 @@ from app.core.redis_client import get_healthy_redis_client
 
 logger = logging.getLogger(__name__)
 
+# Redis is preferred for cross-process job state, but the in-memory fallback
+# keeps local development and degraded deployments usable. The fallback is not
+# durable and should only be treated as best-effort request progress state.
+
 _memory_jobs: Dict[str, Dict[str, Any]] = {}
 _memory_lock = threading.Lock()
 _redis_fallback_active = False
 
 
 def _job_key(task_id: str) -> str:
+    """Build the Redis key used for a pre-analysis job."""
     return f"pre-analysis-job:{task_id}"
 
 
 def _ttl_seconds() -> int:
+    """Return the configured pre-analysis job TTL in seconds."""
     value = int(getattr(settings, "PRE_ANALYSIS_JOB_TTL_S", 900))
     return value if value > 0 else 900
 
 
 def _now_ms() -> int:
+    """Return the current Unix time in milliseconds."""
     return int(time.time() * 1000)
 
 
@@ -67,6 +74,7 @@ def _normalize_job_value(value: Any) -> Any:
 
 
 def _payload_updated_at_ms(payload: Optional[Dict[str, Any]]) -> int:
+    """Extract the update timestamp from a job payload."""
     if not isinstance(payload, dict):
         return -1
     value = payload.get("updatedAtMs")
@@ -74,6 +82,7 @@ def _payload_updated_at_ms(payload: Optional[Dict[str, Any]]) -> int:
 
 
 def _log_redis_fallback(reason: Optional[str] = None) -> None:
+    """Log that job storage is falling back from Redis to memory."""
     global _redis_fallback_active
     if _redis_fallback_active:
         return
@@ -90,11 +99,13 @@ def _log_redis_fallback(reason: Optional[str] = None) -> None:
 
 
 def _mark_redis_healthy() -> None:
+    """Mark Redis as healthy after a successful operation."""
     global _redis_fallback_active
     _redis_fallback_active = False
 
 
 def _get_usable_redis_client():
+    """Return a Redis client when Redis is currently usable."""
     redis_client = get_healthy_redis_client()
     if redis_client is None:
         _log_redis_fallback()
@@ -105,6 +116,7 @@ def _get_usable_redis_client():
 
 
 def _save_memory_job(task_id: str, stored: Dict[str, Any], ttl: int) -> Dict[str, Any]:
+    """Save a job payload into the in-memory fallback store."""
     expires_at = time.time() + ttl
     with _memory_lock:
         _memory_jobs[task_id] = {
@@ -115,6 +127,7 @@ def _save_memory_job(task_id: str, stored: Dict[str, Any], ttl: int) -> Dict[str
 
 
 def _get_memory_job(task_id: str) -> Optional[Dict[str, Any]]:
+    """Return an unexpired job payload from the in-memory fallback store."""
     now = time.time()
     with _memory_lock:
         entry = _memory_jobs.get(task_id)
@@ -150,6 +163,7 @@ def save_job(task_id: str, payload: Dict[str, Any], ttl_s: Optional[int] = None)
 
 
 def get_job(task_id: str) -> Optional[Dict[str, Any]]:
+    """Load a pre-analysis job from Redis or the in-memory fallback store."""
     memory_job = _get_memory_job(task_id)
     redis_job = None
     redis_client = _get_usable_redis_client()
@@ -169,6 +183,7 @@ def get_job(task_id: str) -> Optional[Dict[str, Any]]:
 
 
 def update_job(task_id: str, patch: Dict[str, Any], ttl_s: Optional[int] = None) -> Dict[str, Any]:
+    """Merge a patch into an existing pre-analysis job and persist it."""
     current = get_job(task_id) or {"taskId": task_id}
     current.update(patch)
     return save_job(task_id, current, ttl_s=ttl_s)

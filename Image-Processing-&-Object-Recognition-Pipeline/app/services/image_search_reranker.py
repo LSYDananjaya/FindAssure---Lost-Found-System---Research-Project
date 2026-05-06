@@ -17,6 +17,10 @@ from PIL import Image
 
 from app.domain.color_utils import normalize_color
 
+# The reranker only consumes lightweight metadata and vectors already produced
+# by PP1/PP2. It should stay side-effect free so search ranking can be tested
+# independently from model execution.
+
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]+")
 _BRAND_RE = re.compile(r"^[A-Z]+$")
@@ -51,6 +55,7 @@ class SearchQueryContext:
 
 
 def normalize_search_token(raw: Any) -> str:
+    """Normalize raw search text into a stable uppercase token."""
     token = str(raw or "").strip().upper()
     if not token:
         return ""
@@ -89,6 +94,7 @@ def collect_search_tokens(values: Any) -> list[str]:
 
 
 def extract_brand_tokens(values: Any) -> list[str]:
+    """Extract likely brand tokens from OCR or metadata values."""
     raw_tokens: list[str] = []
     if values is None:
         return []
@@ -136,6 +142,7 @@ def build_color_histogram(image: Optional[Image.Image], bins: tuple[int, int, in
 
 
 def histogram_similarity(left: Optional[np.ndarray], right: Optional[np.ndarray]) -> float:
+    """Compare two color histograms and return a normalized similarity score."""
     if left is None or right is None:
         return 0.0
     lvec = np.asarray(left, dtype=np.float32).reshape(-1)
@@ -147,6 +154,7 @@ def histogram_similarity(left: Optional[np.ndarray], right: Optional[np.ndarray]
 
 
 def vector_similarity(left: Optional[np.ndarray], right: Optional[np.ndarray]) -> Optional[float]:
+    """Compute cosine similarity for two optional vectors when dimensions are valid."""
     if left is None or right is None:
         return None
     lvec = np.asarray(left, dtype=np.float32).reshape(-1)
@@ -161,12 +169,14 @@ def vector_similarity(left: Optional[np.ndarray], right: Optional[np.ndarray]) -
 
 
 def color_conflict(query_color: Optional[str], candidate_color: Optional[str]) -> bool:
+    """Return whether two normalized colors are both present and different."""
     left = normalize_color(str(query_color or "")) or ""
     right = normalize_color(str(candidate_color or "")) or ""
     return bool(left and right and left != right)
 
 
 def token_overlap_score(query_tokens: Iterable[str], candidate_tokens: Iterable[str]) -> float:
+    """Score normalized token overlap between query and candidate token sets."""
     qset = {normalize_search_token(token) for token in query_tokens}
     cset = {normalize_search_token(token) for token in candidate_tokens}
     qset.discard("")
@@ -180,6 +190,7 @@ def token_overlap_score(query_tokens: Iterable[str], candidate_tokens: Iterable[
 
 
 def parse_histogram(values: Any) -> Optional[np.ndarray]:
+    """Parse a serialized histogram into a normalized NumPy vector."""
     if not isinstance(values, (list, tuple)):
         return None
     try:
@@ -195,6 +206,7 @@ def parse_histogram(values: Any) -> Optional[np.ndarray]:
 
 
 def parse_vector(values: Any, *, expected_dim: Optional[int] = None) -> Optional[np.ndarray]:
+    """Parse a serialized vector into a NumPy array with optional dimension validation."""
     if not isinstance(values, (list, tuple)):
         return None
     try:
@@ -209,6 +221,7 @@ def parse_vector(values: Any, *, expected_dim: Optional[int] = None) -> Optional
 
 
 def resolve_candidate_category(metadata: dict[str, Any]) -> Optional[str]:
+    """Resolve the candidate category from searchable metadata fields."""
     raw = metadata.get("category") or metadata.get("label")
     if raw is None:
         return None
@@ -217,6 +230,7 @@ def resolve_candidate_category(metadata: dict[str, Any]) -> Optional[str]:
 
 
 def resolve_candidate_color(metadata: dict[str, Any]) -> Optional[str]:
+    """Resolve and normalize the candidate color from searchable metadata fields."""
     raw = metadata.get("normalized_color") or metadata.get("color")
     if raw is None:
         return None
@@ -225,6 +239,7 @@ def resolve_candidate_color(metadata: dict[str, Any]) -> Optional[str]:
 
 
 def build_item_metadata(hits: list[dict[str, Any]], canonical_metadata: dict[str, Any]) -> dict[str, Any]:
+    """Merge per-hit metadata into one candidate-level reranking payload."""
     merged = dict(canonical_metadata)
 
     ocr_tokens: list[str] = []
@@ -258,6 +273,7 @@ def rerank_score(
     base_vector_score: float,
     strict_color: bool = False,
 ) -> tuple[bool, float, dict[str, Any]]:
+    """Combine vector, color, histogram, OCR, and brand signals into a reranking score."""
     candidate_category = resolve_candidate_category(candidate_metadata)
     candidate_color = resolve_candidate_color(candidate_metadata)
     candidate_ocr_tokens = collect_search_tokens(candidate_metadata.get("ocr_tokens") or candidate_metadata.get("ocr_text"))

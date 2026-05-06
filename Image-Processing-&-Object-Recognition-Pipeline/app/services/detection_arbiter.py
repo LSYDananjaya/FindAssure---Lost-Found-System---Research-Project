@@ -17,6 +17,9 @@ from app.domain.label_keywords import CATEGORY_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
+# This module is deliberately stateless: both PP1 and PP2 can call it without
+# sharing mutable request data between concurrent uploads.
+
 # ── Keyword map used to score caption/OCR evidence ──────────────────────────
 # Now imported from the shared label_keywords module to stay in sync with
 # PP1 reranking, PP2 hint inference, and Florence strong-label derivation.
@@ -53,6 +56,7 @@ def should_run_florence_od() -> Tuple[bool, str]:
 # ── IoU helper ───────────────────────────────────────────────────────────────
 
 def _iou(box_a: Tuple[int, int, int, int], box_b: Tuple[int, int, int, int]) -> float:
+    """Compute intersection-over-union for two bounding boxes."""
     x1 = max(box_a[0], box_b[0])
     y1 = max(box_a[1], box_b[1])
     x2 = min(box_a[2], box_b[2])
@@ -69,6 +73,7 @@ def _iou(box_a: Tuple[int, int, int, int], box_b: Tuple[int, int, int, int]) -> 
 # ── Evidence scoring ─────────────────────────────────────────────────────────
 
 def _text_has_keyword(text: str, keyword: str) -> bool:
+    """Return whether normalized text contains the given keyword as a whole token or phrase."""
     if not text or not keyword:
         return False
     phrase = keyword.strip().lower()

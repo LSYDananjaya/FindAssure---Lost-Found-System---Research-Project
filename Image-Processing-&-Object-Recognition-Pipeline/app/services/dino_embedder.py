@@ -37,6 +37,8 @@ logger = logging.getLogger(__name__)
 class DINOEmbedder:
     """Shared DINO model loader and embedding generator."""
 
+    # Model objects are expensive to load and consume GPU memory, so instances
+    # share one cached model keyed by device/path/configuration.
     _shared_model = None
     _shared_processor = None
     _shared_model_key = None
@@ -50,6 +52,7 @@ class DINOEmbedder:
         projection_dim: int = 128,
         projection_seed: int = 42,
     ) -> None:
+        """Initialize DINO model configuration, device selection, and embedding cache state."""
         self.model_name = model_name
         
         import torch
@@ -72,12 +75,14 @@ class DINOEmbedder:
         self._model_load_lock = threading.Lock()
 
     def _required_model_files(self) -> Tuple[str, ...]:
+        """List the model files that must exist in the configured local model directory."""
         return (
             "config.json",
             "preprocessor_config.json",
         )
 
     def _validate_local_model_path(self) -> str:
+        """Validate and return the local model path used for DINO loading."""
         model_path = os.path.abspath(str(self.model_name))
         if not os.path.isdir(model_path):
             raise RuntimeError(
@@ -107,6 +112,7 @@ class DINOEmbedder:
         return model_path
 
     def _cache_key(self) -> Tuple[str, str, bool]:
+        """Build the cache key that identifies the loaded model configuration."""
         return (
             os.path.abspath(str(self.model_name)),
             str(self.device),
@@ -193,6 +199,7 @@ class DINOEmbedder:
             )
 
     def _projection(self, in_dim: int) -> np.ndarray:
+        """Return the deterministic projection matrix for reducing embedding dimensionality."""
         if self._proj is None or self._proj.shape[0] != in_dim:
             rng = np.random.default_rng(self.projection_seed)
             # Random Gaussian projection, scaled.
@@ -223,6 +230,7 @@ class DINOEmbedder:
         return resized.crop((left, top, right, bottom))
 
     def embed_768(self, image: Image.Image) -> np.ndarray:
+        """Create a normalized 768-dimensional DINO embedding for an image."""
         self.load_model()
         assert self._processor is not None and self._model is not None
 
@@ -252,22 +260,26 @@ class DINOEmbedder:
         return vec.astype(np.float32)
 
     def project_128(self, vec_768: np.ndarray) -> np.ndarray:
+        """Project a 768-dimensional embedding into the 128-dimensional FAISS space."""
         proj = self._projection(vec_768.shape[0])
         v128 = vec_768 @ proj
         return v128.astype(np.float32)
 
     def embed_both(self, image: Image.Image) -> Tuple[np.ndarray, np.ndarray]:
+        """Create both full-size and projected embeddings for an image."""
         vec_768 = self.embed_768(image)
         vec_128 = self.project_128(vec_768)
         return vec_768, vec_128
 
     def embed_128(self, image: Image.Image) -> np.ndarray:
+        """Create only the projected 128-dimensional embedding for an image."""
         v = self.embed_768(image)
         return self.project_128(v)
 
     @staticmethod
     def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
         # normalize for cosine similarity (this is mathematical normalization, not "logic shortcuts")
+        """Compute cosine similarity between two embedding vectors."""
         na = np.linalg.norm(a) + 1e-12
         nb = np.linalg.norm(b) + 1e-12
         return float(np.dot(a, b) / (na * nb))

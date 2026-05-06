@@ -16,6 +16,10 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+# Color utilities move between PIL RGB, OpenCV BGR, and LAB space. Comments in
+# this module call out color-space boundaries because channel order mistakes are
+# otherwise hard to diagnose from output alone.
+
 
 def pil_to_cv2(image: Image.Image) -> np.ndarray:
     """Convert PIL Image (RGB) to OpenCV BGR array."""

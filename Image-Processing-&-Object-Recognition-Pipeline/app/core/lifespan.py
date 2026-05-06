@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
             logger.warning("YOLO warmup failed; continuing with loaded model.", exc_info=True)
         florence_service = FlorenceService()
         dino_embedder = DINOEmbedder()
-        reasoner = create_reasoner_from_settings()
+        reasoner = create_reasoner_from_settings() if bool(getattr(settings, "PP1_ENABLE_REASONER", True)) else None
 
         # Initialize Logic Services
         geometric_verifier = GeometricVerifier()

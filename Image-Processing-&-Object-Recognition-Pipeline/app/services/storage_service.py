@@ -17,10 +17,14 @@ from app.core.redis_client import get_redis_client
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Keep persistence concerns here: model services should return evidence, while
+# this layer owns database records, Redis cache writes, and transaction shape.
+
 class StorageService:
     """Stores PP1/PP2 results using the request-scoped database session."""
 
     def __init__(self, db: Session):
+        """Initialize storage service dependencies."""
         self.db = db
         self.redis_client = get_redis_client()
 

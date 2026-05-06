@@ -36,6 +36,10 @@ from app.services.reasoner_types import (
 
 logger = logging.getLogger(__name__)
 
+# Gemini output is treated as advisory evidence, not a source of unrestricted
+# truth. Normalizers below clamp responses back into the schema and evidence
+# contract expected by PP1/PP2.
+
 TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
 TRANSIENT_PROVIDER_STATUSES = {
     "UNAVAILABLE",
@@ -58,14 +62,24 @@ GeminiFatalError = ReasonerFatalError
 # ----------------------------
 
 STRICT_EXTRACTOR_PROMPT = r"""
-You are an evidence-locked inspection assistant.
+You are an evidence-locked inspection assistant for a lost-and-found system.
 IMPORTANT: You have access to the crop image. Use it to VERIFY the evidence fields provided below.
 Do NOT guess. Do NOT invent. If evidence is missing or contradicted by the image, output empty arrays.
 
 TASK
 1) From the candidate lists, select ONLY items that are clearly supported by the EVIDENCE and VISIBLE in the image.
-2) Produce a detailed public-listing paragraph (2–4 sentences) using ONLY confirmed details.
+2) Produce a natural, fluent public-listing description (2–4 sentences) using ONLY confirmed details.
 3) Use ONLY the exact phrases from the candidate lists when listing features/defects/attachments.
+
+DESCRIPTION WRITING RULES (CRITICAL):
+- Write in natural, flowing English prose that reads like a professional product listing.
+- Open sentence 1 with the item color and label (e.g. "A black helmet with a red and white CS logo on the back.").
+- Weave features, defects, and attachments naturally into sentences — do NOT use robotic patterns.
+- BANNED patterns (never use these): "It has X.", "It shows X.", "It includes X.", "It features X."
+  Instead, combine details: "The helmet features a tinted visor and adjustable chin strap, with minor scratches on the left side."
+- NEVER mention the person, hands, arms, legs, skin tone, body parts, poses, or background.
+- NEVER reference how the item is held, placed, or positioned (e.g. "on their leg", "held in hand", "on a table").
+- Focus exclusively on the physical item — its color, brand, material, condition, and distinguishing marks.
 
 HOW TO DECIDE (STRICT)
 - Start with GROUNDED_FEATURES / GROUNDED_DEFECTS / GROUNDED_ATTACHMENTS:
@@ -108,7 +122,7 @@ Return exactly one JSON object with these keys:
 }}
 
 RULES
-- Do NOT mention the person, hands, skin tone, background.
+- Do NOT mention the person, hands, skin tone, background, body parts, poses, or surroundings.
 - If none found in a list, return an empty array for that list.
 - Keep description object-only and specific to the item itself.
 - Prefer distinctive visible details over generic wording like "an object" or "an item".
@@ -118,7 +132,7 @@ RULES
   In that case, set label_change_reason to a short explanation (e.g. "Image shows earbuds not a wallet").
   If the label is correct, set label_change_reason to null.
 - status must be "accepted" when the output stays evidence-locked, otherwise "rejected".
-- final_description and detailed_description must be object-only. Do not mention background, hands, people, desks, tables, floors, or ownership/use assumptions.
+- final_description and detailed_description must be object-only. Do not mention background, hands, people, desks, tables, floors, body parts, or ownership/use assumptions.
 - unsupported_claims must list any tempting but unsupported facts you intentionally left out. Use [] when none.
 
 CATEGORY-SPECIFIC RULES:
@@ -164,11 +178,19 @@ STRICT RULES:
 2) Every feature, defect, and attachment must be explicitly supported by the evidence bundle or be clearly visible in the supplied images.
 3) Reject the item if the selected views do not show the same category or strongly suggest different physical objects.
 4) Color must be precise and refer to the physical item only. Reject screen glow, reflections, glare, and background colors.
-5) If status is accepted, final_description must be 4 to 6 sentences, object-only, and must not mention the background, table, desk, floor, hands, or people.
+5) If status is accepted, final_description must be 4 to 6 sentences of natural, flowing English prose — like a professional item listing.
 6) Sentence 1 must open with the item color and label when known.
-7) If status is accepted, include all confirmed features, attachments, and defects at least once. Include the most relevant exact OCR text only when supported.
+7) If status is accepted, weave all confirmed features, attachments, and defects naturally into the description. Include the most relevant exact OCR text only when supported.
 8) If key_count is not supported by evidence, return null.
-9) Output JSON only and follow the response schema exactly.
+9) Synthesize a single unified item description across all selected views; do not write one repeated description per image.
+10) Do not repeat the same color, category, or identity sentence for each view. Mention the item identity once, then merge distinct supported details from all views.
+11) Output JSON only and follow the response schema exactly.
+
+DESCRIPTION QUALITY RULES:
+- Write natural, fluent prose. Do NOT use robotic patterns like "It has X.", "It shows X.", "It includes X."
+- Instead, combine details gracefully: "The helmet features a tinted visor and adjustable strap, with minor scratches along the left side."
+- NEVER mention people, hands, arms, legs, body parts, poses, backgrounds, tables, desks, floors, or how the item is held/placed.
+- Focus exclusively on the physical item itself.
 
 CATEGORY-SPECIFIC RULES:
 - SMART PHONE: Use the BACK COVER color only. Never use wallpaper or screen color.
@@ -328,7 +350,7 @@ class GeminiReasoner(ReasonerProtocol):
       pip install google-genai
 
     And set an API key in env:
-      export GOOGLE_API_KEY=...
+      export GEMINI_API_KEY=...
     """
 
     def __init__(
@@ -337,16 +359,17 @@ class GeminiReasoner(ReasonerProtocol):
         *,
         pp2_model_name: Optional[str] = None,
     ) -> None:
+        """Initialize Gemini reasoner settings, model names, and request metadata state."""
         configured_pp1_model = str(
-            model_name or getattr(settings, "PP1_GEMINI_MODEL", "models/gemini-3.1-flash-lite-preview")
+            model_name or getattr(settings, "PP1_GEMINI_MODEL", "models/gemini-2.5-flash")
         ).strip()
-        self.model_name = configured_pp1_model or "models/gemini-3.1-flash-lite-preview"
+        self.model_name = configured_pp1_model or "models/gemini-2.5-flash"
         self.pp1_fallback_model = str(
             getattr(settings, "PP1_GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")
         ).strip() or "gemini-2.5-flash"
         self.pp2_model_name = str(
-            pp2_model_name or getattr(settings, "PP2_REASONER_MODEL", "models/gemini-3.1-flash-lite-preview")
-        ).strip() or "models/gemini-3.1-flash-lite-preview"
+            pp2_model_name or getattr(settings, "PP2_REASONER_MODEL", "models/gemini-2.5-flash")
+        ).strip() or "models/gemini-3.1-pro-preview"
         self.pp2_fallback_model = str(
             getattr(settings, "PP2_REASONER_FALLBACK_MODEL", "gemini-2.5-flash")
         ).strip() or "gemini-2.5-flash"
@@ -356,6 +379,7 @@ class GeminiReasoner(ReasonerProtocol):
         self._last_request_meta: Dict[str, Any] = {}
 
     def _load_client(self) -> None:
+        """Initialize the Gemini client from configured API settings."""
         if self._client is not None:
             return
         try:
@@ -364,7 +388,13 @@ class GeminiReasoner(ReasonerProtocol):
             import os
             
             load_dotenv()
-            api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+            gemini_api_key = str(
+                getattr(settings, "GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY") or ""
+            ).strip()
+            google_api_key = str(
+                getattr(settings, "GOOGLE_API_KEY", None) or os.getenv("GOOGLE_API_KEY") or ""
+            ).strip()
+            api_key = gemini_api_key or google_api_key
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY not found in environment variables")
                 
@@ -372,11 +402,30 @@ class GeminiReasoner(ReasonerProtocol):
             raise RuntimeError(
                 "Required packages not installed. Install with: pip install google-genai python-dotenv"
             ) from e
-            
-        self._client = genai.Client(api_key=api_key)
+
+        previous_google_key = os.environ.get("GOOGLE_API_KEY")
+        previous_gemini_key = os.environ.get("GEMINI_API_KEY")
+        try:
+            if gemini_api_key:
+                os.environ["GEMINI_API_KEY"] = gemini_api_key
+                os.environ.pop("GOOGLE_API_KEY", None)
+            elif google_api_key:
+                os.environ["GOOGLE_API_KEY"] = google_api_key
+                os.environ.pop("GEMINI_API_KEY", None)
+            self._client = genai.Client(api_key=api_key)
+        finally:
+            if previous_google_key is None:
+                os.environ.pop("GOOGLE_API_KEY", None)
+            else:
+                os.environ["GOOGLE_API_KEY"] = previous_google_key
+            if previous_gemini_key is None:
+                os.environ.pop("GEMINI_API_KEY", None)
+            else:
+                os.environ["GEMINI_API_KEY"] = previous_gemini_key
 
     @staticmethod
     def _extract_provider_status(exc: Exception) -> Optional[str]:
+        """Extract a provider status string from a Gemini exception when available."""
         response_json = getattr(exc, "response_json", None)
         if isinstance(response_json, dict):
             error = response_json.get("error")
@@ -402,6 +451,7 @@ class GeminiReasoner(ReasonerProtocol):
         return status_code, provider_status
 
     def _classify_gemini_exception(self, exc: Exception) -> GeminiServiceError:
+        """Convert a provider exception into the service error shape used by the reasoner."""
         status_code_raw = getattr(exc, "status_code", None)
         status_code = int(status_code_raw) if isinstance(status_code_raw, int) else None
         provider_status = self._extract_provider_status(exc)
@@ -431,6 +481,7 @@ class GeminiReasoner(ReasonerProtocol):
 
     @staticmethod
     def _indefinite_article(label: str) -> str:
+        """Choose an English indefinite article for a phrase."""
         cleaned = re.sub(r"^[^A-Za-z0-9]+", "", str(label or "").strip())
         if not cleaned:
             return "a"
@@ -438,6 +489,7 @@ class GeminiReasoner(ReasonerProtocol):
 
     @classmethod
     def _build_pp1_visual_context(cls, label: Optional[str], image_count: int) -> str:
+        """Build text context that describes PP1 visual evidence for prompting."""
         resolved_label = str(label or "").strip()
         if not resolved_label:
             return "This image includes one detected item. Describe only this item using the visible evidence."
@@ -449,6 +501,7 @@ class GeminiReasoner(ReasonerProtocol):
 
     @staticmethod
     def _extract_phase2_prompt_label(evidence_bundle_json: Dict[str, Any]) -> Optional[str]:
+        """Resolve the object label used in PP2 phase-2 prompts."""
         per_image = evidence_bundle_json.get("per_image", [])
         if not isinstance(per_image, list):
             return None
@@ -484,6 +537,7 @@ class GeminiReasoner(ReasonerProtocol):
 
     @classmethod
     def _build_pp2_visual_context(cls, evidence_bundle_json: Dict[str, Any], image_count: int) -> str:
+        """Build text context that describes PP2 multi-view evidence for prompting."""
         label = cls._extract_phase2_prompt_label(evidence_bundle_json)
         if image_count <= 1:
             if label:
@@ -513,6 +567,7 @@ class GeminiReasoner(ReasonerProtocol):
         model_name: Optional[str] = None,
         image_first: bool = False,
     ) -> str:
+        """Send one text-generation request to Gemini and return the response text."""
         self._load_client()
         assert self._client is not None
         self._ensure_model_available(model_name or self.model_name)
@@ -556,6 +611,7 @@ class GeminiReasoner(ReasonerProtocol):
         fallback_config: Any = None,
         image_first: bool = False,
     ) -> str:
+        """Generate text with retry and fallback handling around Gemini calls."""
         attempts = 2
         primary_model = str(model_name or self.model_name).strip()
         fallback_model = str(fallback_model_name or "").strip()
@@ -566,6 +622,33 @@ class GeminiReasoner(ReasonerProtocol):
         model_sequence: List[tuple[str, Any]] = [(primary_model, primary_config)]
         if fallback_model and fallback_model != primary_model:
             model_sequence.append((fallback_model, secondary_config))
+
+        def _fallback_reason(exc: GeminiServiceError) -> Optional[str]:
+            """Create fallback metadata when Gemini generation cannot complete."""
+            if attempted_fallback or not fallback_model or fallback_model == current_model:
+                return None
+            provider_status = str(getattr(exc, "provider_status", "") or "").upper()
+            status_code = getattr(exc, "status_code", None)
+            message = str(exc).upper()
+            if isinstance(exc, GeminiQuotaError) or status_code == 429 or provider_status == "RESOURCE_EXHAUSTED":
+                return "quota_limit"
+            if isinstance(exc, GeminiTransientError):
+                if status_code in TRANSIENT_STATUS_CODES or provider_status in TRANSIENT_PROVIDER_STATUSES:
+                    return "transient_unavailable"
+            if isinstance(exc, GeminiFatalError):
+                model_unavailable_statuses = {
+                    "MODEL_UNAVAILABLE",
+                    "MODEL_NOT_FOUND",
+                    "NOT_FOUND",
+                    "INSUFFICIENT_SYSTEM_MEMORY",
+                }
+                if status_code == 404 or provider_status in model_unavailable_statuses:
+                    return "model_unavailable"
+                if "NOT_FOUND" in message or "MODEL_UNAVAILABLE" in message:
+                    return "model_unavailable"
+                if "INSUFFICIENT_SYSTEM_MEMORY" in message:
+                    return "model_capacity"
+            return None
 
         last_exc: Optional[Exception] = None
         for model_index, (current_model, current_config) in enumerate(model_sequence):
@@ -599,10 +682,11 @@ class GeminiReasoner(ReasonerProtocol):
                     attempt_meta["status"] = "quota_error"
                     attempt_meta["status_code"] = exc.status_code
                     attempt_meta["provider_status"] = exc.provider_status
-                    if not attempted_fallback and fallback_model and fallback_model != current_model:
-                        failover_reason = "quota_limit"
+                    reason = _fallback_reason(exc)
+                    if reason:
+                        failover_reason = reason
                         logger.warning(
-                            "Gemini quota failure on %s; failing over to %s",
+                            "Gemini quota/capacity failure on %s; failing over to %s",
                             current_model,
                             fallback_model,
                         )
@@ -621,6 +705,15 @@ class GeminiReasoner(ReasonerProtocol):
                     attempt_meta["status"] = "transient_error"
                     attempt_meta["status_code"] = exc.status_code
                     attempt_meta["provider_status"] = exc.provider_status
+                    reason = _fallback_reason(exc)
+                    if reason:
+                        failover_reason = reason
+                        logger.warning(
+                            "Gemini transient failure on %s; failing over to %s",
+                            current_model,
+                            fallback_model,
+                        )
+                        break
                     if attempt < attempts:
                         logger.warning(
                             "Gemini transient failure (attempt %s/%s): status_code=%s provider_status=%s",
@@ -642,6 +735,15 @@ class GeminiReasoner(ReasonerProtocol):
                     attempt_meta["status"] = "fatal_error"
                     attempt_meta["status_code"] = exc.status_code
                     attempt_meta["provider_status"] = exc.provider_status
+                    reason = _fallback_reason(exc)
+                    if reason:
+                        failover_reason = reason
+                        logger.warning(
+                            "Gemini model failure on %s; failing over to %s",
+                            current_model,
+                            fallback_model,
+                        )
+                        break
                     self._last_request_meta = {
                         "model_attempts": model_attempts,
                         "selected_model": None,
@@ -659,12 +761,14 @@ class GeminiReasoner(ReasonerProtocol):
         raise GeminiFatalError("Gemini generation failed unexpectedly.")
 
     def consume_last_request_meta(self) -> Dict[str, Any]:
+        """Return and clear metadata for the most recent Gemini request."""
         meta = dict(self._last_request_meta)
         self._last_request_meta = {}
         return meta
 
     @staticmethod
     def _normalize_string_list(value: Any) -> List[str]:
+        """Normalize a value into a list of non-empty strings."""
         if not isinstance(value, list):
             return []
         out: List[str] = []
@@ -676,10 +780,12 @@ class GeminiReasoner(ReasonerProtocol):
 
     @staticmethod
     def _is_gemini3_model(model_name: str) -> bool:
+        """Return whether a model name refers to a Gemini 3 generation model."""
         normalized = str(model_name or "").strip().lower()
         return "gemini-3" in normalized or "gemini 3" in normalized
 
     def _ensure_model_available(self, model_name: str) -> None:
+        """Validate that the configured model can be used before sending requests."""
         normalized = str(model_name or "").strip()
         if not normalized:
             raise GeminiFatalError("Gemini model name is empty.", provider_status="MODEL_NOT_CONFIGURED")
@@ -713,6 +819,7 @@ class GeminiReasoner(ReasonerProtocol):
 
     @classmethod
     def normalize_phase1_response(cls, payload: Any, *, fallback_label: Optional[str], fallback_color: Optional[str]) -> Dict[str, Any]:
+        """Normalize Gemini PP1 output into the expected phase-1 response contract."""
         if not isinstance(payload, dict):
             return {
                 "status": "rejected",
@@ -766,6 +873,7 @@ class GeminiReasoner(ReasonerProtocol):
 
     @classmethod
     def normalize_phase2_response(cls, payload: Any) -> Dict[str, Any]:
+        """Normalize Gemini PP2 output into the expected phase-2 response contract."""
         if not isinstance(payload, dict):
             return {
                 "status": "rejected",
@@ -833,6 +941,7 @@ class GeminiReasoner(ReasonerProtocol):
         return result
 
     def _build_pp2_generate_config(self) -> Any:
+        """Build Gemini generation configuration for PP2 prompts."""
         from google.genai import types  # type: ignore
 
         thinking_budget = max(0, int(getattr(settings, "PP2_REASONER_THINKING_BUDGET", 256)))
@@ -852,6 +961,7 @@ class GeminiReasoner(ReasonerProtocol):
         )
 
     def _build_pp1_generate_config(self) -> Any:
+        """Build Gemini generation configuration for PP1 prompts."""
         from google.genai import types  # type: ignore
 
         thinking_level = str(getattr(settings, "PP1_GEMINI_THINKING_LEVEL", "low") or "low").strip().lower()
@@ -869,6 +979,7 @@ class GeminiReasoner(ReasonerProtocol):
         )
 
     def _build_pp1_fallback_generate_config(self) -> Any:
+        """Build Gemini fallback generation configuration for PP1 prompts."""
         from google.genai import types  # type: ignore
 
         return types.GenerateContentConfig(
@@ -882,6 +993,7 @@ class GeminiReasoner(ReasonerProtocol):
         )
 
     def _build_pp2_fallback_generate_config(self) -> Any:
+        """Build Gemini fallback generation configuration for PP2 prompts."""
         from google.genai import types  # type: ignore
 
         return types.GenerateContentConfig(
@@ -1062,6 +1174,7 @@ class GeminiReasoner(ReasonerProtocol):
         evidence_bundle_json: Dict[str, Any],
         images: Optional[List[Any]] = None,
     ) -> Dict[str, Any]:
+        """Run the PP2 phase-2 reasoning prompt and normalize the result."""
         image_count = len(images) if images else len(evidence_bundle_json.get("selected_view_indices", []) or [])
         prompt_body = PHASE2_PP2_PROMPT.replace(
             "{{EVIDENCE_BUNDLE_JSON}}",
